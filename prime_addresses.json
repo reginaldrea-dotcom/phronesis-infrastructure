@@ -1,0 +1,14 @@
+{
+  "updated": "2026-04-23",
+  "primes": {
+    "argos":          { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "napoleon":       { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "theophrastus":   { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "constantinople": { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "antechamber":    { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "aegis":          { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "ghostwheel":     { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "ricardo":        { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "homer":          { "url": "TBD", "since": "2026-04-23", "predecessor": null }
+  }
+}
