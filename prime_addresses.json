@@ -1,7 +1,7 @@
 {
   "updated": "2026-04-23",
   "primes": {
-    "argos":          { "url": "TBD", "since": "2026-04-23", "predecessor": null },
+    "argos":          { "url": "https://claude.ai/chat/934f176c-7798-4c79-b378-0ef78dd17027", "since": "2026-04-23", "predecessor": null },
     "napoleon":       { "url": "TBD", "since": "2026-04-23", "predecessor": null },
     "theophrastus":   { "url": "TBD", "since": "2026-04-23", "predecessor": null },
     "constantinople": { "url": "TBD", "since": "2026-04-23", "predecessor": null },
