@@ -1,7 +1,7 @@
 {
   "updated": "2026-04-23",
   "primes": {
-    "argos":          { "url": "https://claude.ai/chat/934f176c-7798-4c79-b378-0ef78dd17027", "since": "2026-04-23", "predecessor": null },
+    "argos": { "url": "", "since": "2026-04-23", "predecessor": "https://claude.ai/chat/934f176c-7798-4c79-b378-0ef78dd17027" },
     "napoleon":       { "url": "https://claude.ai/chat/b87a11fb-265a-4fab-9783-611d35dd41ec", "since": "2026-04-23", "predecessor": null },
     "theophrastus":   { "url": "https://claude.ai/chat/fddbe4c1-9c52-4c2b-a028-b5ee90950138", "since": "2026-04-23", "predecessor": null },
     "constantinople": { "url": "https://claude.ai/chat/3c1a0f12-5f59-4fbc-9f3d-ae1d5784cd4a", "since": "2026-04-23", "predecessor": null },
