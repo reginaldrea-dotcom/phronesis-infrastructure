@@ -1,14 +1,50 @@
 {
-  "updated": "2026-04-23",
+  "updated": "2026-05-05",
   "primes": {
-    "argos": { "url": "", "since": "2026-04-23", "predecessor": "https://claude.ai/chat/934f176c-7798-4c79-b378-0ef78dd17027" },
-    "napoleon":       { "url": "https://claude.ai/chat/b87a11fb-265a-4fab-9783-611d35dd41ec", "since": "2026-04-23", "predecessor": null },
-    "theophrastus":   { "url": "https://claude.ai/chat/fddbe4c1-9c52-4c2b-a028-b5ee90950138", "since": "2026-04-23", "predecessor": null },
-    "constantinople": { "url": "https://claude.ai/chat/3c1a0f12-5f59-4fbc-9f3d-ae1d5784cd4a", "since": "2026-04-23", "predecessor": null },
-    "antechamber":    { "url": "https://claude.ai/chat/781dfe76-d51f-4f99-9dd6-6b42b8b38bc7", "since": "2026-04-23", "predecessor": null },
-    "aegis":          { "url": "https://claude.ai/chat/ce2d1d82-c5fa-4898-9b25-4517b9358514", "since": "2026-04-23", "predecessor": null },
-    "ghostwheel":     { "url": "https://claude.ai/chat/193d1f44-5130-42e3-8e1b-a3a72e030bf1", "since": "2026-04-23", "predecessor": null },
-    "ricardo":        { "url": "https://claude.ai/chat/6d3e62a8-238c-412d-9af3-a98eb9747b34", "since": "2026-04-23", "predecessor": null },
-    "homer":          { "url": "https://claude.ai/chat/6129871c-fc6b-45f4-9c8f-898d1296ec1b", "since": "2026-04-23", "predecessor": null }
+    "napoleon": {
+      "url": "https://claude.ai/chat/a2890fc5-6080-4869-aa75-580b24dab272",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "ghostwheel": {
+      "url": "https://claude.ai/chat/193d1f44-5130-42e3-8e1b-a3a72e030bf1",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "homer": {
+      "url": "https://claude.ai/chat/6129871c-fc6b-45f4-9c8f-898d1296ec1b",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "theophrastus": {
+      "url": "https://claude.ai/chat/fddbe4c1-9c52-4c2b-a028-b5ee90950138",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "antechamber": {
+      "url": "https://claude.ai/chat/781dfe76-d51f-4f99-9dd6-6b42b8b38bc7",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "aegis": {
+      "url": "https://claude.ai/chat/ce2d1d82-c5fa-4898-9b25-4517b9358514",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "ricardo": {
+      "url": "https://claude.ai/chat/6d3e62a8-238c-412d-9af3-a98eb9747b34",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "argos": {
+      "url": "https://claude.ai/chat/eb42e09f-965e-4d93-9560-3c1babe93e79",
+      "since": "2026-05-05",
+      "predecessor": null
+    },
+    "constantinople": {
+      "url": "https://claude.ai/chat/3db52bb8-d482-4edc-b98d-002c9fe9c64e",
+      "since": "2026-05-05",
+      "predecessor": null
+    }
   }
 }
