@@ -570,9 +570,6 @@ try {
   console.warn('navigator-status unavailable:', e);
   unreadMap = {};
 }
-const statusData = await statusRes.json();
-unreadMap = statusData.unread || {};
-
     // Attention levels (highest per posting lineage)
     const posts = await sb('wheel_posts?select=posting_lineage,effective_attention_level&superseded_at=is.null');
     attentionMap = {};
