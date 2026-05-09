@@ -555,10 +555,12 @@ async function loadData() {
     instances = {};
     rows.forEach(r => instances[r.name] = r);
 
-    // Unread messages
-    const msgs = await sb('prime_messages?select=to_lineage&status=eq.pending');
-    unreadMap = {};
-    msgs.forEach(m => { unreadMap[m.to_lineage] = (unreadMap[m.to_lineage]||0) + 1; });
+   // Fetch unread counts via Edge Function
+const statusRes = await fetch(SUPABASE_URL + '/functions/v1/navigator-status', {
+  headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
+});
+const statusData = await statusRes.json();
+unreadMap = statusData.unread || {};
 
     // Attention levels (highest per posting lineage)
     const posts = await sb('wheel_posts?select=posting_lineage,effective_attention_level&superseded_at=is.null');
