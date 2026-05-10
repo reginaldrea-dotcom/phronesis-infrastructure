@@ -8,359 +8,139 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+SC:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg:           #FAFAF8;
-      --surface:      #FFFFFF;
-      --bg-dim:       #F0EDE6;
-      --border:       #E0DDD6;
-      --border-lt:    #EDEBE5;
-      --text:         #1C1C1A;
-      --muted:        #6B6B66;
-      --light:        #A8A49E;
-      --badge-red:    #B03030;
-      --badge-amber:  #B8742A;
-      --badge-blue:   #2557A7;
-      --badge-green:  #1A7A3C;
-      --badge-size:   10px;
-      --btn:          #2C2C2A;
-      --btn-text:     #FAFAF8;
-      --overlay:      rgba(20,18,16,0.42);
-      --tile-w:       140px;
-      --tile-h:       164px;
-      --icon-size:    80px;
+      --bg:#FAFAF8;--surface:#FFFFFF;--bg-dim:#F0EDE6;--border:#E0DDD6;--border-lt:#EDEBE5;
+      --text:#1C1C1A;--muted:#6B6B66;--light:#A8A49E;
+      --badge-red:#B03030;--badge-amber:#B8742A;--badge-blue:#2557A7;--badge-green:#1A7A3C;
+      --badge-size:10px;--btn:#2C2C2A;--btn-text:#FAFAF8;--overlay:rgba(20,18,16,0.42);
+      --tile-w:140px;--tile-h:164px;--icon-size:80px;
     }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);font-family:'Lora',Georgia,serif;color:var(--text);min-height:100vh}
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    header{display:flex;align-items:baseline;justify-content:space-between;padding:28px 40px 20px;border-bottom:1px solid var(--border)}
+    .header-left{display:flex;align-items:baseline;gap:20px}
+    h1{font-family:'Cormorant SC',serif;font-size:20px;font-weight:500;letter-spacing:2px}
+    .header-sub{font-size:13px;color:var(--light);font-style:italic}
+    .header-right{display:flex;align-items:center;gap:16px}
+    .last-refreshed{font-size:12px;color:var(--light);font-style:italic}
+    .refresh-btn{font-family:'Lora',serif;font-size:13px;color:var(--muted);background:none;border:1px solid var(--border);padding:5px 14px;cursor:pointer;border-radius:2px;transition:all .15s}
+    .refresh-btn:hover{background:var(--border-lt);color:var(--text)}
 
-    body {
-      background: var(--bg);
-      font-family: 'Lora', Georgia, serif;
-      color: var(--text);
-      min-height: 100vh;
-    }
+    nav{display:flex;padding:0 40px;border-bottom:1px solid var(--border)}
+    nav button{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1.5px;padding:14px 4px;margin-right:28px;border:none;background:none;cursor:pointer;color:var(--light);border-bottom:1.5px solid transparent;margin-bottom:-1px;transition:all .15s;position:relative}
+    nav button.active{color:var(--text);border-bottom-color:var(--text)}
+    nav button:hover:not(.active){color:var(--muted)}
+    .notices-badge{position:absolute;top:10px;right:-10px;background:var(--badge-amber);color:white;font-family:sans-serif;font-size:9px;font-weight:600;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
 
-    /* ── HEADER ── */
-    header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      padding: 28px 40px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .header-left { display: flex; align-items: baseline; gap: 20px; }
-    h1 {
-      font-family: 'Cormorant SC', serif;
-      font-size: 20px; font-weight: 500;
-      letter-spacing: 2px;
-    }
-    .header-sub { font-size: 13px; color: var(--light); font-style: italic; }
-    .header-right { display: flex; align-items: center; gap: 16px; }
-    .last-refreshed { font-size: 12px; color: var(--light); font-style: italic; }
-    .refresh-btn {
-      font-family: 'Lora', serif; font-size: 13px;
-      color: var(--muted); background: none;
-      border: 1px solid var(--border); padding: 5px 14px;
-      cursor: pointer; border-radius: 2px; transition: all 0.15s;
-    }
-    .refresh-btn:hover { background: var(--border-lt); color: var(--text); }
+    .page{display:none;padding:36px 40px}
+    .page.active{display:block}
+    .section-label{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:2px;color:var(--light);margin-bottom:20px}
 
-    /* ── NAV ── */
-    nav {
-      display: flex; padding: 0 40px;
-      border-bottom: 1px solid var(--border);
-    }
-    nav button {
-      font-family: 'Cormorant SC', serif; font-size: 12px;
-      letter-spacing: 1.5px; padding: 14px 4px;
-      margin-right: 28px; border: none; background: none;
-      cursor: pointer; color: var(--light);
-      border-bottom: 1.5px solid transparent;
-      margin-bottom: -1px; transition: all 0.15s;
-      position: relative;
-    }
-    nav button.active { color: var(--text); border-bottom-color: var(--text); }
-    nav button:hover:not(.active) { color: var(--muted); }
-    .notices-badge {
-      position: absolute; top: 10px; right: -10px;
-      background: var(--badge-amber); color: white;
-      font-family: sans-serif; font-size: 9px;
-      width: 16px; height: 16px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 600;
-    }
+    .tile-grid{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:40px}
+    .tile{width:var(--tile-w);height:var(--tile-h);background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;position:relative;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.06);border-radius:2px;transition:border-color .15s,box-shadow .15s;cursor:pointer}
+    .tile:hover:not(.stale){border-color:var(--muted);box-shadow:0 3px 10px rgba(0,0,0,.09)}
+    .tile.stale{opacity:.38;cursor:default}
+    .tile-icon{width:var(--icon-size);height:var(--icon-size);object-fit:contain}
+    .tile-name{font-size:12px;letter-spacing:.8px;font-variant:small-caps;color:var(--muted)}
+    .badges{position:absolute;top:9px;right:9px;display:flex;gap:4px}
+    .badge{width:var(--badge-size);height:var(--badge-size);border-radius:50%}
+    .badge.red{background:var(--badge-red)}.badge.amber{background:var(--badge-amber)}.badge.blue{background:var(--badge-blue)}
+    .section-divider{border:none;border-top:1px solid var(--border-lt);margin:4px 0 36px}
+    .tiles-section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px}
+    .gear-btn{font-family:'Lora',serif;font-size:12px;color:var(--light);background:none;border:none;cursor:pointer;letter-spacing:.3px;transition:color .15s}
+    .gear-btn:hover{color:var(--muted)}
 
-    /* ── PAGES ── */
-    .page { display: none; padding: 36px 40px; }
-    .page.active { display: block; }
+    .rt-container{display:flex;flex-direction:column;align-items:center}
+    .circle-stage{position:relative;width:660px;height:660px}
+    @media(max-width:720px){.circle-stage{display:none}}
+    .circle-tile{position:absolute;transform:translate(-50%,-50%)}
+    .circle-tile .tile{width:108px;height:128px}
+    .circle-tile .tile-icon{width:58px;height:58px}
+    .circle-tile .tile-name{font-size:11px}
+    .tile.resp-blue{border-color:var(--badge-blue);box-shadow:0 0 0 1px var(--badge-blue)}
+    .tile.resp-green{border-color:var(--badge-green);box-shadow:0 0 0 1px var(--badge-green)}
+    .invoke-centre{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:116px;height:116px;border-radius:50%;background:var(--btn);color:var(--btn-text);font-family:'Cormorant SC',serif;font-size:13px;letter-spacing:1px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.5;box-shadow:0 2px 12px rgba(0,0,0,.18);transition:background .2s}
+    .invoke-centre:hover{background:#444}
+    .mobile-rt{display:none;width:100%}
+    @media(max-width:720px){.mobile-rt{display:block}}
+    .mobile-invoke-btn{font-family:'Cormorant SC',serif;font-size:14px;letter-spacing:1.5px;width:100%;padding:16px;background:var(--btn);color:var(--btn-text);border:none;cursor:pointer;margin-bottom:24px;border-radius:2px}
+    .mobile-tile-row{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:2px;margin-bottom:8px;text-decoration:none;color:inherit;position:relative;transition:border-color .15s}
+    .mobile-tile-row:hover:not(.stale){border-color:var(--muted)}
+    .mobile-tile-row.stale{opacity:.38}
+    .mobile-tile-row img{width:44px;height:44px;object-fit:contain}
+    .mobile-tile-row .tile-name{font-size:14px}
+    .mobile-tile-row .badges{position:static}
 
-    .section-label {
-      font-family: 'Cormorant SC', serif; font-size: 11px;
-      letter-spacing: 2px; color: var(--light); margin-bottom: 20px;
-    }
+    .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:200}
+    .modal-card{background:var(--surface);border-radius:10px;width:440px;max-width:92vw;box-shadow:0 16px 48px rgba(20,18,16,.22),0 2px 8px rgba(20,18,16,.10);overflow:hidden}
+    .modal-head{padding:22px 24px 14px;border-bottom:1px solid var(--border-lt)}
+    .modal-title{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:-.01em}
+    .modal-sub{font-size:12px;color:var(--light);margin-top:2px;font-style:italic}
+    .modal-body{padding:16px 24px}
+    .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid var(--border-lt)}
+    .btn-cancel{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;padding:9px 22px;cursor:pointer;border:1px solid var(--border);background:none;border-radius:2px;transition:all .15s}
+    .btn-cancel:hover{background:var(--border-lt)}
+    .btn-send{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;padding:9px 22px;cursor:pointer;background:var(--btn);color:var(--btn-text);border:1px solid var(--btn);border-radius:2px;transition:all .15s}
+    .btn-send:hover{background:#444}
+    .btn-send:disabled{opacity:.5;cursor:not-allowed}
 
-    /* ── TILE ── */
-    .tile-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 40px; }
+    .select-row{display:flex;gap:14px;margin-bottom:10px}
+    .sel-link{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px;transition:color .1s;font-family:'Lora',serif}
+    .sel-link:hover{color:var(--text)}
+    .prime-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-bottom:16px}
+    .p-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;user-select:none;transition:background .1s}
+    .p-row:hover{background:var(--bg-dim)}
+    .p-check{width:15px;height:15px;border:1.5px solid var(--border);border-radius:3px;background:white;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s}
+    .p-row.on .p-check{background:var(--btn);border-color:var(--btn)}
+    .p-row.on .p-check::after{content:'';width:8px;height:5px;border-left:2px solid white;border-bottom:2px solid white;transform:rotate(-45deg) translate(1px,-1px);display:block}
+    .p-icon{width:26px;height:26px;border-radius:50%;background:var(--bg-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:13px;font-weight:600;color:var(--muted);flex-shrink:0;overflow:hidden}
+    .p-icon img{width:100%;height:100%;object-fit:contain}
+    .p-name{font-size:13px;color:var(--text)}
+    .msg-label{font-family:'Cormorant SC',serif;font-size:10px;letter-spacing:2px;color:var(--light);margin-bottom:6px}
+    .msg-field{width:100%;font-family:'Lora',Georgia,serif;font-size:13px;border:1px solid var(--border);padding:10px 12px;background:var(--bg);color:var(--text);border-radius:2px;outline:none;resize:vertical;height:80px;transition:border-color .15s}
+    .msg-field:focus{border-color:var(--muted)}
 
-    .tile {
-      width: var(--tile-w); height: var(--tile-h);
-      background: var(--surface); border: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 10px;
-      position: relative; text-decoration: none; color: inherit;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-      border-radius: 2px; transition: border-color 0.15s, box-shadow 0.15s;
-      cursor: pointer;
-    }
-    .tile:hover:not(.stale) { border-color: var(--muted); box-shadow: 0 3px 10px rgba(0,0,0,0.09); }
-    .tile.stale { opacity: 0.38; cursor: default; }
-    .tile-icon { width: var(--icon-size); height: var(--icon-size); object-fit: contain; }
-    .tile-name { font-size: 12px; letter-spacing: 0.8px; font-variant: small-caps; color: var(--muted); }
+    .notices-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+    .notices-title{font-family:'Cormorant SC',serif;font-size:18px;letter-spacing:1px}
+    .notices-count{font-size:13px;color:var(--light);font-style:italic}
+    .notices-desc{font-size:13px;color:var(--muted);margin-bottom:28px;font-style:italic}
+    .notice-item{border:1px solid var(--border);border-radius:4px;margin-bottom:12px;background:var(--surface);transition:opacity .3s;overflow:hidden}
+    .notice-item.fragged{opacity:.55}
+    .notice-item.dismissed{display:none}
+    .notice-main{display:flex;gap:16px;padding:16px}
+    .notice-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--muted);flex-shrink:0;overflow:hidden}
+    .notice-avatar img{width:100%;height:100%;object-fit:contain}
+    .notice-content{flex:1;min-width:0}
+    .notice-topic{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+    .expand-arrow{color:var(--light);flex-shrink:0;font-size:12px}
+    .notice-summary{font-size:13px;color:var(--muted);line-height:1.5}
+    .notice-body{display:none;font-size:13px;color:var(--muted);line-height:1.6;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-lt)}
+    .notice-item.expanded .notice-body{display:block}
+    .notice-item.expanded .expand-arrow{transform:rotate(180deg)}
+    .notice-meta{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--border-lt);background:var(--bg)}
+    .notice-prime-name{font-size:12px;color:var(--muted);font-variant:small-caps;letter-spacing:.5px}
+    .notice-date{font-size:12px;color:var(--light);font-style:italic}
+    .level-badge{display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:.5px}
+    .l-dot{width:6px;height:6px;border-radius:50%}
+    .level-urgent .l-dot{background:var(--badge-amber)}
+    .level-moderate .l-dot{background:var(--badge-blue)}
+    .l-text{color:var(--muted)}
+    .with-ac{font-size:11px;color:var(--badge-amber);font-style:italic;display:none}
+    .notice-item.fragged .with-ac{display:block}
+    .notice-actions{margin-left:auto;display:flex;gap:8px}
+    .btn-dismiss,.btn-frag{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:.8px;padding:5px 14px;border:1px solid var(--border);background:none;cursor:pointer;border-radius:2px;transition:all .15s}
+    .btn-dismiss:hover{background:var(--badge-red);color:white;border-color:var(--badge-red)}
+    .btn-frag:hover{background:var(--badge-amber);color:white;border-color:var(--badge-amber)}
+    .btn-frag:disabled{opacity:.4;cursor:not-allowed}
+    .notices-empty{font-size:14px;color:var(--light);font-style:italic;padding:40px 0;text-align:center}
 
-    .badges { position: absolute; top: 9px; right: 9px; display: flex; gap: 4px; }
-    .badge { width: var(--badge-size); height: var(--badge-size); border-radius: 50%; }
-    .badge.red   { background: var(--badge-red); }
-    .badge.amber { background: var(--badge-amber); }
-    .badge.blue  { background: var(--badge-blue); }
+    .admin-input{width:100%;font-family:'Lora',serif;font-size:12px;border:1px solid var(--border);padding:6px 10px;background:var(--bg);color:var(--text);border-radius:2px;outline:none;transition:border-color .15s}
+    .admin-input:focus{border-color:var(--muted)}
+    .admin-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .admin-name{font-size:13px;color:var(--muted);min-width:110px;font-variant:small-caps}
+    .status-msg{font-size:14px;color:var(--light);font-style:italic;padding:8px 0}
 
-    .section-divider { border: none; border-top: 1px solid var(--border-lt); margin: 4px 0 36px; }
-
-    /* ── ROUND TABLE ── */
-    .rt-container { display: flex; flex-direction: column; align-items: center; }
-
-    .circle-stage { position: relative; width: 660px; height: 660px; }
-    @media (max-width: 720px) { .circle-stage { display: none; } }
-
-    .circle-tile { position: absolute; transform: translate(-50%, -50%); }
-    .circle-tile .tile { width: 108px; height: 128px; }
-    .circle-tile .tile-icon { width: 58px; height: 58px; }
-    .circle-tile .tile-name { font-size: 11px; }
-
-    /* Response status ring */
-    .tile.resp-grey  { border-color: var(--border); }
-    .tile.resp-blue  { border-color: var(--badge-blue); box-shadow: 0 0 0 1px var(--badge-blue); }
-    .tile.resp-green { border-color: var(--badge-green); box-shadow: 0 0 0 1px var(--badge-green); }
-
-    .invoke-centre {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 116px; height: 116px; border-radius: 50%;
-      background: var(--btn); color: var(--btn-text);
-      font-family: 'Cormorant SC', serif; font-size: 13px;
-      letter-spacing: 1px; border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      text-align: center; line-height: 1.5;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-      transition: background 0.2s;
-    }
-    .invoke-centre:hover { background: #444; }
-
-    .mobile-rt { display: none; width: 100%; }
-    @media (max-width: 720px) { .mobile-rt { display: block; } }
-    .mobile-invoke-btn {
-      font-family: 'Cormorant SC', serif; font-size: 14px;
-      letter-spacing: 1.5px; width: 100%; padding: 16px;
-      background: var(--btn); color: var(--btn-text);
-      border: none; cursor: pointer; margin-bottom: 24px; border-radius: 2px;
-    }
-    .mobile-tile-row {
-      display: flex; align-items: center; gap: 14px;
-      padding: 12px 16px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 2px;
-      margin-bottom: 8px; text-decoration: none; color: inherit;
-      position: relative; transition: border-color 0.15s;
-    }
-    .mobile-tile-row:hover:not(.stale) { border-color: var(--muted); }
-    .mobile-tile-row.stale { opacity: 0.38; }
-    .mobile-tile-row img { width: 44px; height: 44px; object-fit: contain; }
-    .mobile-tile-row .tile-name { font-size: 14px; }
-    .mobile-tile-row .badges { position: static; }
-
-    /* ── INVOKE MODAL ── */
-    .modal-overlay {
-      position: fixed; inset: 0; background: var(--overlay);
-      display: flex; align-items: center; justify-content: center; z-index: 200;
-    }
-    .modal-card {
-      background: var(--surface); border-radius: 10px;
-      width: 440px; max-width: 92vw;
-      box-shadow: 0 16px 48px rgba(20,18,16,0.22), 0 2px 8px rgba(20,18,16,0.10);
-      overflow: hidden;
-    }
-    .modal-head { padding: 22px 24px 14px; border-bottom: 1px solid var(--border-lt); }
-    .modal-title {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 24px; font-weight: 600; letter-spacing: -0.01em;
-    }
-    .modal-sub { font-size: 12px; color: var(--light); margin-top: 2px; font-style: italic; }
-    .modal-body { padding: 16px 24px; }
-
-    .select-row { display: flex; gap: 14px; margin-bottom: 10px; }
-    .sel-link {
-      font-size: 12px; color: var(--muted); cursor: pointer;
-      text-decoration: underline; text-underline-offset: 2px;
-      transition: color 0.1s; font-family: 'Lora', serif;
-    }
-    .sel-link:hover { color: var(--text); }
-
-    .prime-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 2px; margin-bottom: 16px;
-    }
-    .p-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 8px; border-radius: 5px;
-      cursor: pointer; user-select: none; transition: background 0.1s;
-    }
-    .p-row:hover { background: var(--bg-dim); }
-    .p-check {
-      width: 15px; height: 15px;
-      border: 1.5px solid var(--border); border-radius: 3px;
-      background: white; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.12s, border-color 0.12s;
-    }
-    .p-row.on .p-check { background: var(--btn); border-color: var(--btn); }
-    .p-row.on .p-check::after {
-      content: ''; width: 8px; height: 5px;
-      border-left: 2px solid white; border-bottom: 2px solid white;
-      transform: rotate(-45deg) translate(1px, -1px); display: block;
-    }
-    .p-icon {
-      width: 26px; height: 26px; border-radius: 50%;
-      background: var(--bg-dim); border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Cormorant Garamond', serif; font-size: 13px;
-      font-weight: 600; color: var(--muted); flex-shrink: 0;
-      overflow: hidden;
-    }
-    .p-icon img { width: 100%; height: 100%; object-fit: contain; }
-    .p-name { font-size: 13px; color: var(--text); }
-
-    .msg-label {
-      font-family: 'Cormorant SC', serif; font-size: 10px;
-      letter-spacing: 2px; color: var(--light); margin-bottom: 6px;
-    }
-    .msg-field {
-      width: 100%; font-family: 'Lora', Georgia, serif;
-      font-size: 13px; border: 1px solid var(--border);
-      padding: 10px 12px; background: var(--bg);
-      color: var(--text); border-radius: 2px; outline: none;
-      resize: vertical; height: 80px; transition: border-color 0.15s;
-    }
-    .msg-field:focus { border-color: var(--muted); }
-
-    .modal-foot {
-      display: flex; justify-content: flex-end; gap: 10px;
-      padding: 14px 24px; border-top: 1px solid var(--border-lt);
-    }
-    .btn-cancel {
-      font-family: 'Cormorant SC', serif; font-size: 12px; letter-spacing: 1px;
-      padding: 9px 22px; cursor: pointer;
-      border: 1px solid var(--border); background: none; border-radius: 2px;
-      transition: all 0.15s;
-    }
-    .btn-cancel:hover { background: var(--border-lt); }
-    .btn-send {
-      font-family: 'Cormorant SC', serif; font-size: 12px; letter-spacing: 1px;
-      padding: 9px 22px; cursor: pointer;
-      background: var(--btn); color: var(--btn-text);
-      border: 1px solid var(--btn); border-radius: 2px;
-      transition: all 0.15s;
-    }
-    .btn-send:hover { background: #444; }
-    .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* ── NOTICES TAB ── */
-    .notices-head {
-      display: flex; justify-content: space-between;
-      align-items: baseline; margin-bottom: 6px;
-    }
-    .notices-title {
-      font-family: 'Cormorant SC', serif; font-size: 18px;
-      letter-spacing: 1px;
-    }
-    .notices-count { font-size: 13px; color: var(--light); font-style: italic; }
-    .notices-desc { font-size: 13px; color: var(--muted); margin-bottom: 28px; font-style: italic; }
-
-    .notice-item {
-      border: 1px solid var(--border); border-radius: 4px;
-      margin-bottom: 12px; background: var(--surface);
-      transition: opacity 0.3s; overflow: hidden;
-    }
-    .notice-item.fragged { opacity: 0.55; }
-    .notice-item.dismissed { display: none; }
-
-    .notice-main { display: flex; gap: 16px; padding: 16px; }
-
-    .notice-avatar {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: var(--bg-dim); border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Cormorant Garamond', serif; font-size: 15px;
-      font-weight: 600; color: var(--muted); flex-shrink: 0;
-      overflow: hidden;
-    }
-    .notice-avatar img { width: 100%; height: 100%; object-fit: contain; }
-
-    .notice-content { flex: 1; min-width: 0; }
-
-    .notice-topic {
-      font-size: 14px; font-weight: 500; color: var(--text);
-      margin-bottom: 4px; cursor: pointer;
-      display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
-    }
-    .notice-topic:hover .expand-arrow { color: var(--text); }
-    .expand-arrow { color: var(--light); flex-shrink: 0; font-size: 12px; }
-    .notice-summary { font-size: 13px; color: var(--muted); line-height: 1.5; }
-    .notice-body {
-      display: none; font-size: 13px; color: var(--muted);
-      line-height: 1.6; margin-top: 10px; padding-top: 10px;
-      border-top: 1px solid var(--border-lt);
-    }
-    .notice-item.expanded .notice-body { display: block; }
-    .notice-item.expanded .expand-arrow { transform: rotate(180deg); }
-
-    .notice-meta {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 16px; border-top: 1px solid var(--border-lt);
-      background: var(--bg);
-    }
-    .notice-prime-name { font-size: 12px; color: var(--muted); font-variant: small-caps; letter-spacing: 0.5px; }
-    .notice-date { font-size: 12px; color: var(--light); font-style: italic; }
-    .level-badge {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; letter-spacing: 0.5px;
-    }
-    .l-dot { width: 6px; height: 6px; border-radius: 50%; }
-    .level-urgent .l-dot { background: var(--badge-amber); }
-    .level-moderate .l-dot { background: var(--badge-blue); }
-    .l-text { color: var(--muted); }
-    .with-ac {
-      font-size: 11px; color: var(--badge-amber); font-style: italic;
-      display: none;
-    }
-    .notice-item.fragged .with-ac { display: block; }
-
-    .notice-actions { margin-left: auto; display: flex; gap: 8px; }
-    .btn-dismiss, .btn-frag {
-      font-family: 'Cormorant SC', serif; font-size: 11px;
-      letter-spacing: 0.8px; padding: 5px 14px;
-      border: 1px solid var(--border); background: none;
-      cursor: pointer; border-radius: 2px; transition: all 0.15s;
-    }
-    .btn-dismiss:hover { background: var(--badge-red); color: white; border-color: var(--badge-red); }
-    .btn-frag:hover { background: var(--badge-amber); color: white; border-color: var(--badge-amber); }
-    .btn-frag:disabled { opacity: 0.4; cursor: not-allowed; }
-    .notices-empty {
-      font-size: 14px; color: var(--light); font-style: italic;
-      padding: 40px 0; text-align: center;
-    }
-    .status-msg { font-size: 14px; color: var(--light); font-style: italic; padding: 8px 0; }
-
-    @media (max-width: 600px) {
-      header { padding: 20px 20px 16px; }
-      nav { padding: 0 20px; }
-      .page { padding: 24px 20px; }
-    }
+    @media(max-width:600px){header{padding:20px 20px 16px}nav{padding:0 20px}.page{padding:24px 20px}}
   </style>
 </head>
 <body>
@@ -377,9 +157,9 @@
 </header>
 
 <nav>
-  <button class="active" onclick="showPage('roundtable', this)">Round Table</button>
-  <button onclick="showPage('wheel', this)">Tiles</button>
-  <button onclick="showPage('notices', this)" id="noticesTab">
+  <button class="active" onclick="showPage('roundtable',this)">Round Table</button>
+  <button onclick="showPage('wheel',this)">Tiles</button>
+  <button onclick="showPage('notices',this)" id="noticesTab">
     Notices
     <span class="notices-badge" id="noticesBadge" style="display:none"></span>
   </button>
@@ -396,16 +176,19 @@
   </div>
 </div>
 
-<!-- TILES / ROLODEX -->
+<!-- TILES -->
 <div id="wheel" class="page">
-  <p class="section-label">Primes</p>
+  <div class="tiles-section-head">
+    <span class="section-label" style="margin-bottom:0">Primes</span>
+  </div>
   <div class="tile-grid" id="primeTiles"><p class="status-msg">Loading…</p></div>
   <hr class="section-divider">
-  <p class="section-label">Consultants</p>
+  <div class="tiles-section-head">
+    <span class="section-label" style="margin-bottom:0">Consultants &amp; Others</span>
+    <button class="gear-btn" onclick="openAdminPanel()">⚙ Manage</button>
+  </div>
   <div class="tile-grid" id="consultantTiles"><p class="status-msg">Loading…</p></div>
-  <hr class="section-divider">
-  <p class="section-label">Others</p>
-  <div class="tile-grid" id="otherTiles"><p class="status-msg">Loading…</p></div>
+  <div class="tile-grid" id="otherTiles"></div>
 </div>
 
 <!-- NOTICES -->
@@ -441,424 +224,173 @@
   </div>
 </div>
 
-<script>
-/* ============================================================
-   CONFIG
-============================================================ */
-const SUPABASE_URL      = 'https://vysenpymsfhgionqfulf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_dEklXoGWXhXJHZl54VKKTg_Jycm-UGM';
-const INVOKE_FN_URL     = SUPABASE_URL + '/functions/v1/prime-invoke-all';
-const DISMISS_FN_URL    = SUPABASE_URL + '/functions/v1/navigator-dismiss';
-const STATUS_FN_URL     = SUPABASE_URL + '/functions/v1/navigator-status';
+<!-- ADMIN PANEL -->
+<div class="modal-overlay" id="adminPanel" style="display:none" onclick="handleAdminOverlay(event)">
+  <div class="modal-card" style="width:500px;max-height:80vh;overflow-y:auto">
+    <div class="modal-head">
+      <div class="modal-title" style="font-size:20px">Manage Tiles</div>
+      <div class="modal-sub">Edit URLs for Consultants and Others</div>
+    </div>
+    <div class="modal-body" id="adminBody"><p class="status-msg">Loading…</p></div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeAdminPanel()">Close</button>
+      <button class="btn-send" id="adminSaveBtn" onclick="saveAdmin()">Save changes</button>
+    </div>
+  </div>
+</div>
 
-/* ============================================================
-   ICON PATHS
-============================================================ */
+<script>
+const SUPABASE_URL       = 'https://vysenpymsfhgionqfulf.supabase.co';
+const SUPABASE_ANON_KEY  = 'sb_publishable_dEklXoGWXhXJHZl54VKKTg_Jycm-UGM';
+const INVOKE_FN_URL      = SUPABASE_URL + '/functions/v1/prime-invoke-all';
+const DISMISS_FN_URL     = SUPABASE_URL + '/functions/v1/navigator-dismiss';
+const STATUS_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-status';
+const TILES_ADMIN_FN_URL = SUPABASE_URL + '/functions/v1/navigator-tiles-admin';
+
 const ICONS = {
-  argos:          'images/primes/argos.png',
-  napoleon:       'images/primes/napoleon.png',
-  theophrastus:   'images/primes/theophrastus.png',
-  ghostwheel:     'images/primes/ghostwheel.png',
-  constantinople: 'images/primes/constantinople.png',
-  antechamber:    'images/primes/antechamber.png',
-  aegis:          'images/primes/aegis.png',
-  homer:          'images/primes/homer.png',
-  ricardo:        'images/primes/ricardo.png',
-  eames:          'images/primes/eames.png',
-  khaos:          'images/consultants/khaos.png',
-  redshirt:       'images/consultants/redshirt.png',
-  phocus:         'images/consultants/phocus.png',
+  argos:'images/primes/argos.png', napoleon:'images/primes/napoleon.png',
+  theophrastus:'images/primes/theophrastus.png', ghostwheel:'images/primes/ghostwheel.png',
+  constantinople:'images/primes/constantinople.png', antechamber:'images/primes/antechamber.png',
+  aegis:'images/primes/aegis.png', homer:'images/primes/homer.png',
+  ricardo:'images/primes/ricardo.png', eames:'images/primes/eames.png',
+  khaos:'images/consultants/khaos.png', redshirt:'images/consultants/redshirt.png',
 };
 
-const WHEEL_PRIMES   = ['napoleon','argos','theophrastus','ghostwheel','constantinople','antechamber','aegis','homer','ricardo','eames'];
-const STALE_HOURS    = 24;
+const WHEEL_PRIMES = ['napoleon','argos','theophrastus','ghostwheel','constantinople','antechamber','aegis','homer','ricardo','eames'];
+const STALE_HOURS  = 24;
 
-/* ============================================================
-   STATE
-============================================================ */
-let instances    = {};
-let unreadMap    = {};
-let attentionMap = {};
-let noticesData  = [];
-let projectTiles = [];
-let invokeTime   = null;
+let instances={}, unreadMap={}, attentionMap={}, noticesData=[], projectTiles=[], invokeTime=null;
 const checkedPrimes = new Set(['napoleon','argos','ghostwheel']);
+let pendingAdminChanges = {};
 
-/* ============================================================
-   FETCH HELPERS
-============================================================ */
 async function sb(path) {
-  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
-  });
-  if (!r.ok) throw new Error('Supabase ' + r.status);
+  const r = await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+  if(!r.ok) throw new Error('Supabase '+r.status);
   return r.json();
 }
 
-/* ============================================================
-   LOAD DATA
-============================================================ */
 async function loadData() {
-  document.getElementById('lastRefreshed').textContent = 'Refreshing…';
+  document.getElementById('lastRefreshed').textContent='Refreshing…';
   try {
-    // Instances
     const rows = await sb('instances?select=name,display_name,chat_url,instance_type,last_seen_at');
-    instances = {};
-    rows.forEach(r => instances[r.name] = r);
-
-    // Unread counts via Edge Function
-    try {
-      const sr = await fetch(STATUS_FN_URL, { headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY } });
-      const sd = await sr.json();
-      unreadMap = sd.unread || {};
-    } catch(e) { console.warn('navigator-status unavailable:', e); unreadMap = {}; }
-
-    // Attention levels
-    const posts = await sb('wheel_posts?select=posting_lineage,effective_attention_level&superseded_at=is.null');
-    attentionMap = {};
-    const rank = { 'urgent':2, 'moderate':1, 'low':0 };
-    posts.forEach(p => {
-      const cur = attentionMap[p.posting_lineage];
-      if (!cur || (rank[p.effective_attention_level]||0) > (rank[cur]||0)) {
-        attentionMap[p.posting_lineage] = p.effective_attention_level;
-      }
-    });
-
-    // Notices
-    noticesData = await sb('wheel_posts?select=id,posting_lineage,topic,body,effective_attention_level,created_at&effective_attention_level=in.(moderate,urgent)&superseded_at=is.null&reg_acknowledged_at=is.null&order=created_at.desc');
-
-    // Project tiles (consultants + others)
-    projectTiles = await sb('project_tiles?select=id,name,url,category,display_order,icon_ref&order=category,display_order');
-
-    renderWheel();
-    renderRoundTable();
-    renderNotices();
-
-    const t = new Date();
-    document.getElementById('lastRefreshed').textContent =
-      'Updated ' + t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  } catch(e) {
-    document.getElementById('lastRefreshed').textContent = 'Error — check console';
-    console.error(e);
-  }
+    instances={};rows.forEach(r=>instances[r.name]=r);
+    try{const sr=await fetch(STATUS_FN_URL,{headers:{'Authorization':'Bearer '+SUPABASE_ANON_KEY}});const sd=await sr.json();unreadMap=sd.unread||{};}catch(e){unreadMap={};}
+    const posts=await sb('wheel_posts?select=posting_lineage,effective_attention_level&superseded_at=is.null');
+    attentionMap={};const rank={'urgent':2,'moderate':1,'low':0};
+    posts.forEach(p=>{const cur=attentionMap[p.posting_lineage];if(!cur||(rank[p.effective_attention_level]||0)>(rank[cur]||0))attentionMap[p.posting_lineage]=p.effective_attention_level;});
+    noticesData=await sb('wheel_posts?select=id,posting_lineage,topic,body,effective_attention_level,created_at&effective_attention_level=in.(moderate,urgent)&superseded_at=is.null&reg_acknowledged_at=is.null&order=created_at.desc');
+    projectTiles=await sb('project_tiles?select=id,name,url,category,display_order,icon_ref&order=category,display_order');
+    renderWheel();renderRoundTable();renderNotices();
+    const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
 }
 
-/* ============================================================
-   HELPERS
-============================================================ */
-function isStale(lastSeen) {
-  if (!lastSeen) return true;
-  return (Date.now() - new Date(lastSeen).getTime()) > STALE_HOURS * 3600 * 1000;
+function isStale(s){if(!s)return true;return(Date.now()-new Date(s).getTime())>STALE_HOURS*3600*1000;}
+function dName(n){const d=instances[n];if(d&&d.display_name)return d.display_name;return n.charAt(0).toUpperCase()+n.slice(1);}
+function badges(n){const p=[];if(unreadMap[n]>0)p.push(`<span class="badge red" title="${unreadMap[n]} unread"></span>`);if(attentionMap[n]==='urgent')p.push(`<span class="badge amber"></span>`);const i=instances[n];if(i&&!isStale(i.last_seen_at))p.push(`<span class="badge blue"></span>`);return p.length?`<div class="badges">${p.join('')}</div>`:''}
+
+function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}</div>`;}
+
+function makeProjectTile(t){const src=t.icon_ref?`images/consultants/${t.icon_ref}`:'';const inner=src?`<img class="tile-icon" src="${src}" alt="${t.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${t.name}</span>`:`<span class="tile-name" style="font-size:13px;text-align:center;padding:0 8px;line-height:1.3">${t.name}</span>`;if(t.url)return`<a class="tile" href="${t.url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="tile stale">${inner}</div>`;}
+
+function renderWheel(){
+  document.getElementById('primeTiles').innerHTML=WHEEL_PRIMES.map(makeTile).join('');
+  const cons=projectTiles.filter(t=>t.category==='consultant');
+  document.getElementById('consultantTiles').innerHTML=cons.length?cons.map(makeProjectTile).join(''):'<p class="status-msg">No consultants configured.</p>';
+  const oth=projectTiles.filter(t=>t.category==='other');
+  document.getElementById('otherTiles').innerHTML=oth.length?oth.map(makeProjectTile).join(''):'';
 }
 
-function dName(name) {
-  const d = instances[name];
-  if (d && d.display_name) return d.display_name;
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
+function renderRoundTable(){renderCircle();renderMobile();renderPrimeGrid();}
+function respClass(n){if(!invokeTime)return'';const i=instances[n];if(!i||!i.last_seen_at)return' resp-grey';return new Date(i.last_seen_at).getTime()>=invokeTime?' resp-blue':' resp-grey';}
 
-function badges(name) {
-  const parts = [];
-  if (unreadMap[name] > 0)
-    parts.push(`<span class="badge red" title="${unreadMap[name]} unread"></span>`);
-  if (attentionMap[name] === 'urgent')
-    parts.push(`<span class="badge amber" title="Urgent attention"></span>`);
-  const inst = instances[name];
-  if (inst && !isStale(inst.last_seen_at))
-    parts.push(`<span class="badge blue" title="Active within 24h"></span>`);
-  return parts.length ? `<div class="badges">${parts.join('')}</div>` : '';
-}
-
-function makeTile(name) {
-  const inst  = instances[name] || {};
-  const url   = inst.chat_url;
-  const stale = isStale(inst.last_seen_at);
-  const dn    = dName(name);
-  const icon  = ICONS[name] || '';
-  const cls   = 'tile' + (stale ? ' stale' : '');
-  const inner = `${badges(name)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;
-  if (url && !stale) return `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;
-  return `<div class="${cls}">${inner}</div>`;
-}
-
-function makeProjectTile(tile) {
-  const icon = tile.icon_ref ? `images/consultants/${tile.icon_ref}` : '';
-  const inner = icon
-    ? `<img class="tile-icon" src="${icon}" alt="${tile.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${tile.name}</span>`
-    : `<span class="tile-name" style="font-size:14px;text-align:center;padding:0 8px">${tile.name}</span>`;
-  if (tile.url) return `<a class="tile" href="${tile.url}" target="_blank" rel="noopener">${inner}</a>`;
-  return `<div class="tile stale">${inner}</div>`;
-}
-
-/* ============================================================
-   RENDER TILES
-============================================================ */
-function renderWheel() {
-  document.getElementById('primeTiles').innerHTML = WHEEL_PRIMES.map(makeTile).join('');
-
-  const consultants = projectTiles.filter(t => t.category === 'consultant');
-  document.getElementById('consultantTiles').innerHTML = consultants.length
-    ? consultants.map(makeProjectTile).join('')
-    : '<p class="status-msg">No consultants configured.</p>';
-
-  const others = projectTiles.filter(t => t.category === 'other');
-  document.getElementById('otherTiles').innerHTML = others.length
-    ? others.map(makeProjectTile).join('')
-    : '<p class="status-msg">No other projects configured.</p>';
-}
-
-/* ============================================================
-   RENDER ROUND TABLE
-============================================================ */
-function renderRoundTable() {
-  renderCircle();
-  renderMobile();
-  renderPrimeGrid();
-}
-
-function respClass(name) {
-  if (!invokeTime) return '';
-  const inst = instances[name];
-  if (!inst || !inst.last_seen_at) return ' resp-grey';
-  const seen = new Date(inst.last_seen_at).getTime();
-  if (seen >= invokeTime) return ' resp-blue';
-  return ' resp-grey';
-}
-
-function renderCircle() {
-  const stage = document.getElementById('circleStage');
-  const cx = 330, cy = 330, r = 268, n = WHEEL_PRIMES.length;
-  let html = `<button class="invoke-centre" onclick="openModal()">Invoke</button>`;
-  WHEEL_PRIMES.forEach((name, i) => {
-    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-    const x = cx + r * Math.cos(angle);
-    const y = cy + r * Math.sin(angle);
-    const inst  = instances[name] || {};
-    const url   = inst.chat_url;
-    const stale = isStale(inst.last_seen_at);
-    const dn    = dName(name);
-    const icon  = ICONS[name] || '';
-    const cls   = 'tile' + (stale ? ' stale' : '') + respClass(name);
-    const inner = `${badges(name)}<img class="tile-icon" src="${icon}" alt="${dn}" style="width:58px;height:58px" onerror="this.style.visibility='hidden'"><span class="tile-name" style="font-size:11px">${dn}</span>`;
-    const tag   = (url && !stale) ? `a href="${url}" target="_blank" rel="noopener"` : 'div';
-    const close = (url && !stale) ? 'a' : 'div';
-    html += `<div class="circle-tile" style="left:${x}px;top:${y}px"><${tag} class="${cls}">${inner}</${close}></div>`;
+function renderCircle(){
+  const s=document.getElementById('circleStage');const cx=330,cy=330,r=268,n=WHEEL_PRIMES.length;
+  let html=`<button class="invoke-centre" onclick="openModal()">Invoke</button>`;
+  WHEEL_PRIMES.forEach((name,i)=>{
+    const a=(i/n)*2*Math.PI-Math.PI/2;const x=cx+r*Math.cos(a);const y=cy+r*Math.sin(a);
+    const inst=instances[name]||{};const url=inst.chat_url;const stale=isStale(inst.last_seen_at);
+    const dn=dName(name);const icon=ICONS[name]||'';const cls='tile'+(stale?' stale':'')+respClass(name);
+    const inner=`${badges(name)}<img class="tile-icon" src="${icon}" alt="${dn}" style="width:58px;height:58px" onerror="this.style.visibility='hidden'"><span class="tile-name" style="font-size:11px">${dn}</span>`;
+    const tag=(url&&!stale)?`a href="${url}" target="_blank" rel="noopener"`:'div';const close=(url&&!stale)?'a':'div';
+    html+=`<div class="circle-tile" style="left:${x}px;top:${y}px"><${tag} class="${cls}">${inner}</${close}></div>`;
   });
-  stage.innerHTML = html;
+  s.innerHTML=html;
 }
 
-function renderMobile() {
-  const list = document.getElementById('mobilePrimeList');
-  list.innerHTML = WHEEL_PRIMES.map(name => {
-    const inst = instances[name] || {};
-    const url  = inst.chat_url;
-    const stale = isStale(inst.last_seen_at);
-    const dn   = dName(name);
-    const icon = ICONS[name] || '';
-    const cls  = 'mobile-tile-row' + (stale ? ' stale' : '');
-    const inner = `<img src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>${badges(name)}`;
-    if (url && !stale) return `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;
-    return `<div class="${cls}">${inner}</div>`;
+function renderMobile(){document.getElementById('mobilePrimeList').innerHTML=WHEEL_PRIMES.map(n=>{const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='mobile-tile-row'+(s?' stale':'');const inner=`<img src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>${badges(n)}`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}</div>`;}).join('');}
+
+function renderPrimeGrid(){document.getElementById('primeGrid').innerHTML=WHEEL_PRIMES.map(n=>{const on=checkedPrimes.has(n)?'on':'';const icon=ICONS[n]||'';const dn=dName(n);const iconEl=icon?`<div class="p-icon"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="p-icon">${dn[0]}</div>`;return`<div class="p-row ${on}" onclick="togglePrime('${n}')"><div class="p-check"></div>${iconEl}<div class="p-name">${dn}</div></div>`;}).join('');}
+function togglePrime(n){if(checkedPrimes.has(n))checkedPrimes.delete(n);else checkedPrimes.add(n);renderPrimeGrid();}
+function selectAll(){WHEEL_PRIMES.forEach(n=>checkedPrimes.add(n));renderPrimeGrid();}
+function clearAll(){checkedPrimes.clear();renderPrimeGrid();}
+
+function renderNotices(){
+  const count=noticesData.length;
+  document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
+  const b=document.getElementById('noticesBadge');
+  if(count>0){b.textContent=count>9?'9+':count;b.style.display='flex';}else b.style.display='none';
+  if(count===0){document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';return;}
+  document.getElementById('noticesList').innerHTML=noticesData.map((item,idx)=>{
+    const dn=item.posting_lineage.charAt(0).toUpperCase()+item.posting_lineage.slice(1);
+    const icon=ICONS[item.posting_lineage]||'';
+    const av=icon?`<div class="notice-avatar"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="notice-avatar">${dn[0]}</div>`;
+    const date=new Date(item.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    const summary=(item.body||'').split('\n')[0].substring(0,120);
+    const lv='level-'+(item.effective_attention_level||'moderate');
+    return`<div class="notice-item" id="notice-${idx}"><div class="notice-main">${av}<div class="notice-content"><div class="notice-topic" onclick="toggleNotice(${idx})"><span>${item.topic}</span><span class="expand-arrow">▾</span></div><div class="notice-summary">${summary}</div><div class="notice-body">${(item.body||'').replace(/\n/g,'<br>')}</div></div></div><div class="notice-meta"><div class="notice-prime-name">${dn}</div><div class="notice-date">${date}</div><div class="level-badge ${lv}"><div class="l-dot"></div><div class="l-text">${item.effective_attention_level}</div></div><div class="with-ac">with Antechamber</div><div class="notice-actions"><button class="btn-dismiss" onclick="dismissNotice(${idx},'${item.id}')">Dismiss</button><button class="btn-frag" id="frag-${idx}" onclick="fragNotice(${idx},'${item.id}')">Frag</button></div></div></div>`;
   }).join('');
 }
 
-/* ============================================================
-   PRIME CHECKBOX GRID
-============================================================ */
-function renderPrimeGrid() {
-  const grid = document.getElementById('primeGrid');
-  grid.innerHTML = WHEEL_PRIMES.map(name => {
-    const on = checkedPrimes.has(name) ? 'on' : '';
-    const icon = ICONS[name] || '';
-    const dn = dName(name);
-    const iconEl = icon
-      ? `<div class="p-icon"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`
-      : `<div class="p-icon">${dn[0]}</div>`;
-    return `<div class="p-row ${on}" onclick="togglePrime('${name}')">
-      <div class="p-check"></div>
-      ${iconEl}
-      <div class="p-name">${dn}</div>
-    </div>`;
-  }).join('');
+function toggleNotice(i){document.getElementById('notice-'+i).classList.toggle('expanded');}
+async function dismissNotice(idx,id){const el=document.getElementById('notice-'+idx);try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'dismiss'})});}catch(e){console.warn(e);}el.style.opacity='0';setTimeout(()=>{el.classList.add('dismissed');updateNoticesCount();},300);}
+async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'frag'})});}catch(e){console.warn(e);}document.getElementById('notice-'+idx).classList.add('fragged');document.getElementById('frag-'+idx).disabled=true;}
+function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
+
+function openModal(){renderPrimeGrid();document.getElementById('invokeModal').style.display='flex';document.getElementById('invokeMessage').focus();}
+function closeModal(){document.getElementById('invokeModal').style.display='none';}
+function handleOverlayClick(e){if(e.target===document.getElementById('invokeModal'))closeModal();}
+
+async function sendInvoke(){
+  const msg=document.getElementById('invokeMessage').value.trim();const targets=Array.from(checkedPrimes);
+  if(!targets.length){alert('Select at least one Prime.');return;}if(!msg){alert('Please enter a message.');return;}
+  const btn=document.getElementById('sendBtn');btn.textContent='Sending…';btn.disabled=true;
+  targets.forEach(n=>{const url=(instances[n]||{}).chat_url;if(url)window.open(url,'_blank');});
+  invokeTime=Date.now();
+  try{await fetch(INVOKE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({topic:msg.substring(0,80),message:msg,from_lineage:'reg',target_lineages:targets})});}catch(e){console.error(e);}
+  closeModal();btn.textContent='Send';btn.disabled=false;setTimeout(renderCircle,500);
 }
 
-function togglePrime(name) {
-  if (checkedPrimes.has(name)) checkedPrimes.delete(name);
-  else checkedPrimes.add(name);
-  renderPrimeGrid();
+function openAdminPanel(){pendingAdminChanges={};renderAdminBody();document.getElementById('adminPanel').style.display='flex';}
+function closeAdminPanel(){document.getElementById('adminPanel').style.display='none';}
+function handleAdminOverlay(e){if(e.target===document.getElementById('adminPanel'))closeAdminPanel();}
+
+function renderAdminBody(){
+  const body=document.getElementById('adminBody');
+  const cons=projectTiles.filter(t=>t.category==='consultant');
+  const oth=projectTiles.filter(t=>t.category==='other');
+  let html='';
+  if(cons.length){html+=`<div class="msg-label" style="margin-bottom:12px">Consultants</div>`;html+=cons.map(t=>`<div class="admin-row"><span class="admin-name">${t.name}</span><input class="admin-input" type="text" value="${t.url||''}" onchange="pendingAdminChanges['${t.id}']={action:'update',id:'${t.id}',url:this.value}"></div>`).join('');}
+  if(oth.length){html+=`<div class="msg-label" style="margin:18px 0 12px">Others</div>`;html+=oth.map(t=>`<div class="admin-row"><span class="admin-name">${t.name}</span><input class="admin-input" type="text" value="${t.url||''}" onchange="pendingAdminChanges['${t.id}']={action:'update',id:'${t.id}',url:this.value}"></div>`).join('');}
+  html+=`<div class="msg-label" style="margin:20px 0 12px;border-top:1px solid var(--border-lt);padding-top:18px">Add new Other tile</div><div class="admin-row" style="margin-bottom:8px"><span class="admin-name">Name</span><input class="admin-input" type="text" id="newTileName" placeholder="e.g. TripBuddy"></div><div class="admin-row"><span class="admin-name">URL</span><input class="admin-input" type="text" id="newTileUrl" placeholder="https://claude.ai/chat/…"></div>`;
+  body.innerHTML=html;
 }
 
-function selectAll() { WHEEL_PRIMES.forEach(n => checkedPrimes.add(n)); renderPrimeGrid(); }
-function clearAll()  { checkedPrimes.clear(); renderPrimeGrid(); }
-
-/* ============================================================
-   NOTICES
-============================================================ */
-function renderNotices() {
-  const count = noticesData.length;
-  document.getElementById('noticesCount').textContent = count > 0 ? `${count} item${count===1?'':'s'}` : '';
-
-  const badge = document.getElementById('noticesBadge');
-  if (count > 0) {
-    badge.textContent = count > 9 ? '9+' : count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-
-  if (count === 0) {
-    document.getElementById('noticesList').innerHTML = '<div class="notices-empty">Nothing requiring attention.</div>';
-    return;
-  }
-
-  document.getElementById('noticesList').innerHTML = noticesData.map((item, idx) => {
-    const dn = item.posting_lineage.charAt(0).toUpperCase() + item.posting_lineage.slice(1);
-    const icon = ICONS[item.posting_lineage] || '';
-    const avatarEl = icon
-      ? `<div class="notice-avatar"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`
-      : `<div class="notice-avatar">${dn[0]}</div>`;
-    const date = new Date(item.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'short'});
-    const summary = item.body ? item.body.split('\n')[0].substring(0, 120) + (item.body.length > 120 ? '…' : '') : '';
-    const levelCls = 'level-' + (item.effective_attention_level || 'moderate');
-    return `<div class="notice-item" id="notice-${idx}">
-      <div class="notice-main">
-        ${avatarEl}
-        <div class="notice-content">
-          <div class="notice-topic" onclick="toggleNotice(${idx})">
-            <span>${item.topic}</span>
-            <span class="expand-arrow">▾</span>
-          </div>
-          <div class="notice-summary">${summary}</div>
-          <div class="notice-body">${(item.body||'').replace(/\n/g,'<br>')}</div>
-        </div>
-      </div>
-      <div class="notice-meta">
-        <div class="notice-prime-name">${dn}</div>
-        <div class="notice-date">${date}</div>
-        <div class="level-badge ${levelCls}">
-          <div class="l-dot"></div>
-          <div class="l-text">${item.effective_attention_level}</div>
-        </div>
-        <div class="with-ac">with Antechamber</div>
-        <div class="notice-actions">
-          <button class="btn-dismiss" onclick="dismissNotice(${idx},'${item.id}')">Dismiss</button>
-          <button class="btn-frag" id="frag-${idx}" onclick="fragNotice(${idx},'${item.id}')">Frag</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+async function saveAdmin(){
+  const btn=document.getElementById('adminSaveBtn');btn.textContent='Saving…';btn.disabled=true;
+  try{
+    for(const c of Object.values(pendingAdminChanges)){await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(c)});}
+    const nn=document.getElementById('newTileName')?.value.trim();const nu=document.getElementById('newTileUrl')?.value.trim();
+    if(nn&&nu){await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({action:'insert',name:nn,url:nu,category:'other'})});}
+    closeAdminPanel();await loadData();
+  }catch(e){console.error(e);alert('Save failed');}
+  finally{btn.textContent='Save changes';btn.disabled=false;}
 }
 
-function toggleNotice(idx) {
-  document.getElementById('notice-' + idx).classList.toggle('expanded');
-}
+function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
 
-async function dismissNotice(idx, id) {
-  const el = document.getElementById('notice-' + idx);
-  try {
-    await fetch(DISMISS_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
-      body: JSON.stringify({ id, action: 'dismiss' })
-    });
-  } catch(e) { console.warn('Dismiss write failed:', e); }
-  el.style.opacity = '0';
-  setTimeout(() => {
-    el.classList.add('dismissed');
-    updateNoticesCount();
-  }, 300);
-}
-
-async function fragNotice(idx, id) {
-  const el = document.getElementById('notice-' + idx);
-  const btn = document.getElementById('frag-' + idx);
-  try {
-    await fetch(DISMISS_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
-      body: JSON.stringify({ id, action: 'frag' })
-    });
-  } catch(e) { console.warn('Frag write failed:', e); }
-  el.classList.add('fragged');
-  btn.disabled = true;
-}
-
-function updateNoticesCount() {
-  const visible = document.querySelectorAll('.notice-item:not(.dismissed)').length;
-  document.getElementById('noticesCount').textContent = visible > 0 ? `${visible} item${visible===1?'':'s'}` : '';
-  const badge = document.getElementById('noticesBadge');
-  if (visible > 0) { badge.textContent = visible > 9 ? '9+' : visible; badge.style.display = 'flex'; }
-  else { badge.style.display = 'none'; }
-  if (visible === 0) document.getElementById('noticesList').innerHTML = '<div class="notices-empty">Nothing requiring attention.</div>';
-}
-
-/* ============================================================
-   INVOKE MODAL
-============================================================ */
-function openModal() {
-  renderPrimeGrid();
-  document.getElementById('invokeModal').style.display = 'flex';
-  document.getElementById('invokeMessage').focus();
-}
-
-function closeModal() {
-  document.getElementById('invokeModal').style.display = 'none';
-}
-
-function handleOverlayClick(e) {
-  if (e.target === document.getElementById('invokeModal')) closeModal();
-}
-
-async function sendInvoke() {
-  const message = document.getElementById('invokeMessage').value.trim();
-  const targets = Array.from(checkedPrimes);
-  if (targets.length === 0) { alert('Select at least one Prime.'); return; }
-  if (!message) { alert('Please enter a message.'); return; }
-
-  const btn = document.getElementById('sendBtn');
-  btn.textContent = 'Sending…'; btn.disabled = true;
-
-  // Open tabs for each selected Prime (synchronous, within click handler)
-  targets.forEach(name => {
-    const inst = instances[name] || {};
-    if (inst.chat_url) window.open(inst.chat_url, '_blank');
-  });
-
-  // Record invoke time for response tracking
-  invokeTime = Date.now();
-
-  // Send prime_messages
-  try {
-    const res = await fetch(INVOKE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
-      body: JSON.stringify({ topic: message.substring(0,80), message, from_lineage: 'reg', target_lineages: targets })
-    });
-    const data = await res.json();
-    if (!res.ok) console.error('Invoke error:', data.error);
-  } catch(e) { console.error('Invoke send failed:', e); }
-
-  closeModal();
-  btn.textContent = 'Send'; btn.disabled = false;
-
-  // Refresh to show response tracking
-  setTimeout(() => { renderCircle(); }, 500);
-}
-
-/* ============================================================
-   NAVIGATION
-============================================================ */
-function showPage(id, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  btn.classList.add('active');
-}
-
-/* ============================================================
-   INIT
-============================================================ */
-document.addEventListener('DOMContentLoaded', loadData);
+document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
 </html>
+
