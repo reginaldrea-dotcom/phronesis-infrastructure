@@ -23,8 +23,7 @@
     nav button.active{color:var(--text);border-bottom-color:var(--text)}
     nav button:hover:not(.active){color:var(--muted)}
     .nav-badge{position:absolute;top:10px;right:-10px;background:var(--badge-amber);color:white;font-family:sans-serif;font-size:9px;font-weight:600;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-    .page{display:none;padding:36px 40px}
-    .page.active{display:block}
+    .page{display:none;padding:36px 40px}.page.active{display:block}
     .section-label{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:2px;color:var(--light);margin-bottom:20px}
     .tile-grid{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:40px}
     .tile{width:var(--tile-w);height:var(--tile-h);background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;position:relative;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.06);border-radius:2px;transition:border-color .15s,box-shadow .15s;cursor:pointer}
@@ -39,14 +38,13 @@
     .tiles-section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px}
     .gear-btn{font-family:'Lora',serif;font-size:12px;color:var(--light);background:none;border:none;cursor:pointer;letter-spacing:.3px;transition:color .15s}
     .gear-btn:hover{color:var(--muted)}
-
     /* ROUND TABLE TOP BAR */
     .rt-topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
     .rt-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:3px;overflow:hidden}
     .rt-tab{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:1px;padding:6px 18px;border:none;background:none;cursor:pointer;color:var(--muted);transition:all .15s}
     .rt-tab.active{background:var(--btn);color:var(--btn-text)}
     .rt-tab:disabled{opacity:.35;cursor:default}
-
+    .rt-actions{display:flex;gap:8px}
     /* CIRCLE */
     .rt-container{display:flex;flex-direction:column;align-items:center}
     .circle-stage{position:relative;width:660px;height:660px}
@@ -62,13 +60,9 @@
     @media(max-width:720px){.mobile-rt{display:block}}
     .mobile-invoke-btn{font-family:'Cormorant SC',serif;font-size:14px;letter-spacing:1.5px;width:100%;padding:16px;background:var(--btn);color:var(--btn-text);border:none;cursor:pointer;margin-bottom:24px;border-radius:2px}
     .mobile-tile-row{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:2px;margin-bottom:8px;text-decoration:none;color:inherit;position:relative;transition:border-color .15s}
-    .mobile-tile-row:hover:not(.stale){border-color:var(--muted)}
-    .mobile-tile-row.stale{opacity:.38}
-    .mobile-tile-row img{width:44px;height:44px;object-fit:contain}
-    .mobile-tile-row .tile-name{font-size:14px}
-    .mobile-tile-row .badges{position:static}
-
-    /* CONFERENCE DASHBOARD */
+    .mobile-tile-row:hover:not(.stale){border-color:var(--muted)}.mobile-tile-row.stale{opacity:.38}
+    .mobile-tile-row img{width:44px;height:44px;object-fit:contain}.mobile-tile-row .tile-name{font-size:14px}.mobile-tile-row .badges{position:static}
+    /* CONFERENCE */
     .conf-banner{background:var(--btn);color:var(--btn-text);padding:16px 24px;border-radius:4px;margin-bottom:20px}
     .conf-banner-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
     .conf-banner-title{font-family:'Cormorant SC',serif;font-size:14px;letter-spacing:1px}
@@ -79,7 +73,7 @@
     .conf-responses-title{font-family:'Cormorant SC',serif;font-size:13px;letter-spacing:1.5px;color:var(--light)}
     .conf-resp-count{font-size:12px;color:var(--light);font-style:italic}
     .resp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:28px}
-    .resp-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden;transition:border-color .15s}
+    .resp-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden}
     .resp-card.responded{border-color:var(--badge-blue)}
     .resp-card-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
     .resp-avatar{width:28px;height:28px;border-radius:50%;background:var(--bg-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:13px;font-weight:600;color:var(--muted);flex-shrink:0;overflow:hidden}
@@ -95,7 +89,6 @@
     .resp-date{padding:0 14px 8px;font-size:11px;color:var(--light);font-style:italic}
     .awaiting-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1px solid var(--border);border-radius:12px;font-size:11px;color:var(--light)}
     .awaiting-dot{width:6px;height:6px;border-radius:50%;background:var(--border)}
-
     /* MODAL */
     .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:200}
     .modal-card{background:var(--surface);border-radius:10px;width:440px;max-width:92vw;box-shadow:0 16px 48px rgba(20,18,16,.22),0 2px 8px rgba(20,18,16,.10);overflow:hidden}
@@ -108,13 +101,13 @@
     .btn-cancel{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;padding:9px 22px;cursor:pointer;border:1px solid var(--border);background:none;border-radius:2px;transition:all .15s}
     .btn-cancel:hover{background:var(--border-lt)}
     .btn-send{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;padding:9px 22px;cursor:pointer;background:var(--btn);color:var(--btn-text);border:1px solid var(--btn);border-radius:2px;transition:all .15s}
-    .btn-send:hover{background:#444}
-    .btn-send:disabled{opacity:.5;cursor:not-allowed}
+    .btn-send:hover{background:#444}.btn-send:disabled{opacity:.5;cursor:not-allowed}
+    .btn-close-conf{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:1px;padding:6px 16px;cursor:pointer;border:1px solid var(--border);background:none;border-radius:2px;color:var(--muted);transition:all .15s}
+    .btn-close-conf:hover{border-color:var(--badge-red);color:var(--badge-red)}
     .mode-tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:3px;overflow:hidden}
     .mode-tab{flex:1;font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:1px;padding:7px;border:none;background:none;cursor:pointer;color:var(--muted);transition:all .15s;text-align:center}
     .mode-tab.active{background:var(--btn);color:var(--btn-text)}
-    .conf-fields{display:none}
-    .conf-fields.show{display:block}
+    .conf-fields{display:none}.conf-fields.show{display:block}
     .select-row{display:flex;gap:14px;margin-bottom:10px}
     .sel-link{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-family:'Lora',serif}
     .sel-link:hover{color:var(--text)}
@@ -132,15 +125,13 @@
     .msg-field:focus{border-color:var(--muted)}
     .topic-field{width:100%;font-family:'Lora',Georgia,serif;font-size:13px;border:1px solid var(--border);padding:8px 12px;background:var(--bg);color:var(--text);border-radius:2px;outline:none;margin-bottom:12px;transition:border-color .15s}
     .topic-field:focus{border-color:var(--muted)}
-
     /* NOTICES */
     .notices-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
     .notices-title{font-family:'Cormorant SC',serif;font-size:18px;letter-spacing:1px}
     .notices-count{font-size:13px;color:var(--light);font-style:italic}
     .notices-desc{font-size:13px;color:var(--muted);margin-bottom:28px;font-style:italic}
     .notice-item{border:1px solid var(--border);border-radius:4px;margin-bottom:12px;background:var(--surface);transition:opacity .3s;overflow:hidden}
-    .notice-item.fragged{opacity:.55}
-    .notice-item.dismissed{display:none}
+    .notice-item.fragged{opacity:.55}.notice-item.dismissed{display:none}
     .notice-main{display:flex;gap:16px;padding:16px}
     .notice-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--muted);flex-shrink:0;overflow:hidden}
     .notice-avatar img{width:100%;height:100%;object-fit:contain}
@@ -184,23 +175,23 @@
 <nav>
   <button class="active" onclick="showPage('roundtable',this)">Round Table</button>
   <button onclick="showPage('wheel',this)">Tiles</button>
-  <button onclick="showPage('notices',this)" id="noticesTab">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
+  <button onclick="showPage('notices',this)">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
 </nav>
 
 <!-- ROUND TABLE -->
 <div id="roundtable" class="page active">
-  <!-- TOP BAR: always visible, BUG 1 FIX -->
   <div class="rt-topbar">
-    <div class="rt-tabs" id="rtTabs">
+    <div class="rt-tabs">
       <button class="rt-tab active" id="tabCircle" onclick="setRtView('circle')">Circle</button>
       <button class="rt-tab" id="tabConf" onclick="setRtView('conference')" style="display:none">Conference</button>
     </div>
-    <button class="btn-send" style="font-size:11px;padding:6px 18px" onclick="openModal()">Invoke</button>
+    <div class="rt-actions">
+      <button class="btn-close-conf" id="btnCloseConf" onclick="closeConference()" style="display:none">Close conference</button>
+      <button class="btn-send" style="font-size:11px;padding:6px 18px" onclick="openModal()">Invoke</button>
+    </div>
   </div>
   <div id="rtContent"></div>
-  <div class="mobile-rt" id="mobileRt" style="margin-top:20px">
-    <div id="mobilePrimeList"></div>
-  </div>
+  <div class="mobile-rt"><div id="mobilePrimeList"></div></div>
 </div>
 
 <!-- TILES -->
@@ -226,9 +217,9 @@
 <!-- INVOKE MODAL -->
 <div class="modal-overlay" id="invokeModal" style="display:none" onclick="handleOverlayClick(event)">
   <div class="modal-card">
-    <div class="modal-head"><div class="modal-title">Invoke</div><div class="modal-sub">Select Primes and send message</div></div>
+    <div class="modal-head"><div class="modal-title">Invoke</div><div class="modal-sub" id="invokeModalSub">Select Primes and send message</div></div>
     <div class="modal-body">
-      <div class="mode-tabs">
+      <div class="mode-tabs" id="modeTabs">
         <button class="mode-tab active" onclick="setMode('broadcast',this)">Broadcast</button>
         <button class="mode-tab" onclick="setMode('conference',this)">Conference</button>
       </div>
@@ -265,12 +256,13 @@
 </div>
 
 <script>
-const SUPABASE_URL       = 'https://vysenpymsfhgionqfulf.supabase.co';
-const SUPABASE_ANON_KEY  = 'sb_publishable_dEklXoGWXhXJHZl54VKKTg_Jycm-UGM';
-const INVOKE_FN_URL      = SUPABASE_URL + '/functions/v1/prime-invoke-all';
-const DISMISS_FN_URL     = SUPABASE_URL + '/functions/v1/navigator-dismiss';
-const STATUS_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-status';
-const TILES_ADMIN_FN_URL = SUPABASE_URL + '/functions/v1/navigator-tiles-admin';
+const SUPABASE_URL        = 'https://vysenpymsfhgionqfulf.supabase.co';
+const SUPABASE_ANON_KEY   = 'sb_publishable_dEklXoGWXhXJHZl54VKKTg_Jycm-UGM';
+const INVOKE_FN_URL       = SUPABASE_URL + '/functions/v1/prime-invoke-all';
+const DISMISS_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-dismiss';
+const STATUS_FN_URL       = SUPABASE_URL + '/functions/v1/navigator-status';
+const TILES_ADMIN_FN_URL  = SUPABASE_URL + '/functions/v1/navigator-tiles-admin';
+const CLOSE_CONF_FN_URL   = SUPABASE_URL + '/functions/v1/navigator-conference-close';
 
 const ICONS = {
   argos:'images/primes/argos.png',napoleon:'images/primes/napoleon.png',theophrastus:'images/primes/theophrastus.png',
@@ -287,17 +279,29 @@ let invokeTime=null,invokeMode='broadcast';
 const checkedPrimes=new Set(['napoleon','argos','ghostwheel']);
 let pendingAdminChanges={};
 
-// BUG 1 FIX — persistent view preference
+/* VIEW STATE — Bug 1 fix */
 function getRtView(){return sessionStorage.getItem('rtView')||'auto';}
 function setRtView(view){
   sessionStorage.setItem('rtView',view);
-  document.getElementById('tabCircle').classList.toggle('active',view==='circle');
-  const tabConf=document.getElementById('tabConf');
-  if(tabConf)tabConf.classList.toggle('active',view==='conference');
+  updateRtTabs();
   renderRtContent();
 }
+function updateRtTabs(){
+  const view=getRtView();
+  const hasConf=!!openConference;
+  const showConf=hasConf&&(view==='conference'||(view==='auto'));
+  document.getElementById('tabCircle').classList.toggle('active',!showConf);
+  const tc=document.getElementById('tabConf');
+  tc.style.display=hasConf?'':'none';
+  tc.classList.toggle('active',showConf&&hasConf);
+  document.getElementById('btnCloseConf').style.display=hasConf?'':'none';
+}
 
-async function sb(path){const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});if(!r.ok)throw new Error('Supabase '+r.status);return r.json();}
+async function sb(path){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+  if(!r.ok)throw new Error('Supabase '+r.status);
+  return r.json();
+}
 
 async function loadData(){
   document.getElementById('lastRefreshed').textContent='Refreshing…';
@@ -314,13 +318,11 @@ async function loadData(){
     if(confs.length>0){
       openConference=confs[0];
       conferenceResponses=await sb(`conference_responses?select=id,posting_lineage,summary,body,round,created_at&conference_id=eq.${openConference.id}&order=created_at.asc`);
-      document.getElementById('tabConf').style.display='';
     }else{
       openConference=null;conferenceResponses=[];
-      document.getElementById('tabConf').style.display='none';
-      if(getRtView()==='conference')sessionStorage.setItem('rtView','auto');
+      if(getRtView()==='conference')sessionStorage.setItem('rtView','circle');
     }
-    renderWheel();renderRtContent();renderMobile();renderNotices();
+    renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
 }
@@ -339,22 +341,16 @@ function renderWheel(){
   document.getElementById('otherTiles').innerHTML=oth.length?oth.map(makeProjectTile).join(''):'';
 }
 
-// BUG 1 FIX — determine which view to show
 function renderRtContent(){
   const view=getRtView();
-  const showConf=openConference&&(view==='conference'||(view==='auto'&&openConference));
-  // Update tab active states
-  document.getElementById('tabCircle').classList.toggle('active',!showConf);
-  const tabConf=document.getElementById('tabConf');
-  if(tabConf)tabConf.classList.toggle('active',!!showConf);
+  const showConf=openConference&&(view==='conference'||(view==='auto'));
   if(showConf)renderConferenceDashboard();
   else renderCircle();
 }
 
 function renderCircle(){
-  const stage=document.getElementById('rtContent');
   const cx=330,cy=330,r=268,n=WHEEL_PRIMES.length;
-  let html='<div class="rt-container"><div class="circle-stage" id="circleStage">';
+  let html='<div class="rt-container"><div class="circle-stage">';
   html+=`<button class="invoke-centre" onclick="openModal()">Invoke</button>`;
   WHEEL_PRIMES.forEach((name,i)=>{
     const a=(i/n)*2*Math.PI-Math.PI/2;const x=cx+r*Math.cos(a);const y=cy+r*Math.sin(a);
@@ -412,6 +408,22 @@ function renderConferenceDashboard(){
 
 function toggleResp(name){document.getElementById('rcard-'+name)?.classList.toggle('expanded');}
 
+/* CLOSE CONFERENCE */
+async function closeConference(){
+  if(!openConference)return;
+  if(!confirm('Close this conference? All responses are preserved in the database.'))return;
+  try{
+    const res=await fetch(CLOSE_CONF_FN_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body:JSON.stringify({conference_id:openConference.id})
+    });
+    if(!res.ok)throw new Error('Close failed');
+    sessionStorage.setItem('rtView','circle');
+    await loadData();
+  }catch(e){alert('Could not close conference — check console');console.error(e);}
+}
+
 function renderMobile(){
   document.getElementById('mobilePrimeList').innerHTML=WHEEL_PRIMES.map(n=>{
     const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';
@@ -421,6 +433,18 @@ function renderMobile(){
     return`<div class="${cls}">${inner}</div>`;
   }).join('');
 }
+
+function renderPrimeGrid(){
+  const g=document.getElementById('primeGrid');if(!g)return;
+  g.innerHTML=WHEEL_PRIMES.map(n=>{
+    const on=checkedPrimes.has(n)?'on':'';const icon=ICONS[n]||'';const dn=dName(n);
+    const iconEl=icon?`<div class="p-icon"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="p-icon">${dn[0]}</div>`;
+    return`<div class="p-row ${on}" onclick="togglePrime('${n}')"><div class="p-check"></div>${iconEl}<div class="p-name">${dn}</div></div>`;
+  }).join('');
+}
+function togglePrime(n){if(checkedPrimes.has(n))checkedPrimes.delete(n);else checkedPrimes.add(n);renderPrimeGrid();}
+function selectAll(){WHEEL_PRIMES.forEach(n=>checkedPrimes.add(n));renderPrimeGrid();}
+function clearAll(){checkedPrimes.clear();renderPrimeGrid();}
 
 function renderNotices(){
   const count=noticesData.length;
@@ -438,7 +462,6 @@ function renderNotices(){
     return`<div class="notice-item" id="notice-${idx}"><div class="notice-main">${av}<div class="notice-content"><div class="notice-topic" onclick="toggleNotice(${idx})"><span>${item.topic}</span><span class="expand-arrow">▾</span></div><div class="notice-summary">${summary}</div><div class="notice-body">${(item.body||'').replace(/\n/g,'<br>')}</div></div></div><div class="notice-meta"><div class="notice-prime-name">${dn}</div><div class="notice-date">${date}</div><div class="level-badge ${lv}"><div class="l-dot"></div><div class="l-text">${item.effective_attention_level}</div></div><div class="with-ac">with Antechamber</div><div class="notice-actions"><button class="btn-dismiss" onclick="dismissNotice(${idx},'${item.id}')">Dismiss</button><button class="btn-frag" id="frag-${idx}" onclick="fragNotice(${idx},'${item.id}')">Frag</button></div></div></div>`;
   }).join('');
 }
-
 function toggleNotice(i){document.getElementById('notice-'+i).classList.toggle('expanded');}
 async function dismissNotice(idx,id){const el=document.getElementById('notice-'+idx);try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'dismiss'})});}catch(e){console.warn(e);}el.style.opacity='0';setTimeout(()=>{el.classList.add('dismissed');updateNoticesCount();},300);}
 async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'frag'})});}catch(e){console.warn(e);}document.getElementById('notice-'+idx).classList.add('fragged');document.getElementById('frag-'+idx).disabled=true;}
@@ -449,19 +472,33 @@ function setMode(mode,btn){
   invokeMode=mode;
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
   const cf=document.getElementById('confFields');
-  if(mode==='conference'){cf.classList.add('show');document.getElementById('invokeMessage').value='Conference called. Read the conference table and post your response to conference_responses directly. No acknowledgement needed.';}
-  else{cf.classList.remove('show');document.getElementById('invokeMessage').value='Conference called. Read the flag and respond if called. Otherwise read if you like and take part only if you see a gap.';}
+  if(mode==='conference'){
+    cf.classList.add('show');
+    document.getElementById('invokeMessage').value='Conference called. Read the conference table and post your response to conference_responses directly. No acknowledgement needed.';
+  }else{
+    cf.classList.remove('show');
+    document.getElementById('invokeMessage').value='Conference called. Read the flag and respond if called. Otherwise read if you like and take part only if you see a gap.';
+  }
 }
-function openModal(){renderPrimeGrid();document.getElementById('modalError').style.display='none';document.getElementById('invokeModal').style.display='flex';}
+
+function openModal(){
+  renderPrimeGrid();
+  document.getElementById('modalError').style.display='none';
+  // INVOKE FLOW FIX: if open conference exists, pre-select its invited primes and hint
+  if(openConference&&openConference.invited_lineages){
+    checkedPrimes.clear();
+    openConference.invited_lineages.forEach(n=>checkedPrimes.add(n));
+    renderPrimeGrid();
+    document.getElementById('invokeModalSub').textContent='Conference open — sending to invited Primes';
+  }else{
+    document.getElementById('invokeModalSub').textContent='Select Primes and send message';
+  }
+  document.getElementById('invokeModal').style.display='flex';
+}
 function closeModal(){document.getElementById('invokeModal').style.display='none';}
 function handleOverlayClick(e){if(e.target===document.getElementById('invokeModal'))closeModal();}
 
-function renderPrimeGrid(){const g=document.getElementById('primeGrid');if(!g)return;g.innerHTML=WHEEL_PRIMES.map(n=>{const on=checkedPrimes.has(n)?'on':'';const icon=ICONS[n]||'';const dn=dName(n);const iconEl=icon?`<div class="p-icon"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="p-icon">${dn[0]}</div>`;return`<div class="p-row ${on}" onclick="togglePrime('${n}')"><div class="p-check"></div>${iconEl}<div class="p-name">${dn}</div></div>`;}).join('');}
-function togglePrime(n){if(checkedPrimes.has(n))checkedPrimes.delete(n);else checkedPrimes.add(n);renderPrimeGrid();}
-function selectAll(){WHEEL_PRIMES.forEach(n=>checkedPrimes.add(n));renderPrimeGrid();}
-function clearAll(){checkedPrimes.clear();renderPrimeGrid();}
-
-// BUG 2 FIX — atomic write before UI transition
+/* SEND INVOKE — Bug 2 fix + Invoke flow fix */
 async function sendInvoke(){
   const msg=document.getElementById('invokeMessage').value.trim();
   const targets=Array.from(checkedPrimes);
@@ -469,31 +506,35 @@ async function sendInvoke(){
   errEl.style.display='none';
   if(!targets.length){errEl.textContent='Select at least one Prime.';errEl.style.display='block';return;}
   if(!msg){errEl.textContent='Please enter a message.';errEl.style.display='block';return;}
+
   let topic='';
-  if(invokeMode==='conference'){
-    topic=document.getElementById('confTopic').value.trim();
+  // INVOKE FLOW FIX: only create conference record if no open conference exists
+  const createConference=invokeMode==='conference'&&!openConference;
+  if(createConference){
+    topic=document.getElementById('confTopic')?.value.trim()||'';
     if(!topic){errEl.textContent='Please enter a conference topic.';errEl.style.display='block';return;}
   }
+
   const btn=document.getElementById('sendBtn');btn.textContent='Sending…';btn.disabled=true;
 
-  // Open tabs synchronously (must be in click handler for browser security)
+  // Open tabs synchronously (must be in click handler)
   targets.forEach(n=>{const url=(instances[n]||{}).chat_url;if(url)window.open(url,'_blank');});
   invokeTime=Date.now();
 
-  // BUG 2 FIX: await fetch before closing modal
+  // Bug 2 fix: await fetch before closing modal
   try{
-    const payload=invokeMode==='conference'
+    const payload=createConference
       ?{mode:'conference',topic,message:msg,from_lineage:'reg',invited_lineages:targets}
       :{mode:'broadcast',message:msg,from_lineage:'reg',target_lineages:targets};
     const res=await fetch(INVOKE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(payload)});
     if(!res.ok){
-      const d=await res.json();
-      errEl.textContent='Send failed: '+(d.error||'Unknown error');
+      const d=await res.json().catch(()=>({}));
+      errEl.textContent='Send failed: '+(d.error||res.status);
       errEl.style.display='block';
       btn.textContent='Send';btn.disabled=false;
-      return; // modal stays open on failure
+      return;
     }
-    // Success — now close modal and update view
+    // Success: close modal, switch to conference view if appropriate
     closeModal();
     if(invokeMode==='conference')setRtView('conference');
     await loadData();
@@ -519,14 +560,16 @@ function renderAdminBody(){
 }
 async function saveAdmin(){
   const btn=document.getElementById('adminSaveBtn');btn.textContent='Saving…';btn.disabled=true;
-  try{for(const c of Object.values(pendingAdminChanges)){await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(c)});}
-  const nn=document.getElementById('newTileName')?.value.trim();const nu=document.getElementById('newTileUrl')?.value.trim();
-  if(nn&&nu)await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({action:'insert',name:nn,url:nu,category:'other'})});
-  closeAdminPanel();await loadData();}catch(e){console.error(e);alert('Save failed');}finally{btn.textContent='Save changes';btn.disabled=false;}
+  try{
+    for(const c of Object.values(pendingAdminChanges)){await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(c)});}
+    const nn=document.getElementById('newTileName')?.value.trim();const nu=document.getElementById('newTileUrl')?.value.trim();
+    if(nn&&nu)await fetch(TILES_ADMIN_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({action:'insert',name:nn,url:nu,category:'other'})});
+    closeAdminPanel();await loadData();
+  }catch(e){console.error(e);alert('Save failed');}
+  finally{btn.textContent='Save changes';btn.disabled=false;}
 }
 
 function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
-
 document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
