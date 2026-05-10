@@ -160,6 +160,8 @@
     .admin-input{width:100%;font-family:'Lora',serif;font-size:12px;border:1px solid var(--border);padding:6px 10px;background:var(--bg);color:var(--text);border-radius:2px;outline:none}
     .admin-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
     .admin-name{font-size:13px;color:var(--muted);min-width:110px;font-variant:small-caps}
+    .tile-refresh{position:absolute;bottom:7px;right:8px;font-size:15px;color:var(--light);background:none;border:none;cursor:pointer;padding:2px;line-height:1;transition:color .15s;z-index:2}
+    .tile-refresh:hover{color:var(--muted)}
     .status-msg{font-size:14px;color:var(--light);font-style:italic;padding:8px 0}
     @media(max-width:600px){header{padding:20px 20px 16px}nav{padding:0 20px}.page{padding:24px 20px}}
   </style>
@@ -257,12 +259,13 @@
 
 <script>
 const SUPABASE_URL        = 'https://vysenpymsfhgionqfulf.supabase.co';
-const SUPABASE_ANON_KEY   = 'sb_publishable_dEklXoGWXhXJHZl54VKKTg_Jycm-UGM';
+const SUPABASE_ANON_KEY   = 'PASTE_ANON_KEY_HERE';
 const INVOKE_FN_URL       = SUPABASE_URL + '/functions/v1/prime-invoke-all';
 const DISMISS_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-dismiss';
 const STATUS_FN_URL       = SUPABASE_URL + '/functions/v1/navigator-status';
 const TILES_ADMIN_FN_URL  = SUPABASE_URL + '/functions/v1/navigator-tiles-admin';
 const CLOSE_CONF_FN_URL   = SUPABASE_URL + '/functions/v1/navigator-conference-close';
+const REFRESH_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-refresh-prime';
 
 const ICONS = {
   argos:'images/primes/argos.png',napoleon:'images/primes/napoleon.png',theophrastus:'images/primes/theophrastus.png',
@@ -271,7 +274,7 @@ const ICONS = {
   khaos:'images/consultants/khaos.png',redshirt:'images/consultants/redshirt.png',
 };
 const WHEEL_PRIMES=['napoleon','argos','theophrastus','ghostwheel','constantinople','antechamber','aegis','homer','ricardo','eames'];
-const STALE_HOURS=24;
+const STALE_HOURS=168;
 
 let instances={},unreadMap={},attentionMap={},noticesData=[],projectTiles=[];
 let openConference=null,conferenceResponses=[];
@@ -330,7 +333,7 @@ async function loadData(){
 function isStale(s){if(!s)return true;return(Date.now()-new Date(s).getTime())>STALE_HOURS*3600*1000;}
 function dName(n){const d=instances[n];if(d&&d.display_name)return d.display_name;return n.charAt(0).toUpperCase()+n.slice(1);}
 function badges(n){const p=[];if(unreadMap[n]>0)p.push(`<span class="badge red"></span>`);if(attentionMap[n]==='urgent')p.push(`<span class="badge amber"></span>`);const i=instances[n];if(i&&!isStale(i.last_seen_at))p.push(`<span class="badge blue"></span>`);return p.length?`<div class="badges">${p.join('')}</div>`:''}
-function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}</div>`;}
+function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}<button class="tile-refresh" onclick="refreshPrime('${n}')" title="Mark active — I just opened this Prime">↻</button></div>`;}
 function makeProjectTile(t){const src=t.icon_ref?`images/consultants/${t.icon_ref}`:'';const inner=src?`<img class="tile-icon" src="${src}" alt="${t.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${t.name}</span>`:`<span class="tile-name" style="font-size:13px;text-align:center;padding:0 8px">${t.name}</span>`;if(t.url)return`<a class="tile" href="${t.url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="tile stale">${inner}</div>`;}
 
 function renderWheel(){
@@ -407,6 +410,14 @@ function renderConferenceDashboard(){
 }
 
 function toggleResp(name){document.getElementById('rcard-'+name)?.classList.toggle('expanded');}
+
+/* REFRESH STALE PRIME */
+async function refreshPrime(name){
+  try{
+    const res=await fetch(REFRESH_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({name})});
+    if(res.ok)await loadData();
+  }catch(e){console.error('Refresh failed:',e);}
+}
 
 /* CLOSE CONFERENCE */
 async function closeConference(){
