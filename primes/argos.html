@@ -763,6 +763,7 @@
         const data = await res.json();
 
         if (!res.ok) {
+          sessionId = null; // roll back — abandon broken session
 
           renderError('Error: ' + (data.error || res.statusText));
 
@@ -791,6 +792,7 @@
         }
 
       } catch (err) {
+        sessionId = null; // roll back — abandon broken session
 
         renderError('Connection error: ' + err.message);
 
