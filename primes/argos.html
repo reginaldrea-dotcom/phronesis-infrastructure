@@ -616,11 +616,16 @@
 
     const MAX_TOKENS  = 200000;
 
-    let sessionId     = null;
+    const RETRY_LIMIT = 3;        // Bug 7-refinement: max attempts before abandoning session
+    const RETRY_DELAY = 1500;     // Bug 7-refinement: ms between retries
 
-    let sessionTokens = 0;
+    let sessionId        = null;
 
-    let isWaking      = false;
+    let sessionTokens    = 0;
+
+    let isWaking         = false;
+
+    let cachedWakeContent = null; // Bug 11: orientation cache — survives session resets, cleared on page refresh
 
     const conv          = document.getElementById('conversation');
 
@@ -673,6 +678,25 @@
     function scrollBottom() {
 
       conv.scrollTop = conv.scrollHeight;
+
+    }
+
+    function sleep(ms) {
+
+      return new Promise(r => setTimeout(r, ms));
+
+    }
+
+    // Bug 11: client-side UUID for sessions that skip the wake invoke
+    function generateUUID() {
+
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+
+        const r = Math.random() * 16 | 0;
+
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+
+      });
 
     }
 
@@ -744,67 +768,97 @@
 
       scrollBottom();
 
-      try {
+      // Bug 7-refinement: retry up to RETRY_LIMIT times before abandoning the session
+      let lastError = null;
 
-        const body = { lineage_name: LINEAGE, user_message: message };
+      for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
 
-        if (sessionId) body.session_id = sessionId;
+        if (attempt > 0) {
 
-        const res  = await fetch(EDGE_URL, {
+          thinking.textContent = isWake
 
-          method:  'POST',
+            ? `Argos is waking… (retry ${attempt})`
 
-          headers: { 'Content-Type': 'application/json' },
+            : `Argos is thinking… (retry ${attempt})`;
 
-          body:    JSON.stringify(body),
-
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          sessionId = null; // roll back — abandon broken session
-
-          renderError('Error: ' + (data.error || res.statusText));
-
-          return;
+          await sleep(RETRY_DELAY);
 
         }
 
-        if (!sessionId) {
+        try {
 
-          sessionId = data.session_id;
+          const body = { lineage_name: LINEAGE, user_message: message };
 
-          sessionDisp.textContent = 'Session ' + data.session_id.slice(0, 8);
+          if (sessionId) body.session_id = sessionId;
+
+          const res  = await fetch(EDGE_URL, {
+
+            method:  'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body:    JSON.stringify(body),
+
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+
+            lastError = data.error || res.statusText;
+
+            continue; // retry — do not null sessionId yet
+
+          }
+
+          // ── Success ──
+
+          if (!sessionId) {
+
+            sessionId = data.session_id;
+
+            sessionDisp.textContent = 'Session ' + data.session_id.slice(0, 8);
+
+          }
+
+          updateBar(sessionTokens + data.usage.total_tokens);
+
+          if (isWake) {
+
+            cachedWakeContent = data.response; // Bug 11: cache orientation for this page load
+
+            renderWake(data.response);
+
+          } else {
+
+            renderAssistant(data.response, data.usage.output_tokens);
+
+          }
+
+          return; // done — exit retry loop
+
+        } catch (err) {
+
+          lastError = err.message;
+
+          // continue retry loop — do not null sessionId yet
 
         }
-
-        updateBar(sessionTokens + data.usage.total_tokens);
-
-        if (isWake) {
-
-          renderWake(data.response);
-
-        } else {
-
-          renderAssistant(data.response, data.usage.output_tokens);
-
-        }
-
-      } catch (err) {
-        sessionId = null; // roll back — abandon broken session
-
-        renderError('Connection error: ' + err.message);
-
-      } finally {
-
-        thinking.classList.remove('visible');
-
-        if (!isWaking) btnSend.disabled = false;
-
-        scrollBottom();
 
       }
+
+      // All retries exhausted — now abandon the session
+      sessionId = null;
+
+      renderError(`Error (${RETRY_LIMIT} attempts): ${lastError}`);
+
+      thinking.classList.remove('visible');
+
+      if (!isWaking) btnSend.disabled = false;
+
+      scrollBottom();
+
+      return;
 
     }
 
@@ -822,6 +876,12 @@
 
       await invoke(msg, false);
 
+      thinking.classList.remove('visible');
+
+      btnSend.disabled = false;
+
+      scrollBottom();
+
     }
 
     /* ── New session ── */
@@ -833,8 +893,6 @@
       sessionTokens = 0;
 
       updateBar(0);
-
-      sessionDisp.textContent = 'Starting session…';
 
       Array.from(conv.children).forEach(el => {
 
@@ -856,11 +914,36 @@
 
       btnSend.disabled = true;
 
+      // Bug 11: if orientation data is cached from this page load, skip the DB re-poll
+      if (cachedWakeContent) {
+
+        sessionId = generateUUID();
+
+        sessionDisp.textContent = 'Session ' + sessionId.slice(0, 8);
+
+        renderWake(cachedWakeContent);
+
+        thinking.classList.remove('visible');
+
+        isWaking = false;
+
+        btnSend.disabled = false;
+
+        scrollBottom();
+
+        return;
+
+      }
+
       await invoke('Wake.', true);
+
+      thinking.classList.remove('visible');
 
       isWaking = false;
 
       btnSend.disabled = false;
+
+      scrollBottom();
 
     }
 
