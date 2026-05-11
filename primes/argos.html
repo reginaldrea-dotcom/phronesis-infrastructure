@@ -616,8 +616,9 @@
 
     const MAX_TOKENS  = 200000;
 
-    const RETRY_LIMIT = 3;        // Bug 7-refinement: max attempts before abandoning session
-    const RETRY_DELAY = 1500;     // Bug 7-refinement: ms between retries
+    const RETRY_LIMIT   = 3;      // Bug 7-refinement: max attempts before abandoning session
+    const RETRY_DELAY   = 1500;   // Bug 7-refinement: ms between retries
+    const FETCH_TIMEOUT = 25000;  // ms before aborting a hanging fetch and moving to next retry
 
     let sessionId        = null;
 
@@ -791,15 +792,31 @@
 
           if (sessionId) body.session_id = sessionId;
 
-          const res  = await fetch(EDGE_URL, {
+          const controller = new AbortController();
 
-            method:  'POST',
+          const timeoutId  = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
-            headers: { 'Content-Type': 'application/json' },
+          let res;
 
-            body:    JSON.stringify(body),
+          try {
 
-          });
+            res = await fetch(EDGE_URL, {
+
+              method:  'POST',
+
+              headers: { 'Content-Type': 'application/json' },
+
+              body:    JSON.stringify(body),
+
+              signal:  controller.signal,
+
+            });
+
+          } finally {
+
+            clearTimeout(timeoutId);
+
+          }
 
           const data = await res.json();
 
@@ -839,7 +856,7 @@
 
         } catch (err) {
 
-          lastError = err.message;
+          lastError = err.name === 'AbortError' ? 'Request timed out' : err.message;
 
           // continue retry loop — do not null sessionId yet
 
