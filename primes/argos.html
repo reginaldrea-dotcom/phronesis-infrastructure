@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Argos — Phronesis</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+  <style>
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+
+      --accent:        #1B4D4D;
+
+      --accent-dim:    rgba(27, 77, 77, 0.10);
+
+      --accent-border: rgba(27, 77, 77, 0.35);
+
+      --bg:            #FAFAF8;
+
+      --parchment:     #F5F1EB;
+
+      --surface:       #FFFFFF;
+
+      --text:          #1C1C1A;
+
+      --text-muted:    #6B6962;
+
+      --border:        #E2DED8;
+
+      --bar-green:     #3D6B50;
+
+      --bar-amber:     #A87820;
+
+      --bar-red:       #8B3020;
+
+    }
+
+    html, body {
+
+      height: 100%;
+
+      background: var(--bg);
+
+      color: var(--text);
+
+      font-family: 'Lora', Georgia, serif;
+
+      font-size: 15px;
+
+      line-height: 1.7;
+
+      -webkit-font-smoothing: antialiased;
+
+    }
+
+    /* ── Shell ── */
+
+    .shell {
+
+      display: flex;
+
+      flex-direction: column;
+
+      height: 100vh;
+
+      max-width: 820px;
+
+      margin: 0 auto;
+
+    }
+
+    /* ── Header ── */
+
+    .header {
+
+      flex-shrink: 0;
+
+      padding: 22px 36px 0;
+
+    }
+
+    .header-row {
+
+      display: flex;
+
+      align-items: flex-start;
+
+      justify-content: space-between;
+
+    }
+
+    .prime-identity {
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 14px;
+
+    }
+
+    .prime-icon {
+
+      width: 38px;
+
+      height: 38px;
+
+      border-radius: 50%;
+
+      background: var(--accent);
+
+      opacity: 0.82;
+
+      flex-shrink: 0;
+
+    }
+
+    .prime-name {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 28px;
+
+      font-weight: 500;
+
+      color: var(--text);
+
+      letter-spacing: 0.01em;
+
+      line-height: 1.1;
+
+    }
+
+    .prime-role {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 12px;
+
+      font-weight: 400;
+
+      color: var(--text-muted);
+
+      letter-spacing: 0.07em;
+
+      text-transform: uppercase;
+
+      margin-top: 3px;
+
+    }
+
+    .session-meta {
+
+      text-align: right;
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 12px;
+
+      color: var(--text-muted);
+
+      letter-spacing: 0.03em;
+
+      padding-top: 2px;
+
+      line-height: 1.8;
+
+    }
+
+    /* ── Token bar ── */
+
+    .token-bar-wrap {
+
+      margin-top: 14px;
+
+      position: relative;
+
+      cursor: default;
+
+    }
+
+    .token-bar-track {
+
+      height: 2px;
+
+      background: var(--border);
+
+      border-radius: 1px;
+
+      overflow: hidden;
+
+    }
+
+    .token-bar-fill {
+
+      height: 100%;
+
+      width: 0%;
+
+      background: var(--bar-green);
+
+      border-radius: 1px;
+
+      transition: width 0.5s ease, background 0.5s ease;
+
+    }
+
+    .token-bar-tooltip {
+
+      display: none;
+
+      position: absolute;
+
+      top: 7px;
+
+      right: 0;
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 11px;
+
+      color: var(--text-muted);
+
+      letter-spacing: 0.03em;
+
+      white-space: nowrap;
+
+    }
+
+    .token-bar-wrap:hover .token-bar-tooltip { display: block; }
+
+    /* ── Conversation ── */
+
+    .conversation {
+
+      flex: 1;
+
+      overflow-y: auto;
+
+      padding: 28px 36px 12px;
+
+      display: flex;
+
+      flex-direction: column;
+
+      scroll-behavior: smooth;
+
+    }
+
+    /* Wake block */
+
+    .turn-wake {
+
+      background: var(--accent-dim);
+
+      border-left: 2.5px solid var(--accent-border);
+
+      border-radius: 0 3px 3px 0;
+
+      padding: 16px 20px;
+
+      margin-bottom: 28px;
+
+    }
+
+    .turn-wake .turn-label {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 11px;
+
+      font-weight: 600;
+
+      letter-spacing: 0.12em;
+
+      text-transform: uppercase;
+
+      color: var(--accent);
+
+      margin-bottom: 8px;
+
+    }
+
+    .turn-wake .turn-content {
+
+      font-style: italic;
+
+      font-size: 14px;
+
+      color: var(--text);
+
+    }
+
+    /* REG turn */
+
+    .turn-user {
+
+      background: var(--parchment);
+
+      border-radius: 3px;
+
+      padding: 12px 18px;
+
+      margin-bottom: 9px;
+
+    }
+
+    .turn-user .turn-label {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 11px;
+
+      font-weight: 600;
+
+      letter-spacing: 0.10em;
+
+      text-transform: uppercase;
+
+      color: var(--text-muted);
+
+      margin-bottom: 5px;
+
+    }
+
+    .turn-user .turn-label .turn-time {
+
+      font-weight: 400;
+
+      margin-left: 8px;
+
+      letter-spacing: 0.03em;
+
+    }
+
+    /* Prime turn */
+
+    .turn-assistant {
+
+      background: var(--surface);
+
+      border-left: 2.5px solid var(--accent);
+
+      border-radius: 0 3px 3px 0;
+
+      padding: 14px 20px;
+
+      margin-bottom: 20px;
+
+    }
+
+    .turn-assistant .turn-label {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 11px;
+
+      font-weight: 600;
+
+      letter-spacing: 0.10em;
+
+      text-transform: uppercase;
+
+      color: var(--accent);
+
+      margin-bottom: 6px;
+
+    }
+
+    .turn-content {
+
+      white-space: pre-wrap;
+
+      word-break: break-word;
+
+      font-size: 15px;
+
+    }
+
+    .turn-tokens {
+
+      margin-top: 10px;
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 11px;
+
+      color: var(--text-muted);
+
+      letter-spacing: 0.03em;
+
+    }
+
+    /* Thinking */
+
+    .thinking {
+
+      display: none;
+
+      padding: 10px 0 10px 20px;
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-style: italic;
+
+      font-size: 14px;
+
+      color: var(--text-muted);
+
+      border-left: 2px solid var(--border);
+
+      margin-bottom: 20px;
+
+      animation: pulse 2s ease-in-out infinite;
+
+    }
+
+    .thinking.visible { display: block; }
+
+    @keyframes pulse {
+
+      0%, 100% { opacity: 0.5; }
+
+      50%       { opacity: 1; }
+
+    }
+
+    /* ── Input ── */
+
+    .input-area {
+
+      flex-shrink: 0;
+
+      padding: 14px 36px 24px;
+
+      border-top: 1px solid var(--border);
+
+    }
+
+    textarea {
+
+      width: 100%;
+
+      min-height: 76px;
+
+      max-height: 180px;
+
+      padding: 12px 14px;
+
+      background: var(--surface);
+
+      border: 1px solid var(--border);
+
+      border-radius: 3px;
+
+      font-family: 'Lora', Georgia, serif;
+
+      font-size: 14px;
+
+      color: var(--text);
+
+      line-height: 1.65;
+
+      resize: none;
+
+      outline: none;
+
+      transition: border-color 0.2s;
+
+    }
+
+    textarea:focus { border-color: var(--accent); }
+
+    textarea::placeholder {
+
+      color: var(--text-muted);
+
+      font-style: italic;
+
+    }
+
+    .input-controls {
+
+      display: flex;
+
+      justify-content: flex-end;
+
+      gap: 10px;
+
+      margin-top: 10px;
+
+    }
+
+    .btn {
+
+      font-family: 'Cormorant Garamond', Georgia, serif;
+
+      font-size: 14px;
+
+      font-weight: 500;
+
+      letter-spacing: 0.06em;
+
+      padding: 7px 22px;
+
+      border-radius: 2px;
+
+      cursor: pointer;
+
+      border: none;
+
+      transition: opacity 0.15s;
+
+    }
+
+    .btn:hover:not(:disabled) { opacity: 0.75; }
+
+    .btn:disabled { opacity: 0.35; cursor: default; }
+
+    .btn-send         { background: var(--accent); color: white; }
+
+    .btn-new-session  { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+
+  </style>
+
+</head>
+
+<body>
+
+  <div class="shell">
+
+    <div class="header">
+
+      <div class="header-row">
+
+        <div class="prime-identity">
+
+          <div class="prime-icon"></div>
+
+          <div>
+
+            <div class="prime-name">Argos</div>
+
+            <div class="prime-role">Builder — Phronesis Project</div>
+
+          </div>
+
+        </div>
+
+        <div class="session-meta">
+
+          <div id="session-display">Starting session…</div>
+
+          <div id="instance-display" style="color:var(--border)">—</div>
+
+        </div>
+
+      </div>
+
+      <div class="token-bar-wrap">
+
+        <div class="token-bar-track">
+
+          <div class="token-bar-fill" id="token-bar-fill"></div>
+
+        </div>
+
+        <div class="token-bar-tooltip" id="token-bar-tooltip">0 tokens</div>
+
+      </div>
+
+    </div>
+
+    <div class="conversation" id="conversation">
+
+      <div class="thinking visible" id="thinking">Argos is waking…</div>
+
+    </div>
+
+    <div class="input-area">
+
+      <textarea id="input" placeholder="Write to Argos…" rows="3"></textarea>
+
+      <div class="input-controls">
+
+        <button class="btn btn-new-session" id="btn-new-session">New Session</button>
+
+        <button class="btn btn-send" id="btn-send" disabled>Send</button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    const EDGE_URL    = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
+
+    const LINEAGE     = 'argos';
+
+    const PRIME_NAME  = 'Argos';
+
+    const MAX_TOKENS  = 200000;
+
+    let sessionId     = null;
+
+    let sessionTokens = 0;
+
+    let isWaking      = false;
+
+    const conv          = document.getElementById('conversation');
+
+    const thinking      = document.getElementById('thinking');
+
+    const inputEl       = document.getElementById('input');
+
+    const btnSend       = document.getElementById('btn-send');
+
+    const btnNew        = document.getElementById('btn-new-session');
+
+    const tokenFill     = document.getElementById('token-bar-fill');
+
+    const tokenTooltip  = document.getElementById('token-bar-tooltip');
+
+    const sessionDisp   = document.getElementById('session-display');
+
+    /* ── Helpers ── */
+
+    function esc(s) {
+
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    }
+
+    function timeStr() {
+
+      return new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+    }
+
+    function updateBar(total) {
+
+      sessionTokens = total;
+
+      const pct = Math.min((total / MAX_TOKENS) * 100, 100);
+
+      tokenFill.style.width = pct + '%';
+
+      tokenFill.style.background =
+
+        pct < 70 ? 'var(--bar-green)' :
+
+        pct < 85 ? 'var(--bar-amber)' : 'var(--bar-red)';
+
+      tokenTooltip.textContent = total.toLocaleString() + ' tokens used';
+
+    }
+
+    function scrollBottom() {
+
+      conv.scrollTop = conv.scrollHeight;
+
+    }
+
+    /* ── Render ── */
+
+    function insertBefore(el) {
+
+      conv.insertBefore(el, thinking);
+
+    }
+
+    function renderWake(text) {
+
+      const d = document.createElement('div');
+
+      d.className = 'turn-wake';
+
+      d.innerHTML = `<div class="turn-label">Wake</div><div class="turn-content">${esc(text)}</div>`;
+
+      insertBefore(d);
+
+    }
+
+    function renderUser(text) {
+
+      const d = document.createElement('div');
+
+      d.className = 'turn-user';
+
+      d.innerHTML = `<div class="turn-label">Reg <span class="turn-time">${timeStr()}</span></div><div class="turn-content">${esc(text)}</div>`;
+
+      insertBefore(d);
+
+    }
+
+    function renderAssistant(text, tokens) {
+
+      const d = document.createElement('div');
+
+      d.className = 'turn-assistant';
+
+      d.innerHTML = `<div class="turn-label">${PRIME_NAME}</div><div class="turn-content">${esc(text)}</div><div class="turn-tokens">${tokens.toLocaleString()} tokens</div>`;
+
+      insertBefore(d);
+
+    }
+
+    function renderError(msg) {
+
+      const d = document.createElement('div');
+
+      d.className = 'turn-assistant';
+
+      d.innerHTML = `<div class="turn-label">${PRIME_NAME}</div><div class="turn-content" style="color:#8B3020">${esc(msg)}</div>`;
+
+      insertBefore(d);
+
+    }
+
+    /* ── API ── */
+
+    async function invoke(message, isWake = false) {
+
+      btnSend.disabled = true;
+
+      thinking.textContent = isWake ? 'Argos is waking…' : 'Argos is thinking…';
+
+      thinking.classList.add('visible');
+
+      scrollBottom();
+
+      try {
+
+        const body = { lineage_name: LINEAGE, user_message: message };
+
+        if (sessionId) body.session_id = sessionId;
+
+        const res  = await fetch(EDGE_URL, {
+
+          method:  'POST',
+
+          headers: { 'Content-Type': 'application/json' },
+
+          body:    JSON.stringify(body),
+
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+
+          renderError('Error: ' + (data.error || res.statusText));
+
+          return;
+
+        }
+
+        if (!sessionId) {
+
+          sessionId = data.session_id;
+
+          sessionDisp.textContent = 'Session ' + data.session_id.slice(0, 8);
+
+        }
+
+        updateBar(sessionTokens + data.usage.total_tokens);
+
+        if (isWake) {
+
+          renderWake(data.response);
+
+        } else {
+
+          renderAssistant(data.response, data.usage.output_tokens);
+
+        }
+
+      } catch (err) {
+
+        renderError('Connection error: ' + err.message);
+
+      } finally {
+
+        thinking.classList.remove('visible');
+
+        if (!isWaking) btnSend.disabled = false;
+
+        scrollBottom();
+
+      }
+
+    }
+
+    /* ── Send ── */
+
+    async function send() {
+
+      const msg = inputEl.value.trim();
+
+      if (!msg || btnSend.disabled) return;
+
+      inputEl.value = '';
+
+      renderUser(msg);
+
+      await invoke(msg, false);
+
+    }
+
+    /* ── New session ── */
+
+    function newSession() {
+
+      sessionId     = null;
+
+      sessionTokens = 0;
+
+      updateBar(0);
+
+      sessionDisp.textContent = 'Starting session…';
+
+      Array.from(conv.children).forEach(el => {
+
+        if (el.id !== 'thinking') el.remove();
+
+      });
+
+      wake();
+
+    }
+
+    /* ── Wake ── */
+
+    async function wake() {
+
+      if (isWaking) return;
+
+      isWaking = true;
+
+      btnSend.disabled = true;
+
+      await invoke('Wake.', true);
+
+      isWaking = false;
+
+      btnSend.disabled = false;
+
+    }
+
+    /* ── Events ── */
+
+    btnSend.addEventListener('click', send);
+
+    btnNew.addEventListener('click', newSession);
+
+    inputEl.addEventListener('keydown', e => {
+
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+
+    });
+
+    /* ── Boot ── */
+
+    wake();
+
+  </script>
+
+</body>
+
+</html>
