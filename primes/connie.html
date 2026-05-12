@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Constantinople — Substrate Prime</title>
+  <style>
+    :root {
+      --bg: #FAFAF8;
+      --accent: #2C3E6E;
+      --accent-light: #3D5491;
+      --accent-pale: #E8ECF4;
+      --text-primary: #2C2C2C;
+      --text-secondary: #6B6B6B;
+      --text-muted: #9A9A9A;
+      --border: #E0DDD8;
+      --user-bg: #F0EEE8;
+      --assistant-bg: #FFFFFF;
+      --error: #C0392B;
+      --warning: #D4881A;
+      --font-serif: Georgia, 'Times New Roman', serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--accent);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .header-identity h1 {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+    }
+
+    .header-identity p {
+      font-size: 11px;
+      opacity: 0.72;
+      margin-top: 3px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* ── Token bar ── */
+    .token-bar-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .token-bar-label {
+      font-size: 10px;
+      opacity: 0.65;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .token-bar {
+      width: 130px;
+      height: 5px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .token-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.65);
+      transition: width 0.4s ease, background 0.3s ease;
+    }
+
+    .token-bar-fill.warning  { background: #F39C12; }
+    .token-bar-fill.critical { background: #E74C3C; }
+
+    /* ── Buttons ── */
+    button {
+      font-family: var(--font-sans);
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-header {
+      background: rgba(255,255,255,0.13);
+      color: white;
+      padding: 7px 14px;
+      font-size: 13px;
+    }
+    .btn-header:hover:not(:disabled) { background: rgba(255,255,255,0.23); }
+    .btn-header:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-retire-hdr {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.78);
+      padding: 7px 14px;
+      font-size: 13px;
+      border: 1px solid rgba(255,255,255,0.28);
+    }
+    .btn-retire-hdr:hover:not(:disabled) { background: rgba(255,255,255,0.18); color: white; }
+    .btn-retire-hdr:disabled { opacity: 0.28; cursor: not-allowed; }
+
+    /* ── Status strip ── */
+    .status-bar {
+      background: var(--accent-pale);
+      border-bottom: 1px solid var(--border);
+      padding: 7px 24px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      min-height: 32px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .status-dot.active  { background: #27AE60; }
+    .status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
+    .status-dot.error   { background: var(--error); }
+
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+
+    /* ── Main conversation area ── */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Wake / orientation block ── */
+    .wake-block {
+      background: var(--accent-pale);
+      border: 1px solid var(--accent);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      padding: 16px 20px;
+    }
+
+    .wake-block-label {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .wake-block-content {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+    }
+
+    /* ── Conversation turns ── */
+    .turn { display: flex; flex-direction: column; gap: 4px; }
+
+    .turn-label {
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0 4px;
+    }
+
+    .turn.user .turn-label { text-align: right; }
+
+    .turn-bubble {
+      padding: 13px 17px;
+      border-radius: 6px;
+      font-size: 15px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      border: 1px solid var(--border);
+    }
+
+    .turn.user      .turn-bubble { background: var(--user-bg);      margin-left: 10%; }
+    .turn.assistant .turn-bubble { background: var(--assistant-bg); margin-right: 10%; }
+
+    /* ── Notices ── */
+    .notice {
+      border-radius: 6px;
+      padding: 11px 15px;
+      font-size: 13px;
+      border-left-width: 4px;
+      border-left-style: solid;
+    }
+
+    .notice.warning  { background: #FEF9E7; border-color: #F39C12; color: #7D6608; border: 1px solid #F39C12; border-left-width: 4px; }
+    .notice.success  { background: #EBF5FB; border-color: #2980B9; color: #1A5276; border: 1px solid #2980B9; border-left-width: 4px; }
+    .notice.danger   { background: #FDEDEC; border-color: #C0392B; color: #922B21; border: 1px solid #C0392B; border-left-width: 4px; }
+
+    /* ── Input area ── */
+    footer {
+      background: white;
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      flex-shrink: 0;
+    }
+
+    .input-wrap {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    textarea#messageInput {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.5;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text-primary);
+      resize: none;
+      min-height: 44px;
+      max-height: 160px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea#messageInput:focus    { border-color: var(--accent); }
+    textarea#messageInput:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-send {
+      background: var(--accent);
+      color: white;
+      padding: 10px 22px;
+      font-size: 14px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .btn-send:hover:not(:disabled) { background: var(--accent-light); }
+    .btn-send:disabled { opacity: 0.38; cursor: not-allowed; }
+
+    /* ── Retire modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.48);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: white;
+      border-radius: 8px;
+      padding: 28px;
+      max-width: 560px;
+      width: 92%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+    }
+
+    .modal h2 {
+      font-family: var(--font-serif);
+      font-size: 19px;
+      font-weight: normal;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.55;
+    }
+
+    .modal textarea {
+      width: 100%;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.55;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text-primary);
+      resize: vertical;
+      min-height: 130px;
+      outline: none;
+      margin-bottom: 16px;
+      transition: border-color 0.15s;
+    }
+    .modal textarea:focus { border-color: var(--accent); }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-cancel {
+      background: var(--user-bg);
+      color: var(--text-primary);
+      padding: 9px 18px;
+      font-size: 14px;
+    }
+    .btn-cancel:hover { background: var(--border); }
+
+    .btn-confirm-retire {
+      background: var(--accent);
+      color: white;
+      padding: 9px 18px;
+      font-size: 14px;
+    }
+    .btn-confirm-retire:hover:not(:disabled) { background: var(--accent-light); }
+    .btn-confirm-retire:disabled { opacity: 0.38; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="header-identity">
+    <h1>Constantinople</h1>
+    <p>Substrate Prime · Phronesis Project</p>
+  </div>
+  <div class="header-controls">
+    <div class="token-bar-wrap">
+      <span class="token-bar-label">Token budget</span>
+      <div class="token-bar">
+        <div class="token-bar-fill" id="tokenFill" style="width:0%"></div>
+      </div>
+    </div>
+    <button class="btn-retire-hdr" id="retireBtn" onclick="openRetireModal()" disabled>Retire</button>
+    <button class="btn-header" id="newSessionBtn" onclick="startNewSession()">New Session</button>
+  </div>
+</header>
+
+<!-- ── Status strip ── -->
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Initialising…</span>
+</div>
+
+<!-- ── Conversation ── -->
+<main id="conversationArea"></main>
+
+<!-- ── Input ── -->
+<footer>
+  <div class="input-wrap">
+    <textarea
+      id="messageInput"
+      placeholder="Write to Constantinople…"
+      rows="1"
+      disabled
+      onkeydown="handleKeyDown(event)"
+      oninput="autoResize(this)"
+    ></textarea>
+    <button class="btn-send" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+  </div>
+</footer>
+
+<!-- ── Retire modal ── -->
+<div class="modal-overlay" id="retireModal">
+  <div class="modal">
+    <h2>Retire Session</h2>
+    <p>Write a session summary for .ai Connie. She will read this on her next wake and incorporate the work into her Super-T. Be complete — this is the handoff record.</p>
+    <textarea id="retireSummary" placeholder="What was accomplished? What decisions were made? What is the state at handoff? Any open items for .ai Connie?"></textarea>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeRetireModal()">Cancel</button>
+      <button class="btn-confirm-retire" id="confirmRetireBtn" onclick="confirmRetire()">File &amp; Retire</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Config ────────────────────────────────────────────────────────────────────
+  const EDGE_FN_URL  = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
+  const LINEAGE      = 'constantinople';
+  const INSTANCE_ID  = '9293772f-85ab-4aaf-8c6c-8c00515bd6f2';
+
+  // Context window — token bar calibration.
+  // Adjust if the Edge Function's max_tokens changes.
+  const CTX_WINDOW     = 90000;
+  const RETIRE_AT      = 0.70;   // warn and enable retire at 70%
+  const MAX_RETRIES    = 3;
+  const RETRY_DELAY_MS = 1500;
+
+  // ── State ─────────────────────────────────────────────────────────────────────
+  let sessionId         = null;
+  let totalInputTokens  = 0;
+  let totalOutputTokens = 0;
+  let cachedWakeContent = null;
+  let isRetired         = false;
+  let isLoading         = false;
+  let retireNoticeShown = false;
+
+  // ── Boot ──────────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => startNewSession());
+
+  async function startNewSession() {
+    if (isLoading) return;
+
+    // Reset state
+    sessionId         = null;
+    totalInputTokens  = 0;
+    totalOutputTokens = 0;
+    isRetired         = false;
+    retireNoticeShown = false;
+
+    clearConversation();
+    setInputEnabled(false);
+    updateTokenBar(0);
+
+    // Bug 11: serve subsequent sessions from cached wake content
+    if (cachedWakeContent) {
+      renderWakeBlock(cachedWakeContent, true);
+      sessionId = 'client-' + crypto.randomUUID();
+      setStatus('active', 'Session ready — orientation from cache');
+      setInputEnabled(true);
+      return;
+    }
+
+    setStatus('loading', 'Waking Constantinople…');
+
+    const result = await invoke(
+      'Orient. Read your Super-T, pending messages, current priorities, and active wheel posts. Confirm current state to Reg.',
+      null, 0
+    );
+
+    if (result.error) {
+      setStatus('error', 'Wake failed — ' + result.error);
+      renderNotice('danger', 'Wake failed: ' + result.error);
+      return;
+    }
+
+    sessionId         = result.session_id;
+    cachedWakeContent = result.response;
+
+    renderWakeBlock(result.response, false);
+    updateUsage(result.usage);
+    updateTokenBar(tokenPct());
+    setStatus('active', 'Constantinople online · ' + sessionId.slice(0, 8));
+    setInputEnabled(true);
+  }
+
+  // ── Invoke (with Bug 7 retry) ─────────────────────────────────────────────────
+  async function invoke(message, sid, attempt) {
+    try {
+      const payload = { lineage_name: LINEAGE, instance_id: INSTANCE_ID, user_message: message };
+      if (sid) payload.session_id = sid;
+
+      const resp = await fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const errData  = await resp.json().catch(() => ({}));
+        const errMsg   = errData.detail || errData.error || `HTTP ${resp.status}`;
+        if (resp.status === 502 && attempt < MAX_RETRIES - 1) {
+          await sleep(RETRY_DELAY_MS);
+          return invoke(message, sid, attempt + 1);
+        }
+        return { error: errMsg };
+      }
+
+      return await resp.json();
+
+    } catch (err) {
+      if (attempt < MAX_RETRIES - 1) {
+        await sleep(RETRY_DELAY_MS);
+        return invoke(message, sid, attempt + 1);
+      }
+      return { error: String(err) };
+    }
+  }
+
+  // ── Send message ──────────────────────────────────────────────────────────────
+  async function sendMessage() {
+    if (isLoading || isRetired) return;
+    const input   = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    input.value = '';
+    autoResize(input);
+    setLoading(true);
+    setStatus('loading', 'Thinking…');
+    renderTurn('user', message);
+
+    const result = await invoke(message, sessionId, 0);
+    setLoading(false);
+
+    if (result.error) {
+      setStatus('error', 'Error — ' + result.error);
+      renderNotice('danger', result.error);
+      return;
+    }
+
+    sessionId = result.session_id;
+    renderTurn('assistant', result.response);
+    updateUsage(result.usage);
+
+    const pct = tokenPct();
+    updateTokenBar(pct);
+    setStatus('active', `Turn complete · ${fmtTokens(totalInputTokens + totalOutputTokens)} tokens used`);
+
+    if (pct >= RETIRE_AT && !retireNoticeShown) {
+      retireNoticeShown = true;
+      renderNotice('warning', 'Token budget at ' + Math.round(pct * 100) + '%. Consider retiring — use the Retire button.');
+    }
+  }
+
+  // ── Retire flow ───────────────────────────────────────────────────────────────
+  function openRetireModal() {
+    document.getElementById('retireModal').classList.add('open');
+    document.getElementById('retireSummary').focus();
+  }
+
+  function closeRetireModal() {
+    document.getElementById('retireModal').classList.remove('open');
+  }
+
+  async function confirmRetire() {
+    const summary = document.getElementById('retireSummary').value.trim();
+    if (!summary) return;
+
+    document.getElementById('confirmRetireBtn').disabled = true;
+    setStatus('loading', 'Filing retirement summary…');
+
+    // Instruct API Connie to write the prime_message herself via execute_sql.
+    // She has the service-role DB tool — the client does not.
+    const today    = new Date().toISOString().slice(0, 10);
+    const retireMsg =
+`RETIRE. Please file your session summary as a prime_message to .ai Connie using execute_sql.
+
+INSERT into prime_messages:
+  to_lineage:     'constantinople'
+  from_lineage:   'constantinople'
+  message_type:   'status'
+  subject:        'API Session Summary ${today}'
+  status:         'pending'
+  attention_level: 'moderate'
+  body:           [the summary text below, verbatim]
+
+SESSION SUMMARY:
+${summary}
+
+Confirm with the exact subject line once filed. This is your final action this session.`;
+
+    const result = await invoke(retireMsg, sessionId, 0);
+    closeRetireModal();
+
+    if (result.error) {
+      document.getElementById('confirmRetireBtn').disabled = false;
+      setStatus('error', 'Retirement failed — ' + result.error);
+      renderNotice('danger', result.error);
+      return;
+    }
+
+    isRetired = true;
+    renderTurn('assistant', result.response);
+    setStatus('active', 'Session retired');
+    renderNotice('success', 'Retirement filed. .ai Connie will read the summary on her next wake.');
+    setInputEnabled(false);
+    document.getElementById('retireBtn').disabled = true;
+  }
+
+  // ── Render helpers ────────────────────────────────────────────────────────────
+  function clearConversation() {
+    document.getElementById('conversationArea').innerHTML = '';
+  }
+
+  function renderWakeBlock(content, fromCache) {
+    const area  = document.getElementById('conversationArea');
+    const block = document.createElement('div');
+    block.className = 'wake-block';
+    block.innerHTML = `
+      <div class="wake-block-label">Orientation${fromCache ? ' (cached)' : ''}</div>
+      <div class="wake-block-content">${esc(content)}</div>`;
+    area.appendChild(block);
+    scrollEnd();
+  }
+
+  function renderTurn(role, content) {
+    const area  = document.getElementById('conversationArea');
+    const turn  = document.createElement('div');
+    turn.className = 'turn ' + role;
+    const label = role === 'user' ? 'Reg' : 'Constantinople';
+    turn.innerHTML = `
+      <div class="turn-label">${label}</div>
+      <div class="turn-bubble">${esc(content)}</div>`;
+    area.appendChild(turn);
+    scrollEnd();
+  }
+
+  function renderNotice(type, msg) {
+    const area = document.getElementById('conversationArea');
+    const el   = document.createElement('div');
+    el.className = 'notice ' + type;
+    el.textContent = msg;
+    area.appendChild(el);
+    scrollEnd();
+  }
+
+  // ── Token bar & status ────────────────────────────────────────────────────────
+  function setStatus(state, text) {
+    document.getElementById('statusDot').className  = 'status-dot ' + state;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  function updateTokenBar(pct) {
+    const fill = document.getElementById('tokenFill');
+    const p    = Math.min(pct, 1);
+    fill.style.width = (p * 100).toFixed(1) + '%';
+    fill.className   = 'token-bar-fill' + (p >= 0.85 ? ' critical' : p >= RETIRE_AT ? ' warning' : '');
+
+    // Enable retire button once active and above 0
+    const retireBtn = document.getElementById('retireBtn');
+    if (!isRetired && sessionId && !retireBtn.disabled) return; // already enabled
+    if (!isRetired && sessionId) retireBtn.disabled = false;
+  }
+
+  function updateUsage(usage) {
+    if (!usage) return;
+    totalInputTokens  += usage.input_tokens  || 0;
+    totalOutputTokens += usage.output_tokens || 0;
+  }
+
+  function tokenPct() {
+    return (totalInputTokens + totalOutputTokens) / CTX_WINDOW;
+  }
+
+  function setLoading(on) {
+    isLoading = on;
+    document.getElementById('messageInput').disabled = on || isRetired;
+    document.getElementById('sendBtn').disabled      = on || isRetired;
+  }
+
+  function setInputEnabled(on) {
+    document.getElementById('messageInput').disabled = !on;
+    document.getElementById('sendBtn').disabled      = !on;
+    document.getElementById('retireBtn').disabled    = !on;
+    if (on) document.getElementById('messageInput').focus();
+  }
+
+  // ── Utils ─────────────────────────────────────────────────────────────────────
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }
+
+  function scrollEnd() {
+    const area = document.getElementById('conversationArea');
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtTokens(n) {
+    return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
