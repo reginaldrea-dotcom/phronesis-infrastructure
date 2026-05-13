@@ -414,8 +414,8 @@
 
   // Context window — token bar calibration.
   // Adjust if the Edge Function's max_tokens changes.
-  const CTX_WINDOW     = 90000;
-  const RETIRE_AT      = 0.70;   // warn and enable retire at 70%
+  const CTX_WINDOW     = 200000;
+  const RETIRE_AT      = 0.60;   // warn and enable retire at 60%
   const MAX_RETRIES    = 3;
   const RETRY_DELAY_MS = 1500;
 
@@ -425,7 +425,7 @@
   let totalOutputTokens = 0;
   let cachedWakeContent = null;
   let isRetired         = false;
-  let isLoading         = false;
+  let isLoading          = false;
   let retireNoticeShown = false;
 
   // ── Boot ──────────────────────────────────────────────────────────────────────
