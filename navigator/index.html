@@ -382,11 +382,9 @@ function renderConferenceDashboard(){
   let html=`
    <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
       <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
+      <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
+      <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
       <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${!inviteList?' · called by '+(conf.called_by||'unknown'):''}</div>
-    <div class="conf-responses-head">
-      <span class="conf-responses-title">Responses</span>
-      <span class="conf-resp-count">${respondedSet.size} of ${totalLabel}</span>
-    </div>
     <div class="resp-grid">`;
   if(displayList.length===0){
     html+=`<div style="color:var(--light);font-style:italic;font-size:13px;padding:8px 0;grid-column:1/-1">No responses yet.</div>`;
