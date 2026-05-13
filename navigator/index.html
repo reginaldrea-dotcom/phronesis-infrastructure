@@ -317,9 +317,10 @@ async function loadData(){
     posts.forEach(p=>{const cur=attentionMap[p.posting_lineage];if(!cur||(rank[p.effective_attention_level]||0)>(rank[cur]||0))attentionMap[p.posting_lineage]=p.effective_attention_level;});
     noticesData=await sb('wheel_posts?select=id,posting_lineage,topic,body,effective_attention_level,created_at&effective_attention_level=in.(moderate,urgent)&superseded_at=is.null&reg_acknowledged_at=is.null&order=created_at.desc');
     projectTiles=await sb('project_tiles?select=id,name,url,category,display_order,icon_ref&order=category,display_order');
-    const confs=await sb('conferences?select=id,topic,body,called_by,current_round,created_at,invited_lineages&status=eq.open&order=created_at.desc&limit=1');
-    if(confs.length>0){
-      openConference=confs[0];
+    const confs=await sb('conferences?select=id,topic,body,called_by,current_round,created_at,invited_lineages&status=eq.open&order=created_at.desc&limit=10');
+if(confs.length>0){
+  openConferences=confs;
+  if(!openConference||!confs.find(c=>c.id===openConference.id))openConference=confs[0];
       conferenceResponses=await sb(`conference_responses?select=id,posting_lineage,summary,body,round,created_at&conference_id=eq.${openConference.id}&order=created_at.asc`);
     }else{
       openConference=null;conferenceResponses=[];
