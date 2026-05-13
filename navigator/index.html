@@ -380,11 +380,9 @@ function renderConferenceDashboard(){
   const callerNote=!inviteList?' · called by '+(conf.called_by||'unknown'):'';
   const totalLabel=inviteList?String(inviteList.length):'?';
   let html=`
-    <div class="conf-banner">
-      <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}${callerNote}</span></div>
+   <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
       <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
-      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded</div>
-    </div>
+      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${!inviteList?' · called by '+(conf.called_by||'unknown'):''}</div>
     <div class="conf-responses-head">
       <span class="conf-responses-title">Responses</span>
       <span class="conf-resp-count">${respondedSet.size} of ${totalLabel}</span>
