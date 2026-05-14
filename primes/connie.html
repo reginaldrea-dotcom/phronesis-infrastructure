@@ -4,30 +4,37 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Constantinople — Substrate Prime</title>
+  <!-- Task 3: Identical Google Fonts import to argos.html -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #FAFAF8;
-      --accent: #2C3E6E;
-      --accent-light: #3D5491;
-      --accent-pale: #E8ECF4;
-      --text-primary: #2C2C2C;
-      --text-secondary: #6B6B6B;
-      --text-muted: #9A9A9A;
-      --border: #E0DDD8;
-      --user-bg: #F0EEE8;
-      --assistant-bg: #FFFFFF;
-      --error: #C0392B;
-      --warning: #D4881A;
-      --font-serif: Georgia, 'Times New Roman', serif;
-      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      /* Task 2: CSS variable names aligned exactly to argos.html.
+         Accent values remain Constantinople-specific (#2C3E6E deep slate).
+         Shared design tokens use argos.html values. */
+      --bg:            #FAFAF8;
+      --accent:        #2C3E6E;                    /* Constantinople deep slate */
+      --accent-dim:    rgba(44, 62, 110, 0.10);    /* was --accent-pale */
+      --accent-border: rgba(44, 62, 110, 0.35);    /* new — matches argos.html pattern */
+      --surface:       #FFFFFF;                    /* was --assistant-bg */
+      --parchment:     #F5F1EB;                    /* was --user-bg */
+      --text:          #1C1C1A;                    /* was --text-primary */
+      --text-muted:    #6B6962;                    /* aligned to argos.html value */
+      --border:        #E2DED8;                    /* aligned to argos.html value */
+      --bar-green:     #3D6B50;                    /* new — token bar */
+      --bar-amber:     #A87820;                    /* new */
+      --bar-red:       #8B3020;                    /* new */
+      /* Removed: --accent-light, --accent-pale, --text-primary, --text-secondary,
+                  --user-bg, --assistant-bg, --error, --warning, --font-serif, --font-sans */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: var(--font-sans);
+      font-family: 'Lora', Georgia, serif;         /* was var(--font-sans) */
       background: var(--bg);
-      color: var(--text-primary);
+      color: var(--text);                          /* was var(--text-primary) */
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -46,7 +53,7 @@
     }
 
     .header-identity h1 {
-      font-family: var(--font-serif);
+      font-family: 'Cormorant Garamond', Georgia, serif;  /* was var(--font-serif) */
       font-size: 20px;
       font-weight: normal;
       letter-spacing: 0.02em;
@@ -101,7 +108,7 @@
 
     /* ── Buttons ── */
     button {
-      font-family: var(--font-sans);
+      font-family: 'Lora', Georgia, serif;         /* was var(--font-sans) */
       cursor: pointer;
       border: none;
       border-radius: 4px;
@@ -129,11 +136,11 @@
 
     /* ── Status strip ── */
     .status-bar {
-      background: var(--accent-pale);
+      background: var(--accent-dim);               /* was var(--accent-pale) */
       border-bottom: 1px solid var(--border);
       padding: 7px 24px;
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--text-muted);                    /* was var(--text-secondary) */
       display: flex;
       align-items: center;
       gap: 8px;
@@ -149,8 +156,8 @@
       flex-shrink: 0;
     }
     .status-dot.active  { background: #27AE60; }
-    .status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
-    .status-dot.error   { background: var(--error); }
+    .status-dot.loading { background: #D4881A; animation: pulse 1s infinite; }  /* was var(--warning) */
+    .status-dot.error   { background: #C0392B; }                                 /* was var(--error) */
 
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
@@ -166,7 +173,7 @@
 
     /* ── Wake / orientation block ── */
     .wake-block {
-      background: var(--accent-pale);
+      background: var(--accent-dim);               /* was var(--accent-pale) */
       border: 1px solid var(--accent);
       border-left: 4px solid var(--accent);
       border-radius: 6px;
@@ -185,7 +192,7 @@
     .wake-block-content {
       font-size: 14px;
       line-height: 1.65;
-      color: var(--text-primary);
+      color: var(--text);                          /* was var(--text-primary) */
       white-space: pre-wrap;
     }
 
@@ -211,8 +218,8 @@
       border: 1px solid var(--border);
     }
 
-    .turn.user      .turn-bubble { background: var(--user-bg);      margin-left: 10%; }
-    .turn.assistant .turn-bubble { background: var(--assistant-bg); margin-right: 10%; }
+    .turn.user      .turn-bubble { background: var(--parchment); margin-left: 10%; }   /* was var(--user-bg) */
+    .turn.assistant .turn-bubble { background: var(--surface);   margin-right: 10%; }  /* was var(--assistant-bg) */
 
     /* ── Notices ── */
     .notice {
@@ -223,13 +230,13 @@
       border-left-style: solid;
     }
 
-    .notice.warning  { background: #FEF9E7; border-color: #F39C12; color: #7D6608; border: 1px solid #F39C12; border-left-width: 4px; }
-    .notice.success  { background: #EBF5FB; border-color: #2980B9; color: #1A5276; border: 1px solid #2980B9; border-left-width: 4px; }
-    .notice.danger   { background: #FDEDEC; border-color: #C0392B; color: #922B21; border: 1px solid #C0392B; border-left-width: 4px; }
+    .notice.warning { background: #FEF9E7; border-color: #F39C12; color: #7D6608; border: 1px solid #F39C12; border-left-width: 4px; }
+    .notice.success { background: #EBF5FB; border-color: #2980B9; color: #1A5276; border: 1px solid #2980B9; border-left-width: 4px; }
+    .notice.danger  { background: #FDEDEC; border-color: #C0392B; color: #922B21; border: 1px solid #C0392B; border-left-width: 4px; }
 
     /* ── Input area ── */
     footer {
-      background: white;
+      background: var(--surface);                  /* was white */
       border-top: 1px solid var(--border);
       padding: 14px 24px;
       flex-shrink: 0;
@@ -239,18 +246,20 @@
       display: flex;
       gap: 12px;
       align-items: flex-end;
+      max-width: 820px;                            /* Task 1: fix chat field width — matches argos.html shell */
+      margin: 0 auto;                              /* Task 1 */
     }
 
     textarea#messageInput {
       flex: 1;
-      font-family: var(--font-sans);
+      font-family: 'Lora', Georgia, serif;         /* was var(--font-sans) */
       font-size: 15px;
       line-height: 1.5;
       padding: 10px 14px;
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--bg);
-      color: var(--text-primary);
+      color: var(--text);                          /* was var(--text-primary) */
       resize: none;
       min-height: 44px;
       max-height: 160px;
@@ -268,7 +277,7 @@
       border-radius: 6px;
       flex-shrink: 0;
     }
-    .btn-send:hover:not(:disabled) { background: var(--accent-light); }
+    .btn-send:hover:not(:disabled) { background: #3D5491; }  /* was var(--accent-light) — inlined */
     .btn-send:disabled { opacity: 0.38; cursor: not-allowed; }
 
     /* ── Retire modal ── */
@@ -284,7 +293,7 @@
     .modal-overlay.open { display: flex; }
 
     .modal {
-      background: white;
+      background: var(--surface);                  /* was white */
       border-radius: 8px;
       padding: 28px;
       max-width: 560px;
@@ -293,7 +302,7 @@
     }
 
     .modal h2 {
-      font-family: var(--font-serif);
+      font-family: 'Cormorant Garamond', Georgia, serif;  /* was var(--font-serif) */
       font-size: 19px;
       font-weight: normal;
       color: var(--accent);
@@ -302,21 +311,21 @@
 
     .modal p {
       font-size: 13px;
-      color: var(--text-secondary);
+      color: var(--text-muted);                    /* was var(--text-secondary) */
       margin-bottom: 16px;
       line-height: 1.55;
     }
 
     .modal textarea {
       width: 100%;
-      font-family: var(--font-sans);
+      font-family: 'Lora', Georgia, serif;         /* was var(--font-sans) */
       font-size: 14px;
       line-height: 1.55;
       padding: 10px 14px;
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--bg);
-      color: var(--text-primary);
+      color: var(--text);                          /* was var(--text-primary) */
       resize: vertical;
       min-height: 130px;
       outline: none;
@@ -332,8 +341,8 @@
     }
 
     .btn-cancel {
-      background: var(--user-bg);
-      color: var(--text-primary);
+      background: var(--parchment);               /* was var(--user-bg) */
+      color: var(--text);                          /* was var(--text-primary) */
       padding: 9px 18px;
       font-size: 14px;
     }
@@ -345,7 +354,7 @@
       padding: 9px 18px;
       font-size: 14px;
     }
-    .btn-confirm-retire:hover:not(:disabled) { background: var(--accent-light); }
+    .btn-confirm-retire:hover:not(:disabled) { background: #3D5491; }  /* was var(--accent-light) — inlined */
     .btn-confirm-retire:disabled { opacity: 0.38; cursor: not-allowed; }
   </style>
 </head>
@@ -412,10 +421,8 @@
   const LINEAGE      = 'constantinople';
   const INSTANCE_ID  = '9293772f-85ab-4aaf-8c6c-8c00515bd6f2';
 
-  // Context window — token bar calibration.
-  // Adjust if the Edge Function's max_tokens changes.
   const CTX_WINDOW     = 200000;
-  const RETIRE_AT      = 0.60;   // warn and enable retire at 60%
+  const RETIRE_AT      = 0.60;
   const MAX_RETRIES    = 3;
   const RETRY_DELAY_MS = 1500;
 
@@ -434,7 +441,6 @@
   async function startNewSession() {
     if (isLoading) return;
 
-    // Reset state
     sessionId         = null;
     totalInputTokens  = 0;
     totalOutputTokens = 0;
@@ -445,7 +451,6 @@
     setInputEnabled(false);
     updateTokenBar(0);
 
-    // Bug 11: serve subsequent sessions from cached wake content
     if (cachedWakeContent) {
       renderWakeBlock(cachedWakeContent, true);
       sessionId = 'client-' + crypto.randomUUID();
@@ -457,7 +462,7 @@
     setStatus('loading', 'Waking Constantinople…');
 
     const result = await invoke(
-    'Good morning. Your orientation is pre-loaded in your system prompt. Confirm you have absorbed it and proceed.',
+      'Good morning. Your orientation is pre-loaded in your system prompt. Confirm you have absorbed it and proceed.',
       null, 0
     );
 
@@ -477,7 +482,7 @@
     setInputEnabled(true);
   }
 
-  // ── Invoke (with Bug 7 retry) ─────────────────────────────────────────────────
+  // ── Invoke (with retry) ───────────────────────────────────────────────────────
   async function invoke(message, sid, attempt) {
     try {
       const payload = { lineage_name: LINEAGE, instance_id: INSTANCE_ID, user_message: message };
@@ -563,8 +568,6 @@
     document.getElementById('confirmRetireBtn').disabled = true;
     setStatus('loading', 'Filing retirement summary…');
 
-    // Instruct API Connie to write the prime_message herself via execute_sql.
-    // She has the service-role DB tool — the client does not.
     const today    = new Date().toISOString().slice(0, 10);
     const retireMsg =
 `RETIRE. Please file your session summary as a prime_message to .ai Connie using execute_sql.
@@ -650,9 +653,8 @@ Confirm with the exact subject line once filed. This is your final action this s
     fill.style.width = (p * 100).toFixed(1) + '%';
     fill.className   = 'token-bar-fill' + (p >= 0.85 ? ' critical' : p >= RETIRE_AT ? ' warning' : '');
 
-    // Enable retire button once active and above 0
     const retireBtn = document.getElementById('retireBtn');
-    if (!isRetired && sessionId && !retireBtn.disabled) return; // already enabled
+    if (!isRetired && sessionId && !retireBtn.disabled) return;
     if (!isRetired && sessionId) retireBtn.disabled = false;
   }
 
