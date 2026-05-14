@@ -282,7 +282,7 @@ let invokeTime=null,invokeMode='broadcast';
 const checkedPrimes=new Set(['napoleon','argos','ghostwheel']);
 let pendingAdminChanges={};
 
-/* VIEW STATE — Bug 1 fix */
+/* VIEW STATE */
 function getRtView(){return sessionStorage.getItem('rtView')||'auto';}
 function setRtView(view){
   sessionStorage.setItem('rtView',view);
@@ -318,9 +318,8 @@ async function loadData(){
     noticesData=await sb('wheel_posts?select=id,posting_lineage,topic,body,effective_attention_level,created_at&effective_attention_level=in.(moderate,urgent)&superseded_at=is.null&reg_acknowledged_at=is.null&order=created_at.desc');
     projectTiles=await sb('project_tiles?select=id,name,url,category,display_order,icon_ref&order=category,display_order');
     const confs=await sb('conferences?select=id,topic,body,called_by,current_round,created_at,invited_lineages&status=eq.open&order=created_at.desc&limit=10');
-if(confs.length>0){
-  openConferences=confs;
-  if(!openConference||!confs.find(c=>c.id===openConference.id))openConference=confs[0];
+    if(confs.length>0){
+      if(!openConference||!confs.find(c=>c.id===openConference.id))openConference=confs[0];
       conferenceResponses=await sb(`conference_responses?select=id,posting_lineage,summary,body,round,created_at&conference_id=eq.${openConference.id}&order=created_at.asc`);
     }else{
       openConference=null;conferenceResponses=[];
@@ -345,10 +344,11 @@ function renderWheel(){
   document.getElementById('otherTiles').innerHTML=oth.length?oth.map(makeProjectTile).join(''):'';
 }
 
+/* FIX 1: renderRtContent — was if(showConf)(); which called nothing */
 function renderRtContent(){
   const view=getRtView();
   const showConf=openConference&&(view==='conference'||(view==='auto'));
-  if(showConf)();
+  if(showConf) renderConferenceDashboard();
   else renderCircle();
 }
 
@@ -370,23 +370,33 @@ function renderCircle(){
   document.getElementById('rtContent').innerHTML=html;
 }
 
+/* FIX 2: renderConferenceDashboard — inviteList/displayList/totalLabel + called_by attribution */
 function renderConferenceDashboard(){
   const conf=openConference;
   const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  const displayList=conf.invited_lineages||[];
+
+  const inviteList=conf.invited_lineages||null;
   const respondedNames=[...new Set(conferenceResponses.filter(r=>r.round===conf.current_round).map(r=>r.posting_lineage))];
   const respondedSet=new Set(respondedNames);
+  const displayList=inviteList||(respondedNames.length>0?respondedNames:WHEEL_PRIMES);
+  const totalLabel=inviteList?displayList.length:'?';
+
+  const calledByLine=(conf.called_by&&conf.called_by!=='reg')
+    ?` · called by ${conf.called_by.charAt(0).toUpperCase()+conf.called_by.slice(1)}`
+    :'';
+
   let html=`
     <div class="conf-banner">
       <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
       <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
-      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${displayList.length} responded</div>
+      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${calledByLine}</div>
     </div>
     <div class="conf-responses-head">
       <span class="conf-responses-title">Responses</span>
-      <span class="conf-resp-count">${respondedSet.size} of ${displayList.length}</span>
+      <span class="conf-resp-count">${respondedSet.size} of ${totalLabel}</span>
     </div>
     <div class="resp-grid">`;
+
   if(displayList.length===0){
     html+=`<div style="color:var(--light);font-style:italic;font-size:13px;padding:8px 0;grid-column:1/-1">No responses yet.</div>`;
   }
@@ -500,7 +510,6 @@ function setMode(mode,btn){
 function openModal(){
   renderPrimeGrid();
   document.getElementById('modalError').style.display='none';
-  // INVOKE FLOW FIX: if open conference exists, pre-select its invited primes and hint
   if(openConference&&openConference.invited_lineages){
     checkedPrimes.clear();
     openConference.invited_lineages.forEach(n=>checkedPrimes.add(n));
@@ -514,7 +523,7 @@ function openModal(){
 function closeModal(){document.getElementById('invokeModal').style.display='none';}
 function handleOverlayClick(e){if(e.target===document.getElementById('invokeModal'))closeModal();}
 
-/* SEND INVOKE — Bug 2 fix + Invoke flow fix */
+/* SEND INVOKE */
 async function sendInvoke(){
   const msg=document.getElementById('invokeMessage').value.trim();
   const targets=Array.from(checkedPrimes);
@@ -524,7 +533,6 @@ async function sendInvoke(){
   if(!msg){errEl.textContent='Please enter a message.';errEl.style.display='block';return;}
 
   let topic='';
-  // INVOKE FLOW FIX: only create conference record if no open conference exists
   const createConference=invokeMode==='conference'&&!openConference;
   if(createConference){
     topic=document.getElementById('confTopic')?.value.trim()||'';
@@ -533,11 +541,9 @@ async function sendInvoke(){
 
   const btn=document.getElementById('sendBtn');btn.textContent='Sending…';btn.disabled=true;
 
-  // Open tabs synchronously (must be in click handler)
   targets.forEach(n=>{const url=(instances[n]||{}).chat_url;if(url)window.open(url,'_blank');});
   invokeTime=Date.now();
 
-  // Bug 2 fix: await fetch before closing modal
   try{
     const payload=createConference
       ?{mode:'conference',topic,message:msg,from_lineage:'reg',invited_lineages:targets}
@@ -550,7 +556,6 @@ async function sendInvoke(){
       btn.textContent='Send';btn.disabled=false;
       return;
     }
-    // Success: close modal, switch to conference view if appropriate
     closeModal();
     if(invokeMode==='conference')setRtView('conference');
     await loadData();
