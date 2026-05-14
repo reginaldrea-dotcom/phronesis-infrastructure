@@ -309,8 +309,8 @@ async function sb(path){
 async function loadData(){
   document.getElementById('lastRefreshed').textContent='Refreshing…';
   try{
-    const rows=await sb('instances?select=name,display_name,chat_url,instance_type,last_seen_at');
-    instances={};rows.forEach(r=>instances[r.name]=r);
+    const rows=await sb('instances?select=name,display_name,chat_url,instance_type,last_seen_at&order=created_at.desc');
+instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
     try{const sr=await fetch(STATUS_FN_URL,{headers:{'Authorization':'Bearer '+SUPABASE_ANON_KEY}});const sd=await sr.json();unreadMap=sd.unread||{};}catch(e){unreadMap={};}
     const posts=await sb('wheel_posts?select=posting_lineage,effective_attention_level&superseded_at=is.null');
     attentionMap={};const rank={'urgent':2,'moderate':1,'low':0};
