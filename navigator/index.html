@@ -348,7 +348,7 @@ function renderWheel(){
 function renderRtContent(){
   const view=getRtView();
   const showConf=openConference&&(view==='conference'||(view==='auto'));
-  if(showConf)renderConferenceDashboard();
+  if(showConf)();
   else renderCircle();
 }
 
@@ -373,18 +373,19 @@ function renderCircle(){
 function renderConferenceDashboard(){
   const conf=openConference;
   const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  const inviteList=conf.invited_lineages&&conf.invited_lineages.length>0?conf.invited_lineages:null;
+  const displayList=conf.invited_lineages||[];
   const respondedNames=[...new Set(conferenceResponses.filter(r=>r.round===conf.current_round).map(r=>r.posting_lineage))];
   const respondedSet=new Set(respondedNames);
-  const displayList=inviteList||respondedNames;
-  const callerNote=!inviteList?' · called by '+(conf.called_by||'unknown'):'';
-  const totalLabel=inviteList?String(inviteList.length):'?';
   let html=`
-   <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
-      <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
+    <div class="conf-banner">
       <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
       <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
-      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${!inviteList?' · called by '+(conf.called_by||'unknown'):''}</div>
+      <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${displayList.length} responded</div>
+    </div>
+    <div class="conf-responses-head">
+      <span class="conf-responses-title">Responses</span>
+      <span class="conf-resp-count">${respondedSet.size} of ${displayList.length}</span>
+    </div>
     <div class="resp-grid">`;
   if(displayList.length===0){
     html+=`<div style="color:var(--light);font-style:italic;font-size:13px;padding:8px 0;grid-column:1/-1">No responses yet.</div>`;
