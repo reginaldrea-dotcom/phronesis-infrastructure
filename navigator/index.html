@@ -373,6 +373,7 @@ function renderCircle(){
 /* FIX 2: renderConferenceDashboard — inviteList/displayList/totalLabel + called_by attribution */
 function renderConferenceDashboard(){
   const conf=openConference;
+   console.log('invited_lineages:', conf.invited_lineages);
   const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 
 const inviteList=(conf.invited_lineages&&conf.invited_lineages.length>0)?conf.invited_lineages:null;
