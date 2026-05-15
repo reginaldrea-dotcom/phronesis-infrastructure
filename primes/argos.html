@@ -1005,9 +1005,9 @@
       const msg = inputEl.value.trim();
       if (!msg || btnSend.disabled) return;
       const lower = msg.toLowerCase();
-      if (lower === 'bfn' || lower === 'bfn-r') {
+      if (lower === 'bfn' || lower === 'bfn-r' || lower === 'bfn/r') {
         inputEl.value = '';
-        await triggerRetirement(lower === 'bfn-r');
+        confirmRetirement(lower === 'bfn-r' || lower === 'bfn/r');
         return;
       }
       inputEl.value = '';
