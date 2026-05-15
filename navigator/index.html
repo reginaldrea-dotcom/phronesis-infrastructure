@@ -480,7 +480,7 @@ async function dismissNotice(idx,id){const el=document.getElementById('notice-'+
 async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'frag'})});}catch(e){console.warn(e);}document.getElementById('notice-'+idx).classList.add('fragged');document.getElementById('frag-'+idx).disabled=true;}
 function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
 
-/* INVOKE function renderNotices(){
+function renderNotices(){
   const count=noticesData.length;
   document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
   const b=document.getElementById('noticesBadge');
@@ -495,7 +495,8 @@ function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:no
     const lv='level-'+(item.effective_attention_level||'moderate');
     return`<div class="notice-item" id="notice-${idx}"><div class="notice-main">${av}<div class="notice-content"><div class="notice-topic" onclick="toggleNotice(${idx})"><span>${item.topic}</span><span class="expand-arrow">▾</span></div><div class="notice-summary">${summary}</div><div class="notice-body">${(item.body||'').replace(/\n/g,'<br>')}</div></div></div><div class="notice-meta"><div class="notice-prime-name">${dn}</div><div class="notice-date">${date}</div><div class="level-badge ${lv}"><div class="l-dot"></div><div class="l-text">${item.effective_attention_level}</div></div><div class="with-ac">with Antechamber</div><div class="notice-actions"><button class="btn-dismiss" onclick="dismissNotice(${idx},'${item.id}')">Dismiss</button><button class="btn-frag" id="frag-${idx}" onclick="fragNotice(${idx},'${item.id}')">Frag</button></div></div></div>`;
   }).join('');
-}MODAL */
+}
+/* INVOKE MODAL */  
 function setMode(mode,btn){
   invokeMode=mode;
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
