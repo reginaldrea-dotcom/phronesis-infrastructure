@@ -286,7 +286,7 @@ let pendingAdminChanges={};
 function getRtView(){return sessionStorage.getItem('rtView')||'auto';}
 function setRtView(view){
   sessionStorage.setItem('rtView',view);
-    updateRtTabs();
+  updateRtTabs();
   renderRtContent();
 }
 function updateRtTabs(){
@@ -325,11 +325,6 @@ instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
       openConference=null;conferenceResponses=[];
       if(getRtView()==='conference')sessionStorage.setItem('rtView','circle');
     }
-    conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
-    renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
-    const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
-}
  
     renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -486,20 +481,12 @@ async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',
 function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
 
 function renderNotices(){
-const confCount=conferenceNotices.length;
-  const count=noticesData.length+confCount;
+  const count=noticesData.length;
   document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
   const b=document.getElementById('noticesBadge');
   if(count>0){b.textContent=count>9?'9+':count;b.style.display='flex';}else b.style.display='none';
   if(count===0){document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';return;}
-  const confItems=conferenceNotices.map(conf=>{
-    const dn=conf.called_by.charAt(0).toUpperCase()+conf.called_by.slice(1);
-    const icon=ICONS[conf.called_by]||'';
-    const av=icon?`<div class="notice-avatar"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="notice-avatar">${dn[0]}</div>`;
-    const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-    return`<div class="notice-item"><div class="notice-main">${av}<div class="notice-content"><div class="notice-topic" style="cursor:default"><span>Conference: ${conf.topic}</span></div><div class="notice-summary">Called by ${dn} — open</div></div></div><div class="notice-meta"><div class="notice-prime-name">${dn}</div><div class="notice-date">${date}</div><div class="level-badge level-urgent"><div class="l-dot"></div><div class="l-text">urgent</div></div><div class="notice-actions"><button class="btn-frag" onclick="setRtView('conference')">View</button></div></div></div>`;
-  }).join('');
-  document.getElementById('noticesList').innerHTML=confItems+noticesData.map((item,idx)=>{
+  document.getElementById('noticesList').innerHTML=noticesData.map((item,idx)=>{
     const dn=item.posting_lineage.charAt(0).toUpperCase()+item.posting_lineage.slice(1);
     const icon=ICONS[item.posting_lineage]||'';
     const av=icon?`<div class="notice-avatar"><img src="${icon}" alt="${dn}" onerror="this.parentElement.textContent='${dn[0]}'"></div>`:`<div class="notice-avatar">${dn[0]}</div>`;
@@ -611,4 +598,3 @@ document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
 </html>
-
