@@ -286,7 +286,7 @@ let pendingAdminChanges={};
 function getRtView(){return sessionStorage.getItem('rtView')||'auto';}
 function setRtView(view){
   sessionStorage.setItem('rtView',view);
-  updateRtTabs();
+    updateRtTabs();
   renderRtContent();
 }
 function updateRtTabs(){
@@ -325,6 +325,11 @@ instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
       openConference=null;conferenceResponses=[];
       if(getRtView()==='conference')sessionStorage.setItem('rtView','circle');
     }
+    conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
+    renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
+    const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
+}
  
     renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
