@@ -671,7 +671,7 @@
 
     function renderAssistant(text, tokens, arts) {
       const seq = ++turnSequence;
-      const excerpt = text.split(/[.!?\n]/)[0].trim().slice(0, 80);
+      const excerpt = text.trim().slice(0, 200);
       const d = document.createElement('div');
       d.className = 'turn-assistant';
       d.dataset.seq = seq;
