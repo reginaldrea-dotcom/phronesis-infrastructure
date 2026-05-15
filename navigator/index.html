@@ -276,7 +276,7 @@ const ICONS = {
 const WHEEL_PRIMES=['napoleon','argos','theophrastus','ghostwheel','constantinople','antechamber','aegis','homer','ricardo','eames'];
 const STALE_HOURS=168;
 
-let conferenceNotices=[];
+
 let openConference=null,conferenceResponses=[];
 let invokeTime=null,invokeMode='broadcast';
 const checkedPrimes=new Set(['napoleon','argos','ghostwheel']);
@@ -325,8 +325,7 @@ instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
       openConference=null;conferenceResponses=[];
       if(getRtView()==='conference')sessionStorage.setItem('rtView','circle');
     }
-    conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
- 
+ conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
     renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
@@ -482,7 +481,7 @@ async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',
 function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
 
 function renderNotices(){
-  const confCount=.length;
+  const confCount=conferenceNotices.length;
   const count=noticesData.length+confCount;
   document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
   const b=document.getElementById('noticesBadge');
