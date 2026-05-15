@@ -999,12 +999,12 @@
       scrollBottom();
     }
 
-    /* ── New session ── */
+   /* ── New session ── */
     function newSession() {
       sessionId = null; sessionTokens = 0;
-      pinnedTurns = []; artefacts = []; pendingImage = null; retirementShown = false; turnSequence = 0;
+      artefacts = []; pendingImage = null; retirementShown = false; turnSequence = 0;
       updateBar(0); clearError();
-      pinnedList.innerHTML = ''; artefactsList.innerHTML = '';
+      artefactsList.innerHTML = '';
       updatePanelEmpty(); updateBadge();
       Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
       sessionDisp.textContent = 'Starting\u2026';
