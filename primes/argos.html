@@ -743,6 +743,27 @@
       insertBefore(d);
     }
 
+    function confirmRetirement(rich) {
+      if (retirementPending) return;
+      retirementPending = true;
+      const d = document.createElement('div');
+      d.className = 'retirement-prompt'; d.id = 'retirement-confirm-prompt';
+      d.innerHTML =
+        `<div class="retirement-dot"></div>` +
+        `<div class="retirement-text">Retire ${esc(PRIME_CONFIG.name)} and write the Super-T?</div>` +
+        `<button class="btn btn-send" id="btn-confirm-retire" style="margin-left:12px;padding:4px 14px;font-size:12px">Confirm</button>` +
+        `<button class="error-dismiss" id="btn-cancel-retire" style="margin-left:6px">Cancel</button>`;
+      insertBefore(d);
+      scrollBottom();
+      document.getElementById('btn-confirm-retire').addEventListener('click', () => {
+        d.remove(); retirementPending = false;
+        triggerRetirement(rich);
+      });
+      document.getElementById('btn-cancel-retire').addEventListener('click', () => {
+        d.remove(); retirementPending = false;
+      });
+    }
+
     /* ── Error states ── */
     function showError(data) {
       clearError();
