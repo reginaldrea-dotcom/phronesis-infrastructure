@@ -48,8 +48,8 @@
     .nav-link {
       display: flex; align-items: center; gap: 6px; text-decoration: none;
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--text-muted); transition: color 0.15s;
+      font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text); transition: color 0.15s;
     }
     .nav-link:hover { color: var(--text); }
     .nav-icon {
@@ -94,7 +94,7 @@
     .session-meta {
       text-align: right;
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 12px; color: var(--text-muted);
+     font-size: 13.5px; color: var(--text);
       letter-spacing: 0.03em; line-height: 1.8;
     }
 
@@ -190,10 +190,10 @@
     /* ── Pin gesture ── */
     .pin-btn {
       position: absolute; right: 10px; top: 10px;
-      width: 22px; height: 22px;
+       width: 28px; height: 28px;
       display: flex; align-items: center; justify-content: center;
       opacity: 0; transition: opacity 0.15s;
-      cursor: pointer; font-size: 12px; color: var(--text-light);
+       cursor: pointer; font-size: 16px; color: var(--text-muted);
       border: none; background: none; padding: 0;
     }
     .turn-assistant:hover .pin-btn { opacity: 1; }
@@ -304,10 +304,10 @@
 
     .input-row { display: flex; align-items: flex-start; gap: 8px; }
     .btn-attach {
-      flex-shrink: 0; width: 32px; height: 32px; margin-top: 2px;
+      flex-shrink: 0; width: 36px; height: 36px; margin-top: 2px;
       display: flex; align-items: center; justify-content: center;
       border: 1px solid var(--border); border-radius: 2px; background: transparent;
-      cursor: pointer; color: var(--text-light); font-size: 14px;
+      cursor: pointer; color: var(--text-muted); font-size: 18px;
       transition: color 0.15s, border-color 0.15s;
     }
     .btn-attach:hover { color: var(--text-muted); border-color: var(--text-muted); }
