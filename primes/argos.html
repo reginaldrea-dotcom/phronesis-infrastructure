@@ -1065,6 +1065,7 @@
     /* ── Events ── */
     btnSend.addEventListener('click', send);
     btnNew.addEventListener('click', newSession);
+    document.getElementById('btn-retire').addEventListener('click', () => confirmRetirement(true));
     document.getElementById('panel-close').addEventListener('click', closePanel);
     panelToggle.addEventListener('click', openPanel);
     inputEl.addEventListener('keydown', e => {
