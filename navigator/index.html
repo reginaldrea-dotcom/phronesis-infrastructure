@@ -481,7 +481,8 @@ async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',
 function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
 
 function renderNotices(){
-  const count=noticesData.length;
+ const confCount=conferenceNotices.length;
+  const count=noticesData.length+confCount;
   document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
   const b=document.getElementById('noticesBadge');
   if(count>0){b.textContent=count>9?'9+':count;b.style.display='flex';}else b.style.display='none';
