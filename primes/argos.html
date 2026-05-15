@@ -928,7 +928,10 @@
           const body = {
             lineage_name:  PRIME_CONFIG.lineage,
             user_message:  message,
-            pinned_turns:  pinnedTurns.map(p => ({ sequence_number: p.seq, excerpt: p.excerpt })),
+            pinned_turns:  pinnedTurns.map(p => ({
+  role:    'assistant',
+  content: p.el.querySelector('.turn-content')?.textContent || p.excerpt,
+})),
           };
           if (sessionId)      body.session_id = sessionId;
           if (opts.retire)    body.retire      = true;
