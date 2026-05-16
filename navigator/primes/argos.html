@@ -660,6 +660,7 @@
         `<div class="turn-label">${esc(label)}</div>` +
         `<div class="turn-content">${esc(text || 'No orientation data returned.')}</div>`;
       insertBefore(d);
+      return d;
     }
 
     function renderUser(text) {
@@ -1047,6 +1048,7 @@
   thinking.classList.remove('visible');
   isWaking = false; btnSend.disabled = false;
   scrollBottom(); return;
+
 }
 
       const data = await invoke('Wake.', true);
@@ -1055,7 +1057,13 @@
       if (data) {
         cachedWakeContent = data.response;
         renderSessionDivider();
-        renderWake(data.response);
+        const wakeEl = renderWake(data.response);
+if (wakeEl && data.response) {
+  pinnedTurns = pinnedTurns.filter(p => p.seq !== 'wake');
+  const oldPin = document.getElementById('pin-wake');
+  if (oldPin) oldPin.remove();
+  togglePin(wakeEl, 'wake', data.response.slice(0, 80));
+}
         if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
       }
       btnSend.disabled = false;
