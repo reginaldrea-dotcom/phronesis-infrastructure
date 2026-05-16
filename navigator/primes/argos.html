@@ -1040,14 +1040,13 @@
       isWaking = true; btnSend.disabled = true;
 
       if (cachedWakeContent) {
-        sessionId = generateUUID();
-        sessionDisp.textContent = 'Session ' + sessionId.slice(0, 8);
-        renderSessionDivider();
-        renderWake(cachedWakeContent);
-        thinking.classList.remove('visible');
-        isWaking = false; btnSend.disabled = false;
-        scrollBottom(); return;
-      }
+  sessionDisp.textContent = 'New session — pending';
+  renderSessionDivider();
+  renderWake(cachedWakeContent);
+  thinking.classList.remove('visible');
+  isWaking = false; btnSend.disabled = false;
+  scrollBottom(); return;
+}
 
       const data = await invoke('Wake.', true);
       thinking.classList.remove('visible');
