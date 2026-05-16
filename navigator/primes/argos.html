@@ -927,7 +927,7 @@
       scrollBottom();
     }
 
-    /* ── Invoke ── */
+   /* ── Invoke ── */
     async function invoke(message, isWake = false, opts = {}) {
       const pCount = pinnedTurns.length;
       thinking.textContent = isWake
@@ -962,7 +962,8 @@
           if (pendingImage)   { body.image = pendingImage; pendingImage = null; imgPreview.classList.remove('visible'); }
 
           const ctl = new AbortController();
-          const tid = setTimeout(() => ctl.abort(), FETCH_TIMEOUT);
+          const timeout = isWake ? 60000 : FETCH_TIMEOUT;
+          const tid = setTimeout(() => ctl.abort(), timeout);
           let res;
           try {
             res = await fetch(EDGE_URL, {
