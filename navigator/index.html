@@ -554,15 +554,23 @@ async function sendInvoke(){
       ?{mode:'conference',topic,message:msg,from_lineage:'reg',invited_lineages:targets}
       :{mode:'broadcast',message:msg,from_lineage:'reg',target_lineages:targets};
     const res=await fetch(INVOKE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({}));
     if(!res.ok){
-      const d=await res.json().catch(()=>({}));
-      errEl.textContent='Send failed: '+(d.error||res.status);
+      errEl.textContent='Send failed: '+(data.error||res.status);
       errEl.style.display='block';
       btn.textContent='Send';btn.disabled=false;
       return;
     }
+    const newConfId=createConference?(data.conference_id||null):null;
     closeModal();
     if(invokeMode==='conference')setRtView('conference');
+    if(newConfId){
+      const toast=document.createElement('div');
+      toast.style.cssText='position:fixed;top:1rem;right:1rem;background:#1e293b;color:#f1f5f9;padding:1rem 1.25rem;border-radius:8px;z-index:9999;font-family:monospace;font-size:0.85rem;box-shadow:0 4px 12px rgba(0,0,0,0.4);max-width:420px;';
+      toast.innerHTML='<div style="margin-bottom:0.4rem;font-weight:600;color:#94a3b8;font-family:sans-serif;">Conference created</div><div style="letter-spacing:0.03em;word-break:break-all;">'+newConfId+'</div><div style="margin-top:0.6rem;"><button onclick="navigator.clipboard.writeText(\''+newConfId+'\');this.textContent=\'Copied!\'" style="background:#334155;border:none;color:#f1f5f9;padding:0.25rem 0.75rem;border-radius:4px;cursor:pointer;font-size:0.8rem;margin-right:0.5rem;">Copy ID</button><button onclick="this.closest(\'div[style]\').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.8rem;">Dismiss</button></div>';
+      document.body.appendChild(toast);
+      setTimeout(()=>{if(toast.parentElement)toast.remove();},15000);
+    }
     await loadData();
   }catch(e){
     errEl.textContent='Network error — check console';
@@ -572,7 +580,6 @@ async function sendInvoke(){
     btn.textContent='Send';btn.disabled=false;
   }
 }
-
 /* ADMIN */
 function openAdminPanel(){pendingAdminChanges={};renderAdminBody();document.getElementById('adminPanel').style.display='flex';}
 function closeAdminPanel(){document.getElementById('adminPanel').style.display='none';}
