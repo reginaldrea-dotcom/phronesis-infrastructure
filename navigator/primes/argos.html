@@ -94,7 +94,7 @@
     .session-meta {
       text-align: right;
       font-family: 'Cormorant Garamond', Georgia, serif;
-     font-size: 13.5px; color: var(--text);
+      font-size: 13.5px; color: var(--text);
       letter-spacing: 0.03em; line-height: 1.8;
     }
 
@@ -190,10 +190,10 @@
     /* ── Pin gesture ── */
     .pin-btn {
       position: absolute; right: 10px; top: 10px;
-       width: 28px; height: 28px;
+      width: 28px; height: 28px;
       display: flex; align-items: center; justify-content: center;
       opacity: 0; transition: opacity 0.15s;
-       cursor: pointer; font-size: 16px; color: var(--text-muted);
+      cursor: pointer; font-size: 16px; color: var(--text-muted);
       border: none; background: none; padding: 0;
     }
     .turn-assistant:hover .pin-btn { opacity: 1; }
@@ -307,7 +307,7 @@
       flex-shrink: 0; width: 36px; height: 36px; margin-top: 2px;
       display: flex; align-items: center; justify-content: center;
       border: 1px solid var(--border); border-radius: 2px; background: transparent;
-      cursor: pointer; color: var(--text-muted); font-size: 18px;
+      cursor: pointer; color: var(--text-muted);
       transition: color 0.15s, border-color 0.15s;
     }
     .btn-attach:hover { color: var(--text-muted); border-color: var(--text-muted); }
@@ -415,12 +415,13 @@
     .pinned-entry {
       padding: 8px 16px; border-bottom: 1px solid var(--border-lt);
       cursor: pointer; display: flex; align-items: flex-start; gap: 6px;
+      transition: background 0.15s;
     }
-    .pinned-entry:hover { background: rgba(0,0,0,0.02); }
+    .pinned-entry:hover { background: rgba(0,0,0,0.03); }
     .pinned-icon { font-size: 10px; color: var(--accent); margin-top: 2px; flex-shrink: 0; }
     .pinned-excerpt {
       font-size: 12px; color: var(--text-muted); font-style: italic; line-height: 1.5;
-      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
 
     .artefact-entry { padding: 10px 16px; border-bottom: 1px solid var(--border-lt); }
@@ -441,6 +442,48 @@
       transition: background 0.15s;
     }
     .btn-artefact:hover { background: var(--parchment); }
+
+    /* ── Inspect modal ── */
+    .inspect-modal-overlay {
+      position: fixed; inset: 0; background: rgba(28, 28, 26, 0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 24px;
+    }
+    .inspect-modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; width: 100%; max-width: 680px; max-height: 80vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 8px 32px rgba(28, 28, 26, 0.15);
+    }
+    .inspect-modal-header {
+      padding: 16px 20px 12px; border-bottom: 1px solid var(--border-lt);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .inspect-modal-title {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 14px; color: var(--text); letter-spacing: 0.02em;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      flex: 1; margin-right: 12px;
+    }
+    .inspect-modal-close {
+      background: none; border: none; font-size: 18px; color: var(--text-light);
+      cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .inspect-modal-close:hover { color: var(--text); }
+    .inspect-modal-body {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .inspect-modal-content {
+      font-family: 'Lora', Georgia, serif; font-size: 13.5px;
+      color: var(--text); line-height: 1.7;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .inspect-modal-footer {
+      padding: 12px 20px; border-top: 1px solid var(--border-lt);
+      display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -498,12 +541,17 @@
             <button class="btn-remove-image" id="btn-remove-image">×</button>
           </div>
           <div class="input-row">
-            <button class="btn-attach" id="btn-attach" title="Attach image">📎</button>
+            <button class="btn-attach" id="btn-attach" title="Attach image">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13.5 7.5L7 14a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.535 3.536L5.5 11.5a1 1 0 01-1.414-1.414L10 4"/>
+              </svg>
+            </button>
             <input type="file" id="file-input" accept="image/*">
             <textarea id="input" rows="3"></textarea>
           </div>
           <div class="input-controls">
-           <button class="btn btn-new-session" id="btn-new-session">New Session</button>
+            <button class="btn btn-new-session" id="btn-new-session">New Session</button>
+            <button class="btn btn-new-session" id="btn-continue">Continue</button>
             <button class="btn btn-new-session" id="btn-retire">Retire</button>
             <button class="btn btn-send" id="btn-send" disabled>Send</button>
           </div>
@@ -560,7 +608,7 @@
     const RETRY_LIMIT   = 3;
     const RETRY_DELAY   = 1500;
     const FETCH_TIMEOUT = 60000;
-    const PIN_AUTO_RELEASE_DAYS = 3;
+    const FOUR_HOURS    = 4 * 60 * 60 * 1000;
 
     /* ── Apply theme ── */
     const r = document.documentElement.style;
@@ -582,38 +630,40 @@
     /* ── State ── */
     let sessionId         = null;
     let sessionTokens     = 0;
-    let pinnedTurns       = [];   // {seqNum, excerpt, el}
-    let artefacts         = [];   // {title, content, type, time}
+    let pinnedTurns       = [];   // {seq, excerpt, el}
+    let artefacts         = [];   // {title, content, type, time, version}
     let pendingImage      = null;
     let retirementShown   = false;
+    let retirementPending = false;
     let cachedWakeContent = null;
+    let lastWakeTimestamp = null;
     let isWaking          = false;
     let turnSequence      = 0;
-   let countdownInterval = null;
-    let retirementPending = false;
+    let countdownInterval = null;
 
     /* ── DOM refs ── */
-    const conv       = document.getElementById('conversation');
-    const thinking   = document.getElementById('thinking');
-    const inputEl    = document.getElementById('input');
-    const btnSend    = document.getElementById('btn-send');
-    const btnNew     = document.getElementById('btn-new-session');
-    const tokenFill  = document.getElementById('token-bar-fill');
-    const tokenTip   = document.getElementById('token-bar-tooltip');
-    const sessionDisp  = document.getElementById('session-display');
-    const errorState   = document.getElementById('error-state');
-    const fileInput    = document.getElementById('file-input');
-    const imgPreview   = document.getElementById('image-preview');
-    const previewImg   = document.getElementById('preview-img');
-    const previewName  = document.getElementById('preview-name');
-    const panelEl      = document.getElementById('artefact-panel');
-    const panelToggle  = document.getElementById('panel-toggle');
-    const panelBadge   = document.getElementById('panel-badge');
-    const pannedSection  = document.getElementById('panel-pinned-section');
-    const pinnedList     = document.getElementById('panel-pinned-list');
+    const conv             = document.getElementById('conversation');
+    const thinking         = document.getElementById('thinking');
+    const inputEl          = document.getElementById('input');
+    const btnSend          = document.getElementById('btn-send');
+    const btnNew           = document.getElementById('btn-new-session');
+    const btnContinue      = document.getElementById('btn-continue');
+    const tokenFill        = document.getElementById('token-bar-fill');
+    const tokenTip         = document.getElementById('token-bar-tooltip');
+    const sessionDisp      = document.getElementById('session-display');
+    const errorState       = document.getElementById('error-state');
+    const fileInput        = document.getElementById('file-input');
+    const imgPreview       = document.getElementById('image-preview');
+    const previewImg       = document.getElementById('preview-img');
+    const previewName      = document.getElementById('preview-name');
+    const panelEl          = document.getElementById('artefact-panel');
+    const panelToggle      = document.getElementById('panel-toggle');
+    const panelBadge       = document.getElementById('panel-badge');
+    const pannedSection    = document.getElementById('panel-pinned-section');
+    const pinnedList       = document.getElementById('panel-pinned-list');
     const artefactsSection = document.getElementById('panel-artefacts-section');
     const artefactsList    = document.getElementById('panel-artefacts-list');
-    const panelEmpty     = document.getElementById('panel-empty');
+    const panelEmpty       = document.getElementById('panel-empty');
 
     /* ── Helpers ── */
     function esc(s) {
@@ -681,7 +731,9 @@
 
       let artsHtml = '';
       if (arts && arts.length > 0) {
-        artsHtml = arts.map(a => `<div class="artefact-ref">&#128206; ${esc(a.title)} \u2014 in artefact panel</div>`).join('');
+        artsHtml = arts.map(a =>
+          `<div class="artefact-ref">&#128206; ${esc(a.title)} \u2014 in artefact panel</div>`
+        ).join('');
       }
 
       d.innerHTML =
@@ -766,6 +818,40 @@
       });
     }
 
+    /* ── Inspect modal ── */
+    function openInspectModal(title, content, footerConfig) {
+      const existing = document.getElementById('inspect-modal-overlay');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'inspect-modal-overlay';
+      overlay.className = 'inspect-modal-overlay';
+
+      const footerHtml = footerConfig.map((btn, i) =>
+        `<button class="${esc(btn.className || 'btn-artefact')}" data-fi="${i}">${esc(btn.label)}</button>`
+      ).join('');
+
+      overlay.innerHTML =
+        `<div class="inspect-modal">` +
+        `<div class="inspect-modal-header">` +
+        `<span class="inspect-modal-title">${esc(title)}</span>` +
+        `<button class="inspect-modal-close">\u00d7</button>` +
+        `</div>` +
+        `<div class="inspect-modal-body">` +
+        `<pre class="inspect-modal-content">${esc(content)}</pre>` +
+        `</div>` +
+        `<div class="inspect-modal-footer">${footerHtml}</div>` +
+        `</div>`;
+
+      overlay.querySelector('.inspect-modal-close').addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      footerConfig.forEach((btn, i) => {
+        overlay.querySelector(`[data-fi="${i}"]`).addEventListener('click', () => btn.action(overlay));
+      });
+
+      document.body.appendChild(overlay);
+    }
+
     /* ── Error states ── */
     function showError(data) {
       clearError();
@@ -823,9 +909,9 @@
     }
     function updatePanelEmpty() {
       const hasContent = artefacts.length > 0 || pinnedTurns.length > 0;
-      panelEmpty.style.display          = hasContent ? 'none' : 'block';
-      artefactsSection.style.display    = artefacts.length > 0 ? 'block' : 'none';
-      pannedSection.style.display       = pinnedTurns.length > 0 ? 'block' : 'none';
+      panelEmpty.style.display       = hasContent ? 'none' : 'block';
+      artefactsSection.style.display = artefacts.length > 0 ? 'block' : 'none';
+      pannedSection.style.display    = pinnedTurns.length > 0 ? 'block' : 'none';
     }
 
     function addArtefact(art) {
@@ -841,7 +927,8 @@
         `<div class="artefact-title">${esc(art.title)}</div>` +
         `<div class="artefact-meta">${esc(art.type || 'code')} \xb7 ${entry.time}${version > 1 ? ' \xb7 v' + version : ''}</div>` +
         `<div class="artefact-actions">` +
-        `<button class="btn-artefact" data-action="copy" data-idx="${idx}">Copy</button>` +
+        `<button class="btn-artefact" data-action="inspect" data-idx="${idx}">Inspect</button>` +
+        `<button class="btn-artefact" data-action="copy"    data-idx="${idx}">Copy</button>` +
         `<button class="btn-artefact" data-action="dismiss" data-idx="${idx}">Dismiss</button>` +
         `</div>`;
 
@@ -849,8 +936,36 @@
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const i = parseInt(btn.dataset.idx);
-        if (btn.dataset.action === 'copy') {
-          navigator.clipboard.writeText(artefacts[i]?.content || '').then(() => {
+        const storedArt = artefacts[i];
+
+        if (btn.dataset.action === 'inspect') {
+          if (!storedArt) return;
+          const content = storedArt.content || '';
+          openInspectModal(storedArt.title, content, [
+            {
+              label: 'Open in tab',
+              className: 'btn-artefact',
+              action: () => {
+                const blob = new Blob([content], { type: 'text/plain' });
+                window.open(URL.createObjectURL(blob));
+              }
+            },
+            {
+              label: 'Copy',
+              className: 'btn-artefact',
+              action: (overlay) => {
+                navigator.clipboard.writeText(content).catch(() => {});
+                overlay.remove();
+              }
+            },
+            {
+              label: 'Close',
+              className: 'btn-artefact',
+              action: (overlay) => overlay.remove()
+            }
+          ]);
+        } else if (btn.dataset.action === 'copy') {
+          navigator.clipboard.writeText(storedArt?.content || '').then(() => {
             btn.textContent = 'Copied \u2713';
             setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
           }).catch(() => {});
@@ -874,12 +989,39 @@
         const pe = document.getElementById('pin-' + seq);
         if (pe) pe.remove();
       } else {
+        // Capture turn time at pin moment for modal title
+        const turnTime = turnEl.querySelector('.turn-label span')?.textContent?.trim() || '';
         turnEl.classList.add('pinned');
         pinnedTurns.push({ seq, excerpt, el: turnEl });
+
         const pe = document.createElement('div');
         pe.className = 'pinned-entry'; pe.id = 'pin-' + seq;
-        pe.innerHTML = `<span class="pinned-icon">\u2385</span><span class="pinned-excerpt">${esc(excerpt)}\u2026</span>`;
-        pe.addEventListener('click', () => turnEl.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+        pe.innerHTML =
+          `<span class="pinned-icon">\u2385</span>` +
+          `<span class="pinned-excerpt">${esc(excerpt)}\u2026</span>`;
+
+        pe.addEventListener('click', () => {
+          const fullContent = turnEl.querySelector('.turn-content')?.textContent || excerpt;
+          const modalTitle = seq === 'wake'
+            ? `Wake orientation \u2014 ${PRIME_CONFIG.name}`
+            : `Pinned turn \u2014 ${PRIME_CONFIG.name}${turnTime ? ', ' + turnTime : ''}`;
+          openInspectModal(modalTitle, fullContent, [
+            {
+              label: 'Release pin',
+              className: 'btn-artefact',
+              action: (overlay) => {
+                overlay.remove();
+                togglePin(turnEl, seq, excerpt);
+              }
+            },
+            {
+              label: 'Close',
+              className: 'btn-artefact',
+              action: (overlay) => overlay.remove()
+            }
+          ]);
+        });
+
         pinnedList.appendChild(pe);
         openPanel();
       }
@@ -928,7 +1070,7 @@
       scrollBottom();
     }
 
-   /* ── Invoke ── */
+    /* ── Invoke ── */
     async function invoke(message, isWake = false, opts = {}) {
       const pCount = pinnedTurns.length;
       thinking.textContent = isWake
@@ -950,17 +1092,21 @@
         }
         try {
           const body = {
-            lineage_name:  PRIME_CONFIG.lineage,
-            user_message:  message,
-            pinned_turns:  pinnedTurns.map(p => ({
-  role:    'assistant',
-  content: p.el.querySelector('.turn-content')?.textContent || p.excerpt,
-})),
+            lineage_name: PRIME_CONFIG.lineage,
+            user_message: message,
+            pinned_turns: pinnedTurns.map(p => ({
+              role:    'assistant',
+              content: p.el.querySelector('.turn-content')?.textContent || p.excerpt,
+            })),
           };
-          if (sessionId)      body.session_id = sessionId;
-          if (opts.retire)    body.retire      = true;
-          if (opts.rich)      body.rich        = true;
-          if (pendingImage)   { body.image = pendingImage; pendingImage = null; imgPreview.classList.remove('visible'); }
+          if (sessionId)    body.session_id = sessionId;
+          if (opts.retire)  body.retire      = true;
+          if (opts.rich)    body.rich        = true;
+          if (pendingImage) {
+            body.image = pendingImage;
+            pendingImage = null;
+            imgPreview.classList.remove('visible');
+          }
 
           const ctl = new AbortController();
           const timeout = isWake ? 60000 : FETCH_TIMEOUT;
@@ -1024,10 +1170,12 @@
       scrollBottom();
     }
 
-   /* ── New session ── */
+    /* ── New session ── */
     function newSession() {
       sessionId = null; sessionTokens = 0;
-      artefacts = []; pendingImage = null; retirementShown = false; turnSequence = 0;
+      pinnedTurns = []; pinnedList.innerHTML = '';
+      artefacts = []; pendingImage = null;
+      retirementShown = false; retirementPending = false; turnSequence = 0;
       updateBar(0); clearError();
       artefactsList.innerHTML = '';
       updatePanelEmpty(); updateBadge();
@@ -1036,34 +1184,85 @@
       wake();
     }
 
+    /* ── Continue session ── */
+    function continueSession() {
+      const elapsed = lastWakeTimestamp ? Date.now() - lastWakeTimestamp : Infinity;
+      sessionId = null; sessionTokens = 0;
+      pinnedTurns = []; pinnedList.innerHTML = '';
+      artefacts = []; pendingImage = null;
+      retirementShown = false; retirementPending = false; turnSequence = 0;
+      updateBar(0); clearError();
+      artefactsList.innerHTML = '';
+      updatePanelEmpty(); updateBadge();
+      Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
+
+      if (elapsed > FOUR_HOURS || !cachedWakeContent) {
+        // Cache stale or absent — full wake
+        sessionDisp.textContent = 'Starting\u2026';
+        wake();
+      } else {
+        // Within 4h — light continue
+        continueWake();
+      }
+    }
+
+    /* ── Continue wake (light) ── */
+    async function continueWake() {
+      if (isWaking) return;
+      isWaking = true; btnSend.disabled = true;
+
+      sessionDisp.textContent = 'Continuing\u2026';
+      renderSessionDivider('Session continued \xb7 ' + timeStr());
+      const wakeEl = renderWake(cachedWakeContent);
+
+      // Auto-pin the cached orientation
+      if (wakeEl && cachedWakeContent) {
+        pinnedTurns = pinnedTurns.filter(p => p.seq !== 'wake');
+        const oldPin = document.getElementById('pin-wake');
+        if (oldPin) oldPin.remove();
+        togglePin(wakeEl, 'wake', cachedWakeContent.slice(0, 80));
+      }
+
+      // Check inbox for new messages
+      const data = await invoke('Continue — check inbox for any new messages since the last session.', false);
+      thinking.classList.remove('visible');
+      isWaking = false;
+      if (data) {
+        lastWakeTimestamp = Date.now();
+        renderAssistant(data.response, data.usage?.output_tokens || 0, data.artifacts || []);
+      }
+      btnSend.disabled = false;
+      scrollBottom();
+    }
+
     /* ── Wake ── */
     async function wake() {
       if (isWaking) return;
       isWaking = true; btnSend.disabled = true;
 
       if (cachedWakeContent) {
-  sessionDisp.textContent = 'New session — pending';
-  renderSessionDivider();
-  renderWake(cachedWakeContent);
-  thinking.classList.remove('visible');
-  isWaking = false; btnSend.disabled = false;
-  scrollBottom(); return;
-
-}
+        sessionDisp.textContent = 'New session \u2014 pending';
+        renderSessionDivider();
+        renderWake(cachedWakeContent);
+        thinking.classList.remove('visible');
+        isWaking = false; btnSend.disabled = false;
+        scrollBottom(); return;
+      }
 
       const data = await invoke('Wake.', true);
       thinking.classList.remove('visible');
       isWaking = false;
       if (data) {
         cachedWakeContent = data.response;
+        lastWakeTimestamp = Date.now();
         renderSessionDivider();
         const wakeEl = renderWake(data.response);
-if (wakeEl && data.response) {
-  pinnedTurns = pinnedTurns.filter(p => p.seq !== 'wake');
-  const oldPin = document.getElementById('pin-wake');
-  if (oldPin) oldPin.remove();
-  togglePin(wakeEl, 'wake', data.response.slice(0, 80));
-}
+        if (wakeEl && data.response) {
+          pinnedTurns = pinnedTurns.filter(p => p.seq !== 'wake');
+          const oldPin = document.getElementById('pin-wake');
+          if (oldPin) oldPin.remove();
+          togglePin(wakeEl, 'wake', data.response.slice(0, 80));
+        }
         if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
       }
       btnSend.disabled = false;
@@ -1073,7 +1272,9 @@ if (wakeEl && data.response) {
     /* ── Events ── */
     btnSend.addEventListener('click', send);
     btnNew.addEventListener('click', newSession);
-   document.getElementById('btn-retire').addEventListener('click', () => {
+    btnContinue.addEventListener('click', continueSession);
+
+    document.getElementById('btn-retire').addEventListener('click', () => {
       const btn = document.getElementById('btn-retire');
       if (btn.dataset.confirming === 'true') {
         btn.textContent = 'Retire';
