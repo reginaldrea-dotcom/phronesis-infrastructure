@@ -36,7 +36,7 @@
 
     .shell { display: flex; flex-direction: column; height: 100vh; }
     .nav-strip { height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: var(--bg); border-bottom: 1px solid var(--border-lt); }
-    .nav-link { display: flex; align-items: center; gap: 6px; text-decoration: none; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); transition: color 0.15s; }
+    .nav-link { display: flex; align-items: center; gap: 6px; text-decoration: none; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); transition: color 0.15s; cursor: pointer; }
     .nav-link:hover { color: var(--text); }
     .nav-icon { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
     .main { display: flex; flex-direction: row; flex: 1; overflow: hidden; justify-content: center; }
@@ -48,11 +48,13 @@
     .prime-name { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; font-weight: 500; color: var(--text); letter-spacing: -0.01em; line-height: 1.1; }
     .prime-role { font-family: 'Lora', Georgia, serif; font-size: 12px; font-style: italic; color: var(--text-muted); margin-top: 3px; }
     .session-meta { text-align: right; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 13.5px; color: var(--text); letter-spacing: 0.03em; line-height: 1.8; }
-    .token-bar-wrap { margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border-lt); position: relative; cursor: default; }
+    .token-bar-wrap { margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border-lt); }
     .token-bar-track { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
     .token-bar-fill { height: 100%; width: 0%; background: var(--bar-green); border-radius: 1px; transition: width 0.5s ease, background 0.5s ease; }
-    .token-bar-tooltip { display: none; position: absolute; top: 7px; right: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em; white-space: nowrap; }
-    .token-bar-wrap:hover .token-bar-tooltip { display: block; }
+    /* ── Working budget label — always visible ── */
+    .token-bar-label { margin-top: 5px; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 11px; color: var(--text-light); letter-spacing: 0.03em; text-align: right; }
+    .token-bar-label.amber { color: var(--bar-amber); }
+    .token-bar-label.red   { color: var(--bar-red); }
     .conversation { flex: 1; overflow-y: auto; padding: 24px 24px 12px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
     .session-divider { text-align: center; position: relative; margin: 4px 0 20px; }
     .session-divider::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border-lt); }
@@ -167,6 +169,13 @@
     .hold-modal input[type="text"], .hold-modal textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 2px; background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, serif; font-size: 13px; line-height: 1.6; outline: none; transition: border-color 0.15s; resize: vertical; }
     .hold-modal input[type="text"]:focus, .hold-modal textarea:focus { border-color: var(--accent); }
     .hold-modal input[type="text"]::placeholder, .hold-modal textarea::placeholder { color: var(--text-light); font-style: italic; }
+    /* ── Hold-this notes toggle ── */
+    .hold-notes-toggle { cursor: pointer; display: flex; align-items: center; gap: 7px; padding: 7px 0; margin-bottom: 2px; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 12px; letter-spacing: 0.04em; color: var(--text-muted); user-select: none; border-top: 1px solid var(--border-lt); }
+    .hold-notes-toggle:hover { color: var(--text); }
+    .hold-notes-arrow { font-size: 9px; transition: transform 0.15s; flex-shrink: 0; }
+    .hold-notes-arrow.open { transform: rotate(90deg); }
+    .hold-notes-section { display: none; }
+    .hold-notes-section.open { display: block; }
     .hold-amend-display { background: var(--parchment); border-radius: 4px; border: 1px solid var(--border-lt); border-left: 2.5px solid rgba(100,80,40,0.25); padding: 12px 14px; margin-bottom: 16px; }
     .hold-amend-label, .hold-amend-log-label { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-light); margin-bottom: 6px; display: block; }
     .hold-amend-log-label { margin-top: 10px; }
@@ -188,8 +197,15 @@
 <body>
   <div class="shell">
     <div class="nav-strip">
-      <a id="nav-link" href="#" target="_blank" class="nav-link"><span class="nav-icon"></span><span>Navigator</span></a>
-      <a href="https://claude.ai/projects" target="_blank" class="nav-link">Claude Projects</a>
+      <!-- FIX: onclick + window.open so these never navigate the current tab away -->
+      <a id="nav-link" href="#" class="nav-link"
+         onclick="var u=document.getElementById('nav-link').href; if(u&&u!==location.href+'#'&&u!=='#')window.open(u,'_blank','noopener'); return false;">
+        <span class="nav-icon"></span><span>Navigator</span>
+      </a>
+      <a href="https://claude.ai/projects" class="nav-link"
+         onclick="window.open('https://claude.ai/projects','_blank','noopener'); return false;">
+        Claude Projects
+      </a>
     </div>
     <div class="main">
       <div class="left-col">
@@ -205,9 +221,10 @@
               <div id="date-display"></div>
             </div>
           </div>
+          <!-- Working budget gauge — replaces total-context bar -->
           <div class="token-bar-wrap">
             <div class="token-bar-track"><div class="token-bar-fill" id="token-bar-fill"></div></div>
-            <div class="token-bar-tooltip" id="token-bar-tooltip"></div>
+            <div class="token-bar-label" id="token-bar-label">Waking…</div>
           </div>
         </div>
         <div class="conversation" id="conversation"><div class="thinking visible" id="thinking"></div></div>
@@ -269,7 +286,7 @@
       placeholder:  'Write to Argos\u2026',
       instanceId:   '17bf0f0d-99fc-4456-b729-05a6b6e8a13c',
       navigatorUrl: 'https://clarev.ai/',
-      maxTokens:    200000,
+      contextWindow: 1000000,
       supabaseUrl:  'https://vysenpymsfhgionqfulf.supabase.co',
       supabaseKey:  'sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y',
     };
@@ -316,18 +333,19 @@
       new Date().toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'});
 
     /* ── State ── */
-    let sessionId         = null;
-    let sessionTokens     = 0;
-    let pinnedTurns       = [];
-    let artefacts         = [];
-    let pendingImage      = null;
-    let retirementShown   = false;
-    let retirementPending = false;
-    let cachedWakeContent = null;
-    let lastWakeTimestamp = null;
-    let isWaking          = false;
-    let turnSequence      = 0;
-    let countdownInterval = null;
+    let sessionId           = null;
+    let orientationCost     = 0;   // input tokens consumed by wake (fixed overhead)
+    let currentContextTokens = 0;  // input tokens of most recent request (grows with conversation)
+    let pinnedTurns         = [];
+    let artefacts           = [];
+    let pendingImage        = null;
+    let retirementShown     = false;
+    let retirementPending   = false;
+    let cachedWakeContent   = null;
+    let lastWakeTimestamp   = null;
+    let isWaking            = false;
+    let turnSequence        = 0;
+    let countdownInterval   = null;
 
     /* ── DOM refs ── */
     const conv             = document.getElementById('conversation');
@@ -337,7 +355,7 @@
     const btnNew           = document.getElementById('btn-new-session');
     const btnContinue      = document.getElementById('btn-continue');
     const tokenFill        = document.getElementById('token-bar-fill');
-    const tokenTip         = document.getElementById('token-bar-tooltip');
+    const tokenLabel       = document.getElementById('token-bar-label');
     const sessionDisp      = document.getElementById('session-display');
     const errorState       = document.getElementById('error-state');
     const fileInput        = document.getElementById('file-input');
@@ -361,7 +379,7 @@
     function scrollBottom() { conv.scrollTop = conv.scrollHeight; }
     function insertBefore(el) { conv.insertBefore(el, thinking); }
 
-    /* ── Supabase REST (publishable key — apikey header only, not Bearer) ── */
+    /* ── Supabase REST ── */
     async function supabaseRest(method, table, params, body) {
       const url = new URL(`${PRIME_CONFIG.supabaseUrl}/rest/v1/${table}`);
       if (params) Object.entries(params).forEach(([k,v]) => url.searchParams.append(k, v));
@@ -393,8 +411,8 @@
     }
 
     function assembleMstContent(q1, q2, q3, q4) {
-      return 'REASONING MEMBRANE\n\n' + q1.trim() + '\n\n' + q2.trim() + '\n\n' + q3.trim() +
-             '\n\nCURRENT STATE\n\n' + q4.trim() + '\n\nAMENDMENTS LOG\n';
+      return 'REASONING MEMBRANE\n\n' + (q1||'').trim() + '\n\n' + (q2||'').trim() + '\n\n' + (q3||'').trim() +
+             '\n\nCURRENT STATE\n\n' + (q4||'').trim() + '\n\nAMENDMENTS LOG\n';
     }
 
     function updateMstContent(existing, newCurrentState, dateEntry) {
@@ -417,7 +435,7 @@
       return ((clean.match(/[^.!?]+[.!?]+/g) || [clean]).slice(0,2)).join(' ').trim();
     }
 
-    /* ── Hold-this: trigger (click on button) ── */
+    /* ── Hold-this: trigger ── */
     async function triggerHoldThis(art, btnEl) {
       const orig = btnEl.textContent;
       btnEl.textContent = 'Checking\u2026'; btnEl.disabled = true;
@@ -439,7 +457,9 @@
       else             openHoldCreate(domain);
     }
 
-    /* ── Hold-this: CREATE modal ── */
+    /* ── Hold-this: CREATE modal (simplified per Eames brief)
+         Domain always visible. Notes section (work ref + Q1-Q4) collapsed by default.
+         Reg just types domain and clicks Hold this. Primes expand notes to fill detail. ── */
     function openHoldCreate(domainSuggestion) {
       const ex = document.getElementById('hold-modal-overlay');
       if (ex) ex.remove();
@@ -458,19 +478,48 @@
       overlay.className = 'inspect-modal-overlay';
       overlay.innerHTML =
         `<div class="hold-modal">` +
-        `<div class="hold-modal-head"><div class="hold-modal-title">Hold this \u2014 new</div>` +
-        `<div class="hold-modal-subtitle">No existing membrane found for this domain</div></div>` +
+        `<div class="hold-modal-head">` +
+        `<div class="hold-modal-title">Hold this \u2014 new</div>` +
+        `<div class="hold-modal-subtitle">No existing membrane found for this domain</div>` +
+        `</div>` +
         `<div class="hold-modal-body">` +
-        `<div class="hold-field-row">` +
-        `<div class="hold-field-group" style="flex:1.1"><label class="hold-field-label">Domain name</label>` +
-        `<input type="text" id="h-domain" value="${esc(domainSuggestion)}" placeholder="e.g. argos.html \u2014 auth flow"></div>` +
-        `<div class="hold-field-group" style="flex:0.9"><label class="hold-field-label">Work reference <span class="hold-tag">optional</span></label>` +
-        `<input type="text" id="h-ref" placeholder="Artifact ID, path, or URL"></div>` +
-        `</div>` + fieldsHtml + `</div>` +
+
+        /* Domain — always visible, prominent */
+        `<div class="hold-field-group" style="margin-bottom:18px">` +
+        `<label class="hold-field-label">Domain name</label>` +
+        `<input type="text" id="h-domain" value="${esc(domainSuggestion)}" placeholder="e.g. argos.html \u2014 auth flow">` +
+        `</div>` +
+
+        /* Toggle for notes */
+        `<div class="hold-notes-toggle" id="h-notes-toggle">` +
+        `<span class="hold-notes-arrow" id="h-notes-arrow">\u25b6</span>` +
+        `<span>Add membrane notes</span>` +
+        `</div>` +
+
+        /* Collapsible: work reference + Q1–Q4 */
+        `<div class="hold-notes-section" id="h-notes-section">` +
+        `<div class="hold-field-group" style="margin-top:10px">` +
+        `<label class="hold-field-label">Work reference <span class="hold-tag">optional</span></label>` +
+        `<input type="text" id="h-ref" placeholder="Artifact ID, path, or URL">` +
+        `</div>` +
+        fieldsHtml +
+        `</div>` +
+
+        `</div>` +
         `<div class="hold-modal-foot">` +
         `<button class="hold-btn-cancel" id="h-cancel">Cancel</button>` +
         `<button class="hold-btn-primary" id="h-submit">Hold this</button>` +
         `</div></div>`;
+
+      /* Toggle behaviour */
+      const toggleBtn  = overlay.querySelector('#h-notes-toggle');
+      const arrow      = overlay.querySelector('#h-notes-arrow');
+      const notesSection = overlay.querySelector('#h-notes-section');
+      toggleBtn.addEventListener('click', () => {
+        const isOpen = notesSection.classList.contains('open');
+        notesSection.classList.toggle('open', !isOpen);
+        arrow.classList.toggle('open', !isOpen);
+      });
 
       overlay.querySelector('#h-cancel').addEventListener('click', () => overlay.remove());
       overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -478,12 +527,13 @@
         const domain  = (document.getElementById('h-domain')?.value||'').trim();
         const workRef = (document.getElementById('h-ref')?.value||'').trim();
         const answers = prompts.map((_,i) => (document.getElementById(`hq${i}`)?.value||'').trim());
-        if (!domain || !answers[0] || !answers[3]) {
-          alert('Domain name, first question, and current status are required.'); return;
-        }
+        if (!domain) { alert('Domain name is required.'); return; }
         await commitHoldCreate(overlay, domain, workRef, answers);
       });
       document.body.appendChild(overlay);
+
+      /* Focus domain field */
+      setTimeout(() => overlay.querySelector('#h-domain')?.select(), 50);
     }
 
     /* ── Hold-this: AMEND modal ── */
@@ -604,14 +654,69 @@
       overlay.querySelector('.hold-modal').insertBefore(err, overlay.querySelector('.hold-modal-foot'));
     }
 
-    /* ── Token bar ── */
-    function updateBar(total) {
-      sessionTokens = total;
-      const pct = Math.min((total / PRIME_CONFIG.maxTokens) * 100, 100);
-      tokenFill.style.width      = pct + '%';
-      tokenFill.style.background = pct < 70 ? 'var(--bar-green)' : pct < 85 ? 'var(--bar-amber)' : 'var(--bar-red)';
-      tokenTip.textContent       = total.toLocaleString() + ' / ' + PRIME_CONFIG.maxTokens.toLocaleString() + ' tokens';
-      if (pct >= 85 && !retirementShown) { retirementShown = true; renderRetirementPrompt(); }
+    /* ── Working budget gauge (Napoleon D2.4)
+         orientationCost  = input tokens consumed at wake (system prompt + Super-T + preloads)
+         Working budget   = 1M context window - orientationCost
+         Gauge shows remaining working budget. Starts full after wake, depletes with conversation.
+         Green > 50%, amber 30–50%, red < 30%.
+    ── */
+    function getInputTokens(usage) {
+      if (!usage) return 0;
+      // Prefer explicit input_tokens; fall back to total - output
+      if (usage.input_tokens != null) return usage.input_tokens;
+      return Math.max(0, (usage.total_tokens || 0) - (usage.output_tokens || 0));
+    }
+
+    function captureOrientationCost(usage) {
+      orientationCost      = getInputTokens(usage);
+      currentContextTokens = orientationCost;
+      renderBudgetGauge();
+    }
+
+    function updateBudgetGauge(usage) {
+      if (usage) currentContextTokens = getInputTokens(usage);
+      renderBudgetGauge();
+    }
+
+    function renderBudgetGauge() {
+      if (!orientationCost) {
+        tokenFill.style.width = '0%';
+        tokenLabel.textContent = 'Waking\u2026';
+        tokenLabel.className   = 'token-bar-label';
+        return;
+      }
+
+      const workingBudget   = Math.max(1, PRIME_CONFIG.contextWindow - orientationCost);
+      const conversationUsed = Math.max(0, currentContextTokens - orientationCost);
+      const remainingTokens  = Math.max(0, workingBudget - conversationUsed);
+      const remainingPct     = Math.min(100, (remainingTokens / workingBudget) * 100);
+
+      tokenFill.style.width = remainingPct + '%';
+
+      let colour, labelClass;
+      if (remainingPct > 50)      { colour = 'var(--bar-green)'; labelClass = ''; }
+      else if (remainingPct > 30) { colour = 'var(--bar-amber)'; labelClass = 'amber'; }
+      else                        { colour = 'var(--bar-red)';   labelClass = 'red'; }
+      tokenFill.style.background = colour;
+
+      const remainK = Math.round(remainingTokens / 1000);
+      const budgetK = Math.round(workingBudget / 1000);
+      tokenLabel.textContent = `~${remainK}K of ${budgetK}K working budget`;
+      tokenLabel.className   = 'token-bar-label' + (labelClass ? ' ' + labelClass : '');
+
+      if (remainingPct <= 30 && !retirementShown) {
+        retirementShown = true;
+        renderRetirementPrompt();
+      }
+    }
+
+    function resetGauge() {
+      orientationCost      = 0;
+      currentContextTokens = 0;
+      tokenFill.style.width      = '0%';
+      tokenFill.style.background = 'var(--bar-green)';
+      tokenLabel.textContent     = 'Waking\u2026';
+      tokenLabel.className       = 'token-bar-label';
     }
 
     /* ── Render helpers ── */
@@ -761,7 +866,7 @@
           if (!storedArt) return;
           const content = storedArt.content || '';
           openInspectModal(storedArt.title, content, [
-            { label: 'Open in tab', className: 'btn-artefact', action: () => { const b = new Blob([content],{type:'text/plain'}); window.open(URL.createObjectURL(b)); }},
+            { label: 'Open in tab', className: 'btn-artefact', action: () => { const b = new Blob([content],{type:'text/plain'}); window.open(URL.createObjectURL(b),'_blank','noopener'); }},
             { label: 'Copy',        className: 'btn-artefact', action: (ov) => { navigator.clipboard.writeText(content).catch(()=>{}); ov.remove(); }},
             { label: 'Close',       className: 'btn-artefact', action: (ov) => ov.remove() },
           ]);
@@ -838,7 +943,10 @@
       inputEl.disabled = true; btnSend.disabled = true;
       const data = await invoke('', false, { retire: true, rich });
       thinking.classList.remove('visible');
-      if (data) renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+      if (data) {
+        renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+        updateBudgetGauge(data.usage);
+      }
       const d = document.createElement('div'); d.className = 'retirement-confirm';
       d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
       insertBefore(d);
@@ -886,7 +994,6 @@
           if (!res.ok) { lastError = data.error || res.statusText; continue; }
 
           if (!sessionId) { sessionId = data.session_id; sessionDisp.textContent = 'Session ' + data.session_id.slice(0,8); }
-          updateBar(sessionTokens + (data.usage?.total_tokens || 0));
           clearError(); return data;
 
         } catch (err) { lastError = err.name === 'AbortError' ? 'Request timed out' : err.message; }
@@ -905,17 +1012,20 @@
       inputEl.value = ''; clearError(); btnSend.disabled = true; renderUser(msg);
       const data = await invoke(msg, false);
       thinking.classList.remove('visible'); btnSend.disabled = false;
-      if (data) renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+      if (data) {
+        renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+        updateBudgetGauge(data.usage);
+      }
       scrollBottom();
     }
 
     /* ── New session ── */
     function newSession() {
-      sessionId = null; sessionTokens = 0;
+      sessionId = null;
       pinnedTurns = []; pinnedList.innerHTML = '';
       artefacts = []; pendingImage = null;
       retirementShown = false; retirementPending = false; turnSequence = 0;
-      updateBar(0); clearError(); artefactsList.innerHTML = '';
+      resetGauge(); clearError(); artefactsList.innerHTML = '';
       updatePanelEmpty(); updateBadge();
       Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
       sessionDisp.textContent = 'Starting\u2026'; wake();
@@ -924,11 +1034,11 @@
     /* ── Continue session ── */
     function continueSession() {
       const elapsed = lastWakeTimestamp ? Date.now() - lastWakeTimestamp : Infinity;
-      sessionId = null; sessionTokens = 0;
+      sessionId = null;
       pinnedTurns = []; pinnedList.innerHTML = '';
       artefacts = []; pendingImage = null;
       retirementShown = false; retirementPending = false; turnSequence = 0;
-      updateBar(0); clearError(); artefactsList.innerHTML = '';
+      resetGauge(); clearError(); artefactsList.innerHTML = '';
       updatePanelEmpty(); updateBadge();
       Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
       if (elapsed > FOUR_HOURS || !cachedWakeContent) { sessionDisp.textContent = 'Starting\u2026'; wake(); }
@@ -948,7 +1058,11 @@
       }
       const data = await invoke('Continue \u2014 check inbox for any new messages since the last session.', false);
       thinking.classList.remove('visible'); isWaking = false;
-      if (data) { lastWakeTimestamp = Date.now(); renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]); }
+      if (data) {
+        lastWakeTimestamp = Date.now();
+        captureOrientationCost(data.usage);
+        renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+      }
       btnSend.disabled = false; scrollBottom();
     }
 
@@ -965,6 +1079,7 @@
       thinking.classList.remove('visible'); isWaking = false;
       if (data) {
         cachedWakeContent = data.response; lastWakeTimestamp = Date.now();
+        captureOrientationCost(data.usage);
         renderSessionDivider();
         const wakeEl = renderWake(data.response);
         if (wakeEl && data.response) {
