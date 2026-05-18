@@ -37,6 +37,7 @@
       "predecessor": null
     },
     "argos": {
+      "url": "https://clarev.ai/primes/argos.html",
       "instance_id": "17bf0f0d-99fc-4456-b729-05a6b6e8a13c",
       "type": "api_prime",
       "since": "2026-05-20",
