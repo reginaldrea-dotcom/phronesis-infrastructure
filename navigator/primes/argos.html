@@ -680,7 +680,7 @@
     }
 
     function updateBudgetGauge(usage) {
-  if (usage) currentContextTokens = Math.max(currentContextTokens, getInputTokens(usage));
+  if (usage) currentContextTokens += (usage.output_tokens || 0);
   renderBudgetGauge();
 }
 
