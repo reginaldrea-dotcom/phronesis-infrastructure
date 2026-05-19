@@ -680,9 +680,9 @@
     }
 
     function updateBudgetGauge(usage) {
-      if (usage) currentContextTokens = getInputTokens(usage);
-      renderBudgetGauge();
-    }
+  if (usage) currentContextTokens = Math.max(currentContextTokens, getInputTokens(usage));
+  renderBudgetGauge();
+}
 
     function renderBudgetGauge() {
       if (!orientationCost) {
