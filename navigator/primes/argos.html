@@ -240,7 +240,7 @@
                 <path d="M13.5 7.5L7 14a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.535 3.536L5.5 11.5a1 1 0 01-1.414-1.414L10 4"/>
               </svg>
             </button>
-            <input type="file" id="file-input" accept="image/*">
+           <input type="file" id="file-input" accept="image/*,application/pdf">
             <textarea id="input" rows="3"></textarea>
           </div>
           <div class="input-controls">
@@ -338,7 +338,8 @@
     let currentContextTokens = 0;  // input tokens of most recent request (grows with conversation)
     let pinnedTurns         = [];
     let artefacts           = [];
-    let pendingImage        = null;
+    let pendingImage = null;
+    let pendingFile = null;
     let retirementShown     = false;
     let retirementPending   = false;
     let cachedWakeContent   = null;
@@ -590,16 +591,44 @@
 
     /* ── Hold-this: commit CREATE ── */
     async function commitHoldCreate(overlay, domain, workRef, answers) {
-      const btn = overlay.querySelector('#h-submit');
-      btn.textContent = 'Saving\u2026'; btn.disabled = true;
-
-      const content  = assembleMstContent(answers[0], answers[1], answers[2], answers[3]);
-      const metadata = {
-        domain, prime_lineage: PRIME_CONFIG.lineage,
-        status: 'active', domain_type: 'code',
-        work_reference: workRef || null,
-        last_touched: new Date().toISOString().slice(0,10),
-      };
+  const btn = overlay.querySelector('#h-submit');
+  btn.textContent = 'Saving\u2026'; btn.disabled = true;
+  const content = assembleMstContent(answers[0], answers[1], answers[2], answers[3]);
+  const metadata = {
+    domain, prime_lineage: PRIME_CONFIG.lineage,
+    status: 'active', domain_type: 'code',
+    work_reference: workRef || null,
+    last_touched: new Date().toISOString().slice(0, 10),
+  };
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'hold_this',
+        lineage_name: PRIME_CONFIG.lineage,
+        hold_this_payload: {
+          mode: 'create',
+          instance_id: PRIME_CONFIG.instanceId,
+          title: domain,
+          content,
+          metadata,
+        },
+      }),
+    });
+    const result = await res.json();
+    if (result.id) {
+      overlay.remove();
+      showHoldConfirm('Membrane held.', result.id);
+    } else {
+      btn.textContent = 'Hold this'; btn.disabled = false;
+      showHoldError(overlay, result.message || 'Could not save. Please try again.');
+    }
+  } catch (err) {
+    btn.textContent = 'Hold this'; btn.disabled = false;
+    showHoldError(overlay, 'Network error. Please try again.');
+  }
+}
 
       const result = await supabaseRest('POST', 'artifacts', null, {
         instance_id: PRIME_CONFIG.instanceId, title: domain,
@@ -617,25 +646,40 @@
 
     /* ── Hold-this: commit AMEND ── */
     async function commitHoldAmend(overlay, existingMst, newEntry) {
-      const btn = overlay.querySelector('#h-submit');
-      btn.textContent = 'Saving\u2026'; btn.disabled = true;
-
-      const dateEntry      = `[${todayStr()}]\n${newEntry}`;
-      const newCurrentState = extractCurrentState(newEntry);
-      const updatedContent = updateMstContent(existingMst.content || '', newCurrentState, dateEntry);
-      const updatedMetadata = { ...(existingMst.metadata||{}), last_touched: new Date().toISOString().slice(0,10) };
-
-      const result = await supabaseRest('PATCH', 'artifacts', { 'id': `eq.${existingMst.id}` },
-        { content: updatedContent, metadata: updatedMetadata });
-
-      if (result !== null) {
-        overlay.remove();
-        showHoldConfirm('Amendment saved.', existingMst.id);
-      } else {
-        btn.textContent = 'Amend'; btn.disabled = false;
-        showHoldError(overlay, 'Could not write to Supabase — RLS may be blocking anon writes. Report to Reg.');
-      }
+  const btn = overlay.querySelector('#h-submit');
+  btn.textContent = 'Saving\u2026'; btn.disabled = true;
+  const dateEntry = `[${todayStr()}]\n${newEntry}`;
+  const newCurrentState = extractCurrentState(newEntry);
+  const updatedContent = updateMstContent(existingMst.content || '', newCurrentState, dateEntry);
+  const updatedMetadata = { ...(existingMst.metadata || {}), last_touched: new Date().toISOString().slice(0, 10) };
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'hold_this',
+        lineage_name: PRIME_CONFIG.lineage,
+        hold_this_payload: {
+          mode: 'amend',
+          id: existingMst.id,
+          content: updatedContent,
+          metadata: updatedMetadata,
+        },
+      }),
+    });
+    const result = await res.json();
+    if (!result.error) {
+      overlay.remove();
+      showHoldConfirm('Amendment saved.', existingMst.id);
+    } else {
+      btn.textContent = 'Amend'; btn.disabled = false;
+      showHoldError(overlay, result.message || 'Could not save. Please try again.');
     }
+  } catch (err) {
+    btn.textContent = 'Amend'; btn.disabled = false;
+    showHoldError(overlay, 'Network error. Please try again.');
+  }
+}
 
     function showHoldConfirm(message, artifactId) {
       const d = document.createElement('div');
@@ -930,18 +974,32 @@
     /* ── Image handling ── */
     document.getElementById('btn-attach').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', e => {
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        pendingImage = { data: ev.target.result.split(',')[1], media_type: file.type };
-        previewImg.src = ev.target.result; previewName.textContent = file.name;
-        imgPreview.classList.add('visible');
-      };
-      reader.readAsDataURL(file); fileInput.value = '';
-    });
-    document.getElementById('btn-remove-image').addEventListener('click', () => {
-      pendingImage = null; imgPreview.classList.remove('visible'); previewImg.src = '';
-    });
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const b64 = ev.target.result.split(',')[1];
+    if (file.type.startsWith('image/')) {
+      pendingImage = { data: b64, media_type: file.type };
+      pendingFile = null;
+      previewImg.src = ev.target.result;
+      previewImg.style.display = '';
+    } else {
+      pendingFile = { data: b64, media_type: file.type, name: file.name };
+      pendingImage = null;
+      previewImg.src = '';
+      previewImg.style.display = 'none';
+    }
+    previewName.textContent = file.name;
+    imgPreview.classList.add('visible');
+  };
+  reader.readAsDataURL(file); fileInput.value = '';
+});
+
+document.getElementById('btn-remove-image').addEventListener('click', () => {
+  pendingImage = null; pendingFile = null;
+  imgPreview.classList.remove('visible');
+  previewImg.src = ''; previewImg.style.display = '';
+});
 
     /* ── Retirement ── */
     async function triggerRetirement(rich) {
@@ -983,7 +1041,13 @@
           if (sessionId)    body.session_id = sessionId;
           if (opts.retire)  body.retire      = true;
           if (opts.rich)    body.rich        = true;
-          if (pendingImage) { body.image = pendingImage; pendingImage = null; imgPreview.classList.remove('visible'); }
+         if (pendingImage) {
+  body.image = pendingImage; pendingImage = null;
+  imgPreview.classList.remove('visible');
+} else if (pendingFile) {
+  body.file = pendingFile; pendingFile = null;
+  imgPreview.classList.remove('visible');
+}
 
           const ctl = new AbortController();
           const timeout = isWake ? 60000 : FETCH_TIMEOUT;
