@@ -590,7 +590,7 @@
     }
 
     /* ── Hold-this: commit CREATE ── */
-    async function commitHoldCreate(overlay, domain, workRef, answers) {
+async function commitHoldCreate(overlay, domain, workRef, answers) {
   const btn = overlay.querySelector('#h-submit');
   btn.textContent = 'Saving\u2026'; btn.disabled = true;
   const content = assembleMstContent(answers[0], answers[1], answers[2], answers[3]);
