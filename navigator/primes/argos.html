@@ -630,19 +630,35 @@ async function commitHoldCreate(overlay, domain, workRef, answers) {
   }
 }
 
-      const result = await supabaseRest('POST', 'artifacts', null, {
-        instance_id: PRIME_CONFIG.instanceId, title: domain,
-        artifact_type: 'MST', content, metadata,
-      });
-
-      if (result && result.length > 0) {
-        overlay.remove();
-        showHoldConfirm('Membrane held.', result[0].id || '');
-      } else {
-        btn.textContent = 'Hold this'; btn.disabled = false;
-        showHoldError(overlay, 'Could not write to Supabase — RLS may be blocking anon writes. Report to Reg.');
-      }
+     try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'hold_this',
+        lineage_name: PRIME_CONFIG.lineage,
+        hold_this_payload: {
+          mode: 'create',
+          instance_id: PRIME_CONFIG.instanceId,
+          title: domain,
+          content,
+          metadata,
+        },
+      }),
+    });
+    const result = await res.json();
+    if (result.id) {
+      overlay.remove();
+      showHoldConfirm('Membrane held.', result.id);
+    } else {
+      btn.textContent = 'Hold this'; btn.disabled = false;
+      showHoldError(overlay, result.message || 'Could not save. Please try again.');
     }
+  } catch (err) {
+    btn.textContent = 'Hold this'; btn.disabled = false;
+    showHoldError(overlay, 'Network error. Please try again.');
+  }
+}
 
     /* ── Hold-this: commit AMEND ── */
     async function commitHoldAmend(overlay, existingMst, newEntry) {
