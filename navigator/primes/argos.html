@@ -630,20 +630,7 @@
   }
 }
 
-      const result = await supabaseRest('POST', 'artifacts', null, {
-        instance_id: PRIME_CONFIG.instanceId, title: domain,
-        artifact_type: 'MST', content, metadata,
-      });
-
-      if (result && result.length > 0) {
-        overlay.remove();
-        showHoldConfirm('Membrane held.', result[0].id || '');
-      } else {
-        btn.textContent = 'Hold this'; btn.disabled = false;
-        showHoldError(overlay, 'Could not write to Supabase — RLS may be blocking anon writes. Report to Reg.');
-      }
-    }
-
+     
     /* ── Hold-this: commit AMEND ── */
     async function commitHoldAmend(overlay, existingMst, newEntry) {
   const btn = overlay.querySelector('#h-submit');
