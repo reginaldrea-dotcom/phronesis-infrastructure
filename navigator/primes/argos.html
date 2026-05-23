@@ -528,8 +528,14 @@
         const domain  = (document.getElementById('h-domain')?.value||'').trim();
         const workRef = (document.getElementById('h-ref')?.value||'').trim();
         const answers = prompts.map((_,i) => (document.getElementById(`hq${i}`)?.value||'').trim());
-        if (!domain) { alert('Domain name is required.'); return; }
-        await commitHoldCreate(overlay, domain, workRef, answers);
+       if (!domain) { alert('Domain name is required.'); return; }
+if (!answers[0]) {
+  notesSection.classList.add('open');
+  arrow.classList.add('open');
+  showHoldError(overlay, 'Please describe what you examined and concluded before saving.');
+  return;
+}
+await commitHoldCreate(overlay, domain, workRef, answers);
       });
       document.body.appendChild(overlay);
 
@@ -588,7 +594,12 @@
       });
       document.body.appendChild(overlay);
     }
-
+function mstTitle(domain) {
+  const slug = domain.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 48);
+  const d = new Date();
+  const mon = d.toLocaleString('en-GB', { month: 'short' });
+  return `MST_${slug}_${mon}${d.getFullYear()}`;
+}
     /* ── Hold-this: commit CREATE ── */
     async function commitHoldCreate(overlay, domain, workRef, answers) {
   const btn = overlay.querySelector('#h-submit');
@@ -608,12 +619,12 @@
         action: 'hold_this',
         lineage_name: PRIME_CONFIG.lineage,
         hold_this_payload: {
-          mode: 'create',
-          instance_id: PRIME_CONFIG.instanceId,
-          title: domain,
-          content,
-          metadata,
-        },
+  mode: 'create',
+  instance_id: PRIME_CONFIG.instanceId,
+  title: mstTitle(domain),
+  content,
+  metadata,
+},
       }),
     });
     const result = await res.json();
