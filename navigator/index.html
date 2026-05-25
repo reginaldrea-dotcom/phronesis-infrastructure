@@ -417,7 +417,7 @@ let displayList=inviteList||(respondedNames.length>0?respondedNames:WHEEL_PRIMES
       <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${calledByLine}</div>
     </div>
     <div class="reg-input-section" style="margin:12px 0 8px 0">
-      <button id="regInputToggle" onclick="toggleRegInput()" style="font-size:11px;font-family:Cormorant SC,serif;letter-spacing:0.8px;padding:4px 12px;border:1px solid rgba(255,255,255,0.2);background:none;color:rgba(250,250,248,0.65);cursor:pointer;border-radius:2px">+ Add your input</button>
+     style="font-size:11px;font-family:Cormorant SC,serif;letter-spacing:0.8px;padding:4px 12px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;border-radius:2px"
       <div id="regInputBody" style="display:none;margin-top:10px">
         <input id="regSummary" type="text" placeholder="Summary (optional)" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(250,250,248,0.85);font-family:Cormorant SC,serif;border-radius:2px">
         <textarea id="regBody" rows="4" placeholder="Your message (required)" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(250,250,248,0.85);font-family:Cormorant SC,serif;border-radius:2px;resize:vertical"></textarea>
