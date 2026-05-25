@@ -493,7 +493,7 @@ async function closeConference(){
     const res=await fetch(CLOSE_CONF_FN_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
-      body:JSON.stloadDataringify({conference_id:openConference.id})
+     body:JSON.stringify({conference_id:openConference.id})
     });
     if(!res.ok)throw new Error('Close failed');
     sessionStorage.setItem('rtView','circle');
