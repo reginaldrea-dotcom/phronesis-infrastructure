@@ -8,6 +8,29 @@ const r = document.documentElement.style;
 r.setProperty('--accent',        PRIME_CONFIG.accent);
 r.setProperty('--accent-dim',    PRIME_CONFIG.accentDim);
 r.setProperty('--accent-border', PRIME_CONFIG.accentBorder);
+/* ── DOM ref assignment ── */
+conv            = document.getElementById('conversation');
+thinking        = document.getElementById('thinking');
+inputEl         = document.getElementById('input');
+btnSend         = document.getElementById('btn-send');
+btnNew          = document.getElementById('btn-new-session');
+btnContinue     = document.getElementById('btn-continue');
+tokenFill       = document.getElementById('token-bar-fill');
+tokenLabel      = document.getElementById('token-bar-label');
+sessionDisp     = document.getElementById('session-display');
+errorState      = document.getElementById('error-state');
+fileInput       = document.getElementById('file-input');
+imgPreview      = document.getElementById('image-preview');
+previewImg      = document.getElementById('preview-img');
+previewName     = document.getElementById('preview-name');
+panelEl         = document.getElementById('artefact-panel');
+panelToggle     = document.getElementById('panel-toggle');
+panelBadge      = document.getElementById('panel-badge');
+pannedSection   = document.getElementById('panel-pinned-section');
+pinnedList      = document.getElementById('panel-pinned-list');
+artefactsSection = document.getElementById('panel-artefacts-section');
+artefactsList   = document.getElementById('panel-artefacts-list');
+panelEmpty      = document.getElementById('panel-empty');
 
 /* ── Static DOM init ── */
 document.getElementById('prime-icon').textContent        = PRIME_CONFIG.initial;
