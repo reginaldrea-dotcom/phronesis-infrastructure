@@ -188,6 +188,7 @@
       <button class="rt-tab" id="tabConf" onclick="setRtView('conference')" style="display:none">Conference</button>
     </div>
     <div class="rt-actions">
+      <button class="btn-secondary" onclick="openRtAdmin()" style="font-size:11px;padding:6px 18px">⚙ Manage</button>
       <button class="btn-close-conf" id="btnCloseConf" onclick="closeConference()" style="display:none">Close conference</button>
       <button class="btn-send" style="font-size:11px;padding:6px 18px" onclick="openModal()">Invoke</button>
     </div>
@@ -246,13 +247,15 @@
 </div>
 
 <!-- ADMIN PANEL -->
-<div class="modal-overlay" id="adminPanel" style="display:none" onclick="handleAdminOverlay(event)">
+
+<div class="modal-overlay" id="rtAdminPanel" style="display:none" onclick="handleRtAdminOverlay(event)">
   <div class="modal-card" style="width:500px;max-height:80vh;overflow-y:auto">
-    <div class="modal-head"><div class="modal-title" style="font-size:20px">Manage Tiles</div><div class="modal-sub">Edit URLs for Consultants and Others</div></div>
-    <div class="modal-body" id="adminBody"></div>
+    <div class="modal-head"><div class="modal-title" style="font-size:20px">Manage Primes</div><div class="modal-sub">Edit URLs for Round Table invocation</div></div>
+    <div class="modal-body" id="rtAdminBody"></div>
+    <span id="rtAdminError" style="font-size:11px;color:#c0392b;padding:0 0 8px 0;display:block"></span>
     <div class="modal-foot">
-      <button class="btn-cancel" onclick="closeAdminPanel()">Close</button>
-      <button class="btn-send" id="adminSaveBtn" onclick="saveAdmin()">Save changes</button>
+      <button class="btn-cancel" onclick="closeRtAdmin()">Close</button>
+      <button class="btn-send" onclick="saveRtAdmin()">Save changes</button>
     </div>
   </div>
 </div>
@@ -266,7 +269,7 @@ const STATUS_FN_URL       = SUPABASE_URL + '/functions/v1/navigator-status';
 const TILES_ADMIN_FN_URL  = SUPABASE_URL + '/functions/v1/navigator-tiles-admin';
 const CLOSE_CONF_FN_URL   = SUPABASE_URL + '/functions/v1/navigator-conference-close';
 const REFRESH_FN_URL      = SUPABASE_URL + '/functions/v1/navigator-refresh-prime';
-
+const CONF_POST_FN_URL=`${SUPABASE_URL}/functions/v1/navigator-conf-post`;
 const ICONS = {
   argos:'images/primes/argos.png',napoleon:'images/primes/napoleon.png',theophrastus:'images/primes/theophrastus.png',
   ghostwheel:'images/primes/ghostwheel.png',constantinople:'images/primes/constantinople.png',antechamber:'images/primes/antechamber.png',
@@ -279,6 +282,7 @@ const STALE_HOURS=168;
 
 let openConference=null,conferenceResponses=[];
 let invokeTime=null,invokeMode='broadcast';
+let regInputOpen=false;
 const checkedPrimes=new Set(['napoleon','argos','ghostwheel']);
 let pendingAdminChanges={};
 
@@ -319,7 +323,8 @@ instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
     projectTiles=await sb('project_tiles?select=id,name,url,category,display_order,icon_ref&order=category,display_order');
     const confs=await sb('conferences?select=id,topic,body,called_by,current_round,created_at,invited_lineages&status=eq.open&order=created_at.desc&limit=10');
     if(confs.length>0){
-      if(!openConference||!confs.find(c=>c.id===openConference.id))openConference=confs[0];
+     const freshConf = confs.find(c => c.id === (openConference?.id));
+openConference = freshConf || confs[0];
       conferenceResponses=await sb(`conference_responses?select=id,posting_lineage,summary,body,round,created_at&conference_id=eq.${openConference.id}&order=created_at.asc`);
     }else{
       openConference=null;conferenceResponses=[];
@@ -333,7 +338,7 @@ instances={};rows.forEach(r=>{if(!instances[r.name])instances[r.name]=r;});
 
 function isStale(s){if(!s)return true;return(Date.now()-new Date(s).getTime())>STALE_HOURS*3600*1000;}
 function dName(n){const d=instances[n];if(d&&d.display_name)return d.display_name;return n.charAt(0).toUpperCase()+n.slice(1);}
-function badges(n){const p=[];if(unreadMap[n]>0)p.push(`<span class="badge red"></span>`);if(attentionMap[n]==='urgent')p.push(`<span class="badge amber"></span>`);const i=instances[n];if(i&&!isStale(i.last_seen_at))p.push(`<span class="badge blue"></span>`);return p.length?`<div class="badges">${p.join('')}</div>`:''}
+function badges(n){const p=[];if(unreadMap[n]>0)p.push(`<span class="badge red"></span>`);if(attentionMap[n]==='urgent')p.push(`<span class="badge amber"></span>`);return p.length?`<div class="badges">${p.join('')}</div>`:''}
 function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}<button class="tile-refresh" onclick="refreshPrime('${n}')" title="Mark active — I just opened this Prime">↻</button></div>`;}
 function makeProjectTile(t){const src=t.icon_ref?`images/consultants/${t.icon_ref}`:'';const inner=src?`<img class="tile-icon" src="${src}" alt="${t.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${t.name}</span>`:`<span class="tile-name" style="font-size:13px;text-align:center;padding:0 8px">${t.name}</span>`;if(t.url)return`<a class="tile" href="${t.url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="tile stale">${inner}</div>`;}
 
@@ -359,12 +364,12 @@ function renderCircle(){
   html+=`<button class="invoke-centre" onclick="openModal()">Invoke</button>`;
   WHEEL_PRIMES.forEach((name,i)=>{
     const a=(i/n)*2*Math.PI-Math.PI/2;const x=cx+r*Math.cos(a);const y=cy+r*Math.sin(a);
-    const inst=instances[name]||{};const url=inst.chat_url;const stale=isStale(inst.last_seen_at);
+   const inst=instances[name]||{};const url=inst.chat_url;
     const dn=dName(name);const icon=ICONS[name]||'';
     const resp=invokeTime&&inst.last_seen_at&&new Date(inst.last_seen_at).getTime()>=invokeTime;
-    const cls='tile'+(stale?' stale':'')+(resp?' resp-blue':'');
+    const cls='tile'+(resp?' resp-blue':'');
     const inner=`${badges(name)}<img class="tile-icon" src="${icon}" alt="${dn}" style="width:58px;height:58px" onerror="this.style.visibility='hidden'"><span class="tile-name" style="font-size:11px">${dn}</span>`;
-    const tag=(url&&!stale)?`a href="${url}" target="_blank" rel="noopener"`:'div';const close=(url&&!stale)?'a':'div';
+    const tag=url?`a href="${url}" target="_blank" rel="noopener"`:'div';const close=url?'a':'div';
     html+=`<div class="circle-tile" style="left:${x}px;top:${y}px"><${tag} class="${cls}">${inner}</${close}></div>`;
   });
   html+='</div></div>';
@@ -374,13 +379,13 @@ function renderCircle(){
 /* FIX 2: renderConferenceDashboard — inviteList/displayList/totalLabel + called_by attribution */
 function renderConferenceDashboard(){
   const conf=openConference;
-   console.log('invited_lineages:', conf.invited_lineages);
-  const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 
 const inviteList=(conf.invited_lineages&&conf.invited_lineages.length>0)?conf.invited_lineages:null;
   const respondedNames=[...new Set(conferenceResponses.filter(r=>r.round===conf.current_round).map(r=>r.posting_lineage))];
   const respondedSet=new Set(respondedNames);
-  const displayList=inviteList||(respondedNames.length>0?respondedNames:WHEEL_PRIMES);
+let displayList=inviteList||(respondedNames.length>0?respondedNames:WHEEL_PRIMES);
+    if(conferenceResponses.find(r=>r.posting_lineage==='reg'&&r.round===conf.current_round)&&!displayList.includes('reg'))displayList=[...displayList,'reg'];
   const totalLabel=inviteList?displayList.length:'?';
 
   const calledByLine=(conf.called_by&&conf.called_by!=='reg')
@@ -390,13 +395,24 @@ const inviteList=(conf.invited_lineages&&conf.invited_lineages.length>0)?conf.in
   let html=`
     <div class="conf-banner">
       <div class="conf-banner-top"><span class="conf-banner-title">${conf.topic}</span><span class="conf-banner-meta">${date}</span></div>
-      <div class="conf-banner-body">${(conf.body||'').split('\n').slice(0,4).join('<br>')}</div>
+     <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${calledByLine}</div>
+      <div class="conf-banner-id" style="margin-top:6px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;opacity:0.55;font-family:monospace;letter-spacing:0.03em;word-break:break-all">${conf.id}</span>
+        <button onclick="navigator.clipboard.writeText('${conf.id}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="font-size:10px;font-family:Cormorant SC,serif;letter-spacing:0.8px;padding:2px 8px;border:1px solid rgba(250,250,248,0.25);background:none;color:rgba(250,250,248,0.7);cursor:pointer;border-radius:2px">Copy</button>
+      </div>
+    </div>
       <div class="conf-banner-round">Round ${conf.current_round} · ${respondedSet.size} of ${totalLabel} responded${calledByLine}</div>
     </div>
-    <div class="conf-responses-head">
-      <span class="conf-responses-title">Responses</span>
-      <span class="conf-resp-count">${respondedSet.size} of ${totalLabel}</span>
+    <div class="reg-input-section" style="margin:12px 0 8px 0">
+      <button id="regInputToggle" onclick="toggleRegInput()" style="font-size:11px;font-family:Cormorant SC,serif;letter-spacing:0.8px;padding:4px 12px;border:1px solid rgba(255,255,255,0.2);background:none;color:rgba(250,250,248,0.65);cursor:pointer;border-radius:2px">+ Add your input</button>
+      <div id="regInputBody" style="display:none;margin-top:10px">
+        <input id="regSummary" type="text" placeholder="Summary (optional)" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(250,250,248,0.85);font-family:Cormorant SC,serif;border-radius:2px">
+        <textarea id="regBody" rows="4" placeholder="Your message (required)" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(250,250,248,0.85);font-family:Cormorant SC,serif;border-radius:2px;resize:vertical"></textarea>
+        <button onclick="postRegInput()" style="font-family:Cormorant SC,serif;letter-spacing:0.8px;padding:5px 16px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);color:rgba(250,250,248,0.85);cursor:pointer;border-radius:2px">Post</button>
+        <span id="regInputFeedback" style="margin-left:10px;font-size:11px;opacity:0.6"></span>
+      </div>
     </div>
+    <div class="conf-responses-head">
     <div class="resp-grid">`;
 
   if(displayList.length===0){
@@ -427,7 +443,40 @@ const inviteList=(conf.invited_lineages&&conf.invited_lineages.length>0)?conf.in
 }
 
 function toggleResp(name){document.getElementById('rcard-'+name)?.classList.toggle('expanded');}
+function toggleRegInput(){
+  regInputOpen=!regInputOpen;
+  const body=document.getElementById('regInputBody');
+  const btn=document.getElementById('regInputToggle');
+  if(body)body.style.display=regInputOpen?'block':'none';
+  if(btn)btn.textContent=regInputOpen?'− Hide input':'+ Add your input';
+}
 
+async function postRegInput(){
+  const conf=openConference;
+  if(!conf)return;
+  const summary=document.getElementById('regSummary').value.trim();
+  const body=document.getElementById('regBody').value.trim();
+  const fb=document.getElementById('regInputFeedback');
+  if(!body){fb.textContent='Body required.';return;}
+  fb.textContent='Posting...';
+  try{
+    const r=await fetch(CONF_POST_FN_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({conference_id:conf.id,round:conf.current_round,summary:summary||null,body})
+    });
+    if(!r.ok)throw new Error(await r.text());
+    fb.textContent='Posted.';
+    document.getElementById('regBody').value='';
+    document.getElementById('regSummary').value='';
+    regInputOpen=false;
+    document.getElementById('regInputBody').style.display='none';
+    document.getElementById('regInputToggle').textContent='+ Add your input';
+    await loadData();
+  }catch(e){
+    fb.textContent='Error: '+e.message;
+  }
+}
 /* REFRESH STALE PRIME */
 async function refreshPrime(name){
   try{
@@ -444,7 +493,7 @@ async function closeConference(){
     const res=await fetch(CLOSE_CONF_FN_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
-      body:JSON.stringify({conference_id:openConference.id})
+      body:JSON.stloadDataringify({conference_id:openConference.id})
     });
     if(!res.ok)throw new Error('Close failed');
     sessionStorage.setItem('rtView','circle');
@@ -454,10 +503,10 @@ async function closeConference(){
 
 function renderMobile(){
   document.getElementById('mobilePrimeList').innerHTML=WHEEL_PRIMES.map(n=>{
-    const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';
-    const cls='mobile-tile-row'+(s?' stale':'');
+    const i=instances[n]||{};const url=i.chat_url;const dn=dName(n);const icon=ICONS[n]||'';
+    const cls='mobile-tile-row';
     const inner=`<img src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>${badges(n)}`;
-    if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;
+    if(url)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;
     return`<div class="${cls}">${inner}</div>`;
   }).join('');
 }
@@ -601,7 +650,49 @@ async function saveAdmin(){
   }catch(e){console.error(e);alert('Save failed');}
   finally{btn.textContent='Save changes';btn.disabled=false;}
 }
-
+function openRtAdmin(){
+  pendingRtAdminChanges={};
+  renderRtAdminBody();
+  document.getElementById('rtAdminPanel').style.display='flex';
+}
+function closeRtAdmin(){
+  document.getElementById('rtAdminPanel').style.display='none';
+}
+function handleRtAdminOverlay(e){
+  if(e.target.id==='rtAdminPanel')closeRtAdmin();
+}
+function renderRtAdminBody(){
+  const el=document.getElementById('rtAdminBody');
+  el.innerHTML=WHEEL_PRIMES.map(n=>{
+    const inst=instances[n]||{};
+    return`<div class="admin-row">
+      <span class="admin-label">${dName(n)}</span>
+      <input class="admin-input" type="text" value="${inst.chat_url||''}"
+        onchange="pendingRtAdminChanges['${n}']=this.value"
+        placeholder="Chat URL">
+    </div>`;
+  }).join('');
+}
+async function saveRtAdmin(){
+  const errEl=document.getElementById('rtAdminError');
+  errEl.textContent='';
+  const entries=Object.entries(pendingRtAdminChanges);
+  if(!entries.length){closeRtAdmin();return;}
+  try{
+    for(const[name,chat_url]of entries){
+      const r=await fetch(TILES_ADMIN_FN_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'update-prime',name,chat_url})
+      });
+      if(!r.ok)throw new Error(await r.text());
+    }
+    closeRtAdmin();
+    await loadData();
+  }catch(e){
+    errEl.textContent='Error: '+e.message;
+  }
+}
 function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
 document.addEventListener('DOMContentLoaded',loadData);
 </script>
