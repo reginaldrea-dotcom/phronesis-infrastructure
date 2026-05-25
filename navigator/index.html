@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+id<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -260,6 +260,19 @@
   </div>
 </div>
 
+<!-- TILES ADMIN PANEL -->
+
+<div class="modal-overlay" id="adminPanel" style="display:none" onclick="handleAdminOverlay(event)">
+  <div class="modal-card" style="width:500px;max-height:80vh;overflow-y:auto">
+    <div class="modal-head"><div class="modal-title" style="font-size:20px">Manage Tiles</div><div class="modal-sub">Edit URLs for Consultants and Others</div></div>
+    <div class="modal-body" id="adminBody"></div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeAdminPanel()">Close</button>
+      <button class="btn-send" id="adminSaveBtn" onclick="saveAdmin()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL        = 'https://vysenpymsfhgionqfulf.supabase.co';
 const SUPABASE_ANON_KEY   = 'sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y';
@@ -339,7 +352,7 @@ openConference = freshConf || confs[0];
 function isStale(s){if(!s)return true;return(Date.now()-new Date(s).getTime())>STALE_HOURS*3600*1000;}
 function dName(n){const d=instances[n];if(d&&d.display_name)return d.display_name;return n.charAt(0).toUpperCase()+n.slice(1);}
 function badges(n){const p=[];if(unreadMap[n]>0)p.push(`<span class="badge red"></span>`);if(attentionMap[n]==='urgent')p.push(`<span class="badge amber"></span>`);return p.length?`<div class="badges">${p.join('')}</div>`:''}
-function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}<button class="tile-refresh" onclick="refreshPrime('${n}')" title="Mark active — I just opened this Prime" style="opacity:0.8;font-size:16px;color:var(--text)">↻</button></div>`;}
+function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isStale(i.last_seen_at);const dn=dName(n);const icon=ICONS[n]||'';const cls='tile'+(s?' stale':'');const inner=`${badges(n)}<img class="tile-icon" src="${icon}" alt="${dn}" onerror="this.style.visibility='hidden'"><span class="tile-name">${dn}</span>`;if(url&&!s)return`<a class="${cls}" href="${url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="${cls}">${inner}<button class="tile-refresh" onclick="refreshPrime('${n}')" title="Mark active — I just opened this Prime">↻</button></div>`;}
 function makeProjectTile(t){const src=t.icon_ref?`images/consultants/${t.icon_ref}`:'';const inner=src?`<img class="tile-icon" src="${src}" alt="${t.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${t.name}</span>`:`<span class="tile-name" style="font-size:13px;text-align:center;padding:0 8px">${t.name}</span>`;if(t.url)return`<a class="tile" href="${t.url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="tile stale">${inner}</div>`;}
 
 function renderWheel(){
