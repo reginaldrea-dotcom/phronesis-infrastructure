@@ -1,6 +1,6 @@
 /* ── argos-config.js ── Per-Prime config, constants, hold prompts ── */
 
-const PRIME_CONFIG = {
+var PRIME_CONFIG = {
   lineage:      'argos',
   name:         'Argos',
   initial:      'A',
@@ -16,14 +16,14 @@ const PRIME_CONFIG = {
   supabaseKey:  'sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y',
 };
 
-const EDGE_URL      = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
-const RETRY_LIMIT   = 3;
-const RETRY_DELAY   = 1500;
-const FETCH_TIMEOUT = 60000;
-const FOUR_HOURS    = 4 * 60 * 60 * 1000;
+var EDGE_URL      = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
+var RETRY_LIMIT   = 3;
+var RETRY_DELAY   = 1500;
+var FETCH_TIMEOUT = 60000;
+var FOUR_HOURS    = 4 * 60 * 60 * 1000;
 
 /* ── Hold-this: prompt configs per domain ── */
-const HOLD_PROMPTS = {
+var HOLD_PROMPTS = {
   code: [
     { label: 'What did you examine and what did you conclude?',
       hint:  'The decisions reached — not a summary of the work, but what was settled and why.',
