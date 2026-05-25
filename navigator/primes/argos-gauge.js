@@ -1,9 +1,9 @@
 /* ── argos-gauge.js ── Working budget gauge (Napoleon D2.4) ── */
 /*
-   orientationCost  = input tokens consumed at wake (system prompt + Super-T + preloads)
-   Working budget   = sessionBudget - orientationCost
-   Gauge shows remaining working budget. Starts full after wake, depletes with conversation.
-   Green > 50%, amber 30–50%, red < 30%.
+  orientationCost  = input tokens consumed at wake (system prompt + Super-T + preloads)
+  Working budget   = sessionBudget - orientationCost
+  Gauge shows remaining working budget. Starts full after wake, depletes with conversation.
+  Green > 50%, amber 30–50%, red < 30%.
 */
 
 function getInputTokens(usage) {
@@ -32,9 +32,9 @@ function updateBudgetGauge(usage) {
 
 function renderBudgetGauge() {
   if (!orientationCost) {
-    tokenFill.style.width = '0%';
-    tokenLabel.textContent = 'Waking\u2026';
-    tokenLabel.className   = 'token-bar-label';
+    tokenFill.style.width      = '0%';
+    tokenLabel.textContent     = 'Waking\u2026';
+    tokenLabel.className       = 'token-bar-label';
     return;
   }
 
