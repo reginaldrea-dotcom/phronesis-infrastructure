@@ -1,41 +1,39 @@
 /* ── argos-state.js ── Session state variables and DOM refs ── */
-
 /* State */
-let sessionId            = null;
-let orientationCost      = 0;    // input tokens consumed by wake (fixed overhead)
-let currentContextTokens = 0;    // input tokens of most recent request (grows with conversation)
-let pinnedTurns          = [];
-let artefacts            = [];
-let pendingImage         = null;
-let pendingFile          = null;
-let retirementShown      = false;
-let retirementPending    = false;
-let cachedWakeContent    = null;
-let lastWakeTimestamp    = null;
-let isWaking             = false;
-let turnSequence         = 0;
-let countdownInterval    = null;
-
-/* DOM refs — assigned after DOMContentLoaded in argos-init.js */
-let conv;
-let thinking;
-let inputEl;
-let btnSend;
-let btnNew;
-let btnContinue;
-let tokenFill;
-let tokenLabel;
-let sessionDisp;
-let errorState;
-let fileInput;
-let imgPreview;
-let previewImg;
-let previewName;
-let panelEl;
-let panelToggle;
-let panelBadge;
-let pannedSection;
-let pinnedList;
-let artefactsSection;
-let artefactsList;
-let panelEmpty;
+var sessionId            = null;
+var orientationCost      = 0;
+var currentContextTokens = 0;
+var pinnedTurns          = [];
+var artefacts            = [];
+var pendingImage         = null;
+var pendingFile          = null;
+var retirementShown      = false;
+var retirementPending    = false;
+var cachedWakeContent    = null;
+var lastWakeTimestamp    = null;
+var isWaking             = false;
+var turnSequence         = 0;
+var countdownInterval    = null;
+/* DOM refs — assigned in argos-init.js */
+var conv;
+var thinking;
+var inputEl;
+var btnSend;
+var btnNew;
+var btnContinue;
+var tokenFill;
+var tokenLabel;
+var sessionDisp;
+var errorState;
+var fileInput;
+var imgPreview;
+var previewImg;
+var previewName;
+var panelEl;
+var panelToggle;
+var panelBadge;
+var pannedSection;
+var pinnedList;
+var artefactsSection;
+var artefactsList;
+var panelEmpty;
