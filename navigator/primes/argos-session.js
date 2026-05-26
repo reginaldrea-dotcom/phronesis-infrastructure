@@ -57,7 +57,13 @@ async function invoke(message, isWake = false, opts = {}) {
   }
 
   sessionId = null;
-  showError({ error: true, error_type: 'api_error', message: `Failed after ${RETRY_LIMIT} attempts: ${lastError}` });
+ showError({
+  error: true,
+  error_type: 'api_error',
+  message: sessionId
+    ? `Request timed out. Session ${sessionId.slice(0,8)} preserved — context intact. Dismiss and try again.`
+    : `Request timed out after ${RETRY_LIMIT} attempts. Dismiss and try again.`
+});
   thinking.classList.remove('visible'); return null;
 }
 
