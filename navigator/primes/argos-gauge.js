@@ -26,7 +26,7 @@ function captureOrientationCost(usage) {
 }
 
 function updateBudgetGauge(usage) {
-  if (usage) currentContextTokens += (usage.output_tokens || 0);
+  if (usage) currentContextTokens = getInputTokens(usage);
   renderBudgetGauge();
 }
 
