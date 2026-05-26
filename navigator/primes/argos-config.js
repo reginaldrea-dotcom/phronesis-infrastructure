@@ -1,4 +1,4 @@
-/* ── argos-config.js ── Per-Prime config, constants, hold prompts ── */
+/* ── argos-config.js ── Per-Prime config, constants, hold prompts ── */ 
 
 var PRIME_CONFIG = {
   lineage:      'argos',
