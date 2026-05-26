@@ -25,7 +25,7 @@ async function invoke(message, isWake = false, opts = {}) {
         user_message: message,
         pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: p.el.querySelector('.turn-content')?.textContent || p.excerpt })),
       };
-      if (sessionId)   body.session_id = sessionId;
+      if ()   body.session_id = ;
       if (opts.retire) body.retire      = true;
       if (opts.rich)   body.rich        = true;
       if (pendingImage) {
@@ -56,7 +56,7 @@ async function invoke(message, isWake = false, opts = {}) {
     } catch (err) { lastError = err.name === 'AbortError' ? 'Request timed out' : err.message; }
   }
 
-  sessionId = null;
+ 
  showError({
   error: true,
   error_type: 'api_error',
