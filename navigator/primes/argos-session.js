@@ -25,7 +25,7 @@ async function invoke(message, isWake = false, opts = {}) {
         user_message: message,
         pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: p.el.querySelector('.turn-content')?.textContent || p.excerpt })),
       };
-      if ()   body.session_id = ;
+    if (sessionId)   body.session_id = sessionId;
       if (opts.retire) body.retire      = true;
       if (opts.rich)   body.rich        = true;
       if (pendingImage) {
