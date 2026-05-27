@@ -105,6 +105,7 @@ function newSession() {
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
   retirementShown = false; retirementPending = false; turnSequence = 0;
+   cachedWakeContent = null; lastWakeTimestamp = null;
   resetGauge(); clearError(); artefactsList.innerHTML = '';
   updatePanelEmpty(); updateBadge();
   Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
