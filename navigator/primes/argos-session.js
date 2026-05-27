@@ -7,64 +7,85 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* ── Invoke ── */
 async function invoke(message, isWake = false, opts = {}) {
+  invokeController = new AbortController();
+  btnStop.style.display = ''; btnSend.style.display = 'none';
+
   const pCount = pinnedTurns.length;
   thinking.textContent = isWake ? `${PRIME_CONFIG.name} is waking\u2026`
     : pCount > 0 ? `${PRIME_CONFIG.name} is thinking\u2026 holding ${pCount} pinned turn${pCount!==1?'s':''}`
     : `${PRIME_CONFIG.name} is thinking\u2026`;
   thinking.classList.add('visible'); scrollBottom();
+
   let lastError = null;
 
-  for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
-    if (attempt > 0) {
-      thinking.textContent = isWake ? `${PRIME_CONFIG.name} is waking\u2026 (retry ${attempt})` : `${PRIME_CONFIG.name} is thinking\u2026 (retry ${attempt})`;
-      await sleep(RETRY_DELAY);
+  try {
+    for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
+      if (invokeController.signal.aborted) break;
+
+      if (attempt > 0) {
+        thinking.textContent = isWake ? `${PRIME_CONFIG.name} is waking\u2026 (retry ${attempt})` : `${PRIME_CONFIG.name} is thinking\u2026 (retry ${attempt})`;
+        await sleep(RETRY_DELAY);
+      }
+
+      try {
+        const body = {
+          lineage_name: PRIME_CONFIG.lineage,
+          user_message: message,
+          pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: p.el.querySelector('.turn-content')?.textContent || p.excerpt })),
+        };
+        if (sessionId) body.session_id = sessionId;
+        if (opts.retire) body.retire = true;
+        if (opts.rich) body.rich = true;
+        if (pendingImage) {
+          body.image = pendingImage; pendingImage = null;
+          imgPreview.classList.remove('visible');
+        } else if (pendingFile) {
+          body.file = pendingFile; pendingFile = null;
+          imgPreview.classList.remove('visible');
+        }
+
+        const timeoutCtl = new AbortController();
+        const timeout = isWake ? 60000 : FETCH_TIMEOUT;
+        const tid = setTimeout(() => timeoutCtl.abort(), timeout);
+        const signal = typeof AbortSignal.any === 'function'
+          ? AbortSignal.any([invokeController.signal, timeoutCtl.signal])
+          : timeoutCtl.signal;
+
+        let res;
+        try { res = await fetch(EDGE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body), signal }); }
+        finally { clearTimeout(tid); }
+
+        const data = await res.json();
+        if (data.error === true || (data.error_type && !res.ok)) {
+          if (data.error_type) { showError(data); return null; }
+          lastError = data.error || res.statusText; continue;
+        }
+        if (!res.ok) { lastError = data.error || res.statusText; continue; }
+        if (!sessionId) { sessionId = data.session_id; sessionDisp.textContent = 'Session ' + data.session_id.slice(0,8); }
+        clearError(); return data;
+
+      } catch (err) {
+        if (invokeController.signal.aborted) break;
+        lastError = err.name === 'AbortError' ? 'Request timed out' : err.message;
+      }
     }
-    try {
-      const body = {
-        lineage_name: PRIME_CONFIG.lineage,
-        user_message: message,
-        pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: p.el.querySelector('.turn-content')?.textContent || p.excerpt })),
-      };
-    if (sessionId)   body.session_id = sessionId;
-      if (opts.retire) body.retire      = true;
-      if (opts.rich)   body.rich        = true;
-      if (pendingImage) {
-        body.image = pendingImage; pendingImage = null;
-        imgPreview.classList.remove('visible');
-      } else if (pendingFile) {
-        body.file = pendingFile; pendingFile = null;
-        imgPreview.classList.remove('visible');
-      }
 
-      const ctl = new AbortController();
-      const timeout = isWake ? 60000 : FETCH_TIMEOUT;
-      const tid = setTimeout(() => ctl.abort(), timeout);
-      let res;
-      try { res = await fetch(EDGE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body), signal: ctl.signal }); }
-      finally { clearTimeout(tid); }
+    if (!invokeController.signal.aborted) {
+      showError({
+        error: true,
+        error_type: 'api_error',
+        message: sessionId
+          ? `Request timed out. Session ${sessionId.slice(0,8)} preserved — context intact. Dismiss and try again.`
+          : `Request timed out after ${RETRY_LIMIT} attempts. Dismiss and try again.`
+      });
+    }
+    return null;
 
-      const data = await res.json();
-      if (data.error === true || (data.error_type && !res.ok)) {
-        if (data.error_type) { showError(data); thinking.classList.remove('visible'); return null; }
-        lastError = data.error || res.statusText; continue;
-      }
-      if (!res.ok) { lastError = data.error || res.statusText; continue; }
-
-      if (!sessionId) { sessionId = data.session_id; sessionDisp.textContent = 'Session ' + data.session_id.slice(0,8); }
-      clearError(); return data;
-
-    } catch (err) { lastError = err.name === 'AbortError' ? 'Request timed out' : err.message; }
+  } finally {
+    thinking.classList.remove('visible');
+    btnStop.style.display = 'none'; btnSend.style.display = '';
+    invokeController = null;
   }
-
- 
- showError({
-  error: true,
-  error_type: 'api_error',
-  message: sessionId
-    ? `Request timed out. Session ${sessionId.slice(0,8)} preserved — context intact. Dismiss and try again.`
-    : `Request timed out after ${RETRY_LIMIT} attempts. Dismiss and try again.`
-});
-  thinking.classList.remove('visible'); return null;
 }
 
 /* ── Send ── */
