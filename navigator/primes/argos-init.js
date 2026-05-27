@@ -76,6 +76,7 @@ document.getElementById('btn-remove-image').addEventListener('click', () => {
 
 /* ── Button events ── */
 btnSend.addEventListener('click', send);
+btnStop.addEventListener('click', () => { if (invokeController) invokeController.abort(); });
 btnNew.addEventListener('click', newSession);
 btnContinue.addEventListener('click', continueSession);
 
