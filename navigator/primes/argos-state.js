@@ -38,3 +38,4 @@ var pinnedList;
 var artefactsSection;
 var artefactsList;
 var panelEmpty;
+var btnStop;
