@@ -10,6 +10,7 @@ var pendingFile          = null;
 var retirementShown      = false;
 var retirementPending    = false;
 var cachedWakeContent    = null;
+var cachedWakeUsage      = null;
 var lastWakeTimestamp    = null;
 var isWaking             = false;
 var turnSequence         = 0;

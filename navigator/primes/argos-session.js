@@ -174,13 +174,14 @@ async function wake() {
   if (cachedWakeContent) {
     sessionDisp.textContent = 'New session \u2014 pending';
     renderSessionDivider(); renderWake(cachedWakeContent);
+    if (cachedWakeUsage) captureOrientationCost(cachedWakeUsage);
     thinking.classList.remove('visible'); isWaking = false; btnSend.disabled = false;
     scrollBottom(); return;
   }
   const data = await invoke('Wake.', true);
   thinking.classList.remove('visible'); isWaking = false;
   if (data) {
-    cachedWakeContent = data.response; lastWakeTimestamp = Date.now();
+    cachedWakeContent = data.response; cachedWakeUsage = data.usage; lastWakeTimestamp = Date.now();
     captureOrientationCost(data.usage);
     renderSessionDivider();
     const wakeEl = renderWake(data.response);
