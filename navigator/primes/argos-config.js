@@ -11,7 +11,7 @@ var PRIME_CONFIG = {
   placeholder:  'Write to Argos\u2026',
   instanceId:   '17bf0f0d-99fc-4456-b729-05a6b6e8a13c',
   navigatorUrl: 'https://clarev.ai/',
-  sessionBudget: 200000,
+  sessionBudget: 500000,
   supabaseUrl:  'https://vysenpymsfhgionqfulf.supabase.co',
   supabaseKey:  'sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y',
 };
