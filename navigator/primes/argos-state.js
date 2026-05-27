@@ -14,6 +14,7 @@ var lastWakeTimestamp    = null;
 var isWaking             = false;
 var turnSequence         = 0;
 var countdownInterval    = null;
++var invokeController     = null;
 /* DOM refs — assigned in argos-init.js */
 var conv;
 var thinking;
