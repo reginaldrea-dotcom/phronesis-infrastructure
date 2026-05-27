@@ -98,7 +98,12 @@ async function send() {
   thinking.classList.remove('visible'); btnSend.disabled = false;
   if (data) {
     renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
-    updateBudgetGauge(data.usage);
+    if (!data.wake && !orientationCost) {
+      captureOrientationCost(data.usage);
+      pendingOrientationUsage = null;
+    } else {
+      updateBudgetGauge(data.usage);
+    }
   }
   scrollBottom();
 }
@@ -162,7 +167,7 @@ async function continueWake() {
   thinking.classList.remove('visible'); isWaking = false;
   if (data) {
     lastWakeTimestamp = Date.now();
-    captureOrientationCost(data.usage);
+    pendingOrientationUsage = data.usage;
     renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
   }
   btnSend.disabled = false; scrollBottom();
@@ -174,7 +179,7 @@ async function wake() {
   if (cachedWakeContent) {
     sessionDisp.textContent = 'New session \u2014 pending';
     renderSessionDivider(); renderWake(cachedWakeContent);
-    if (cachedWakeUsage) captureOrientationCost(cachedWakeUsage);
+    if (cachedWakeUsage) pendingOrientationUsage = cachedWakeUsage;
     thinking.classList.remove('visible'); isWaking = false; btnSend.disabled = false;
     scrollBottom(); return;
   }
@@ -182,7 +187,7 @@ async function wake() {
   thinking.classList.remove('visible'); isWaking = false;
   if (data) {
     cachedWakeContent = data.response; cachedWakeUsage = data.usage; lastWakeTimestamp = Date.now();
-    captureOrientationCost(data.usage);
+    pendingOrientationUsage = data.usage;
     renderSessionDivider();
     const wakeEl = renderWake(data.response);
     if (wakeEl && data.response) {
