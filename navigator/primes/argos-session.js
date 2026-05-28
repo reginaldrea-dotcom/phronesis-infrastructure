@@ -104,6 +104,7 @@ async function send() {
     } else {
       updateBudgetGauge(data.usage);
     }
+    updateLoadGauge(data);
   }
   scrollBottom();
 }
@@ -117,6 +118,7 @@ async function triggerRetirement(rich) {
   if (data) {
     renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
     updateBudgetGauge(data.usage);
+    updateLoadGauge(data);
   }
   const d = document.createElement('div'); d.className = 'retirement-confirm';
   d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
@@ -169,6 +171,7 @@ async function continueWake() {
     lastWakeTimestamp = Date.now();
     pendingOrientationUsage = data.usage;
     renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+    updateLoadGauge(data);
   }
   btnSend.disabled = false; scrollBottom();
 }

@@ -9,6 +9,28 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
   <link rel="preload" href="prime-core.v1.css" as="style">
   <link rel="stylesheet" href="prime-core.v1.css">
+  <style>
+    /* Load gauge — weighted session load (primary). Token bar retained as secondary 200K fallback indicator. */
+    .load-gauge-wrap   { margin-top: 14px; padding-bottom: 14px;
+                         border-bottom: 1px solid var(--border-lt); }
+    .load-gauge-row    { display: flex; align-items: center; gap: 10px; }
+    .load-gauge-track  { flex: 1; height: 8px; background: var(--border);
+                         border-radius: 4px; overflow: hidden; }
+    .load-gauge-fill   { height: 100%; width: 0%; background: var(--bar-green);
+                         transition: width 0.3s ease, background 0.3s ease; }
+    .load-gauge-score  { font-family: 'Cormorant Garamond', Georgia, serif;
+                         font-size: 13px; font-weight: 500; color: var(--text-muted);
+                         min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+    .load-gauge-label        { margin-top: 6px; font-family: 'Cormorant Garamond', Georgia, serif;
+                               font-size: 12px; color: var(--text-muted); letter-spacing: 0.02em;
+                               font-style: italic; min-height: 16px; }
+    .load-gauge-label.amber  { color: var(--bar-amber); font-style: normal; font-weight: 500; }
+    .load-gauge-label.red    { color: var(--bar-red);   font-style: normal; font-weight: 600; }
+    .load-gauge-label.terminal { color: var(--bar-red); font-style: normal; font-weight: 600; }
+    /* Secondary token readout — kept readable but de-emphasised */
+    .load-gauge-wrap .token-bar-wrap   { margin-top: 8px; padding-bottom: 0; border-bottom: none; }
+    .load-gauge-wrap .token-bar-label  { font-size: 11px; opacity: 0.75; }
+  </style>
 </head>
 <body>
   <div class="shell">
@@ -36,9 +58,18 @@
               <div id="date-display"></div>
             </div>
           </div>
-          <div class="token-bar-wrap">
-            <div class="token-bar-track"><div class="token-bar-fill" id="token-bar-fill"></div></div>
-            <div class="token-bar-label" id="token-bar-label">Waking…</div>
+          <!-- Load gauge: weighted session load (primary indicator). Thresholds at 8 pts or 200K tokens. -->
+          <!-- When routing DDL to Constantinople, include current load score in the request body. -->
+          <div class="load-gauge-wrap">
+            <div class="load-gauge-row">
+              <div class="load-gauge-track"><div class="load-gauge-fill" id="load-gauge-fill"></div></div>
+              <div class="load-gauge-score" id="load-gauge-score">0 / 8</div>
+            </div>
+            <div class="load-gauge-label" id="load-gauge-label">Waking…</div>
+            <div class="token-bar-wrap">
+              <div class="token-bar-track"><div class="token-bar-fill" id="token-bar-fill"></div></div>
+              <div class="token-bar-label" id="token-bar-label">Waking…</div>
+            </div>
           </div>
         </div>
         <div class="conversation" id="conversation"><div class="thinking visible" id="thinking"></div></div>
