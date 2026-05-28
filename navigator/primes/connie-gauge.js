@@ -1,22 +1,24 @@
 /* ── connie-gauge.js ── Load gauge (primary) + token budget readout (secondary) ── */
 /*
   Primary indicator: weighted session load score, computed by the interface from
-  SQL content in tool calls within each API response. Thresholds: 8 pts (primary)
+  SQL content in tool calls within each API response. Thresholds: 16 pts (primary)
   or 200K tokens consumed (fallback), whichever fires first.
 
   Score is computed here. It is not reported by Constantinople and not held in
   session memory. Score resets to zero at session start
   (see connie-session.js newSession/continueSession).
 
-  Calibration note: the 8-point threshold is conservative, calibrated from a single
-  Argos test session (873572eb, 27 May 2026). Recalibrate from production sessions
-  when sufficient data exists. Do not adjust without Reg instruction.
+  Calibration note: the 16-point threshold replaces the original 8-point
+  calibration (Argos test session 873572eb, 27 May 2026); raised by Reg
+  instruction 28 May 2026 to absorb API Prime wake overhead. Recalibrate
+  from production sessions when sufficient data exists. Do not adjust without
+  Reg instruction.
 
   DDL routing reminder: when routing DDL to Constantinople, include the current load
   score in the request body. (Self-reference for Constantinople — informational only.)
 */
 
-var LOAD_THRESHOLD       = 8;
+var LOAD_THRESHOLD       = 16;
 var LOAD_TOKEN_THRESHOLD = 200000;
 var ARTIFACT_TABLES_RE   = /\b(wheel_posts|conference_responses|prime_messages)\b/i;
 var SUPER_T_RE           = /\bsuper_t_chains\b/i;
@@ -225,7 +227,7 @@ function renderLoadGauge() {
     colour     = 'var(--bar-red)';
     labelText  = 'Red — session threshold reached. File TP from this state.';
     labelClass = 'red';
-  } else if (loadScore >= 5) {
+  } else if (loadScore >= 12) {
     colour     = 'var(--bar-amber)';
     labelText  = 'Amber — complete in-flight work only. No new compound operations.';
     labelClass = 'amber';
