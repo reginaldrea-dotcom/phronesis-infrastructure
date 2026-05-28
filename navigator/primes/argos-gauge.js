@@ -54,16 +54,17 @@ function renderTokenReadout() {
     tokenLabel.className   = 'token-bar-label';
     return;
   }
-  const usedPct = Math.min(100, (currentContextTokens / LOAD_TOKEN_THRESHOLD) * 100);
-  tokenFill.style.width = usedPct + '%';
+  const usedPct      = Math.min(100, (currentContextTokens / LOAD_TOKEN_THRESHOLD) * 100);
+  const remainingPct = Math.max(0, 100 - usedPct);
+  tokenFill.style.width = remainingPct + '%';
   let colour;
-  if      (usedPct < 60) colour = 'var(--bar-green)';
-  else if (usedPct < 85) colour = 'var(--bar-amber)';
-  else                   colour = 'var(--bar-red)';
+  if      (remainingPct > 50) colour = 'var(--bar-green)';
+  else if (remainingPct > 30) colour = 'var(--bar-amber)';
+  else                        colour = 'var(--bar-red)';
   tokenFill.style.background = colour;
-  const usedK    = Math.round(currentContextTokens / 1000);
-  const ceilingK = Math.round(LOAD_TOKEN_THRESHOLD / 1000);
-  tokenLabel.textContent = `~${usedK}K of ${ceilingK}K fallback`;
+  const remainingK = Math.max(0, Math.round((LOAD_TOKEN_THRESHOLD - currentContextTokens) / 1000));
+  const ceilingK   = Math.round(LOAD_TOKEN_THRESHOLD / 1000);
+  tokenLabel.textContent = `~${remainingK}K of ${ceilingK}K remaining`;
   tokenLabel.className   = 'token-bar-label';
 }
 
