@@ -7,469 +7,66 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="preload" href="prime-core.v1.css" as="style">
+  <link rel="stylesheet" href="prime-core.v1.css">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Load gauge — weighted session load (primary). Token bar retained as secondary 200K fallback indicator. */
+    .load-gauge-wrap   { margin-top: 14px; padding-bottom: 14px;
+                         border-bottom: 1px solid var(--border-lt); }
+    .load-gauge-row    { display: flex; align-items: center; gap: 10px; }
+    .load-gauge-track  { flex: 1; height: 8px; background: var(--border);
+                         border-radius: 4px; overflow: hidden; }
+    .load-gauge-fill   { height: 100%; width: 0%; background: var(--bar-green);
+                         transition: width 0.3s ease, background 0.3s ease; }
+    .load-gauge-score  { font-family: 'Cormorant Garamond', Georgia, serif;
+                         font-size: 13px; font-weight: 500; color: var(--text-muted);
+                         min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+    .load-gauge-label        { margin-top: 6px; font-family: 'Cormorant Garamond', Georgia, serif;
+                               font-size: 12px; color: var(--text-muted); letter-spacing: 0.02em;
+                               font-style: italic; min-height: 16px; }
+    .load-gauge-label.amber  { color: var(--bar-amber); font-style: normal; font-weight: 500; }
+    .load-gauge-label.red    { color: var(--bar-red);   font-style: normal; font-weight: 600; }
+    .load-gauge-label.terminal { color: var(--bar-red); font-style: normal; font-weight: 600; }
+    /* Secondary token readout */
+    .load-gauge-wrap .token-bar-wrap   { margin-top: 8px; padding-bottom: 0; border-bottom: none; }
+    .load-gauge-wrap .token-bar-label  { font-size: 11px; opacity: 0.75; }
 
-    :root {
-      --bg:            #FAFAF8;
-      --surface:       #FFFFFF;
-      --parchment:     #F5F1EB;
-      --panel-bg:      #F7F4EE;
-      --text:          #1C1C1A;
-      --text-muted:    #6B6962;
-      --text-light:    #A8A49C;
-      --border:        #E2DED8;
-      --border-lt:     #EDEBE4;
-      --bar-green:     #3D6B50;
-      --bar-amber:     #A87820;
-      --bar-red:       #8B3020;
-      --btn:           #2C2C2A;
-      --btn-text:      #FAFAF8;
-      /* Per-Prime accent — overridden by PRIME_CONFIG at init */
-      --accent:        #2C3E6E;
-      --accent-dim:    rgba(44, 62, 110, 0.10);
-      --accent-border: rgba(44, 62, 110, 0.35);
-    }
-
-    html, body { height: 100%; background: var(--bg); color: var(--text);
-      font-family: 'Lora', Georgia, serif; font-size: 15px; line-height: 1.7;
-      -webkit-font-smoothing: antialiased; }
-
-    /* ── Shell ── */
-    .shell { display: flex; flex-direction: column; height: 100vh; }
-
-    /* ── Nav strip ── */
-    .nav-strip {
-      height: 34px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 24px;
-      background: var(--bg); border-bottom: 1px solid var(--border-lt);
-    }
-    .nav-link {
-      display: flex; align-items: center; gap: 6px; text-decoration: none;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--text-muted); transition: color 0.15s;
-    }
-    .nav-link:hover { color: var(--text); }
-    .nav-icon {
-      width: 12px; height: 12px; border-radius: 50%;
-      background: var(--accent); flex-shrink: 0;
-    }
-
-    /* ── Main body ── */
-    .main {
-      display: flex; flex-direction: row; flex: 1;
-      overflow: hidden; justify-content: center;
-    }
-
-    /* ── Left column ── */
-    .left-col {
-      display: flex; flex-direction: column;
-      flex: 1; max-width: 820px; min-width: 0; position: relative;
-    }
-
-    /* ── Header ── */
-    .header { flex-shrink: 0; padding: 18px 24px 0; }
-    .header-row {
-      display: flex; align-items: flex-start; justify-content: space-between;
-    }
-    .prime-identity { display: flex; align-items: center; gap: 14px; }
-    .prime-icon {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: var(--accent-dim); border: 1.5px solid var(--accent-border);
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 16px; color: var(--accent);
-    }
-    .prime-name {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 28px; font-weight: 500; color: var(--text);
-      letter-spacing: -0.01em; line-height: 1.1;
-    }
-    .prime-role {
-      font-family: 'Lora', Georgia, serif; font-size: 12px;
-      font-style: italic; color: var(--text-muted); margin-top: 3px;
-    }
-    .session-meta {
-      text-align: right;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 12px; color: var(--text-muted);
-      letter-spacing: 0.03em; line-height: 1.8;
-    }
-
-    /* ── Token bar ── */
-    .token-bar-wrap {
-      margin-top: 14px; padding-bottom: 14px;
-      border-bottom: 1px solid var(--border-lt);
-      position: relative; cursor: default;
-    }
-    .token-bar-track { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
-    .token-bar-fill {
-      height: 100%; width: 0%; background: var(--bar-green); border-radius: 1px;
-      transition: width 0.5s ease, background 0.5s ease;
-    }
-    .token-bar-tooltip {
-      display: none; position: absolute; top: 7px; right: 0;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; color: var(--text-muted);
-      letter-spacing: 0.03em; white-space: nowrap;
-    }
-    .token-bar-wrap:hover .token-bar-tooltip { display: block; }
-
-    /* ── Conversation ── */
-    .conversation {
-      flex: 1; overflow-y: auto; padding: 24px 24px 12px;
-      scroll-behavior: smooth;
-      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
-    }
-
-    /* ── Session divider ── */
-    .session-divider { text-align: center; position: relative; margin: 4px 0 20px; }
-    .session-divider::before {
-      content: ''; position: absolute; top: 50%; left: 0; right: 0;
-      height: 1px; background: var(--border-lt);
-    }
-    .session-divider span {
-      position: relative; background: var(--bg); padding: 0 12px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--text-light);
-    }
-
-    /* ── Wake block ── */
-    .turn-wake {
-      background: var(--accent-dim); border-left: 2.5px solid var(--accent-border);
-      border-radius: 0 6px 6px 0; padding: 14px 18px; margin-bottom: 24px;
-    }
-    .turn-wake .turn-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 7px;
-    }
-    .turn-wake .turn-content { font-style: italic; font-size: 14px; color: var(--text); line-height: 1.65; }
-
-    /* ── REG turn ── */
-    .turn-user {
-      background: var(--parchment); border-radius: 3px;
-      padding: 11px 16px; margin-bottom: 2px; max-width: 92%;
-    }
-    .turn-user .turn-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
-      text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px;
-    }
-    .turn-user .turn-time { font-weight: 400; margin-left: 8px; letter-spacing: 0.03em; }
-    .turn-user .turn-content { font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
-
-    /* ── Prime turn ── */
-    .turn-assistant {
-      background: var(--surface); border-left: 2.5px solid var(--accent);
-      border-radius: 0 3px 3px 0; padding: 13px 18px;
-      margin-bottom: 18px; max-width: 96%; position: relative;
-    }
-    .turn-assistant .turn-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
-    }
-    .turn-content { font-size: 15px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-    .turn-tokens {
-      margin-top: 8px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; color: var(--text-muted); letter-spacing: 0.03em;
-    }
-    .artefact-ref {
-      display: inline-flex; align-items: center; gap: 6px;
-      margin-top: 8px; padding: 5px 10px;
-      background: var(--parchment); border-radius: 2px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em;
-    }
-
-    /* ── Pin gesture ── */
-    .pin-btn {
-      position: absolute; right: 10px; top: 10px;
-      width: 22px; height: 22px;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.15s;
-      cursor: pointer; font-size: 12px; color: var(--text-light);
-      border: none; background: none; padding: 0;
-    }
-    .turn-assistant:hover .pin-btn { opacity: 1; }
-    .turn-assistant.pinned .pin-btn { opacity: 1; color: var(--accent); }
-    .turn-assistant.pinned::after {
-      content: ''; position: absolute; top: 0; right: 0;
-      width: 0; height: 0; border-style: solid;
-      border-width: 0 14px 14px 0;
-      border-color: transparent var(--accent-border) transparent transparent;
-    }
-
-    /* ── Attention divider ── */
-    .attention-divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 6px 0 18px; opacity: 0.7;
-    }
-    .attention-divider::before, .attention-divider::after {
-      content: ''; flex: 1; height: 1px; background: var(--accent-dim);
-    }
-    .attention-divider span {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--accent); opacity: 0.6; white-space: nowrap;
-    }
-
-    /* ── Sibling task turn ── */
-    .turn-sibling {
-      background: var(--surface); border: 1px solid var(--border);
-      border-left: 2.5px solid var(--text-light);
-      border-radius: 0 3px 3px 0; padding: 13px 18px; margin-bottom: 18px;
-    }
-    .sibling-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
-      text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
-    }
-    .sibling-target {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px; color: var(--text); margin-bottom: 8px;
-    }
-    .sibling-desc { font-size: 13px; color: var(--text-muted); font-style: italic; line-height: 1.6; margin-bottom: 12px; }
-    .btn-launch {
-      padding: 6px 18px; background: transparent;
-      border: 1px solid var(--border); border-radius: 2px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px; color: var(--text); cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .btn-launch:hover:not(:disabled) { background: var(--parchment); border-color: var(--text-muted); }
-    .btn-launch:disabled { color: var(--text-muted); cursor: default; }
-
-    /* ── Retirement prompt ── */
-    .retirement-prompt {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 0; margin-bottom: 8px;
-      animation: fadeIn 0.6s ease forwards;
-    }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .retirement-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--bar-amber); flex-shrink: 0;
-      animation: dotPulse 2.5s ease-in-out infinite;
-    }
-    @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .retirement-text {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px; font-style: italic;
-      color: var(--text-muted); letter-spacing: 0.02em;
-    }
-    .retirement-confirm {
-      text-align: center; padding: 14px 0;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 14px; font-style: italic; color: var(--text-muted);
-      animation: fadeIn 0.8s ease forwards;
-    }
-
-    /* ── Thinking indicator ── */
-    .thinking {
-      display: none; padding: 8px 0 8px 18px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-style: italic; font-size: 14px; color: var(--text-muted);
-      border-left: 2px solid var(--border); margin-bottom: 18px;
-      animation: thinkPulse 2s ease-in-out infinite;
-    }
-    .thinking.visible { display: block; }
-    @keyframes thinkPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
-
-    /* ── Input area ── */
-    .input-area { flex-shrink: 0; padding: 12px 24px 20px; border-top: 1px solid var(--border); }
-
-    .image-preview {
-      display: none; align-items: center; gap: 8px;
-      padding: 8px 10px; margin-bottom: 6px;
-      background: var(--parchment); border-radius: 2px; border: 1px solid var(--border);
-    }
-    .image-preview.visible { display: flex; }
-    .image-preview img { width: 48px; height: 48px; object-fit: cover; border-radius: 2px; }
-    .image-preview-name {
-      font-family: 'Cormorant Garamond', Georgia, serif; font-size: 12px;
-      color: var(--text-muted); flex: 1;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .btn-remove-image {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-light); font-size: 14px; padding: 0; transition: color 0.15s;
-    }
-    .btn-remove-image:hover { color: var(--text); }
-
-    .input-row { display: flex; align-items: flex-start; gap: 8px; }
-    .btn-attach {
-      flex-shrink: 0; width: 32px; height: 32px; margin-top: 2px;
-      display: flex; align-items: center; justify-content: center;
-      border: 1px solid var(--border); border-radius: 2px; background: transparent;
-      cursor: pointer; color: var(--text-light); font-size: 14px;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .btn-attach:hover { color: var(--text-muted); border-color: var(--text-muted); }
-    #file-input { display: none; }
-
-    textarea {
-      flex: 1; min-height: 72px; max-height: 160px;
-      padding: 11px 13px; resize: none; outline: none;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
-      font-family: 'Lora', Georgia, serif; font-size: 14px; color: var(--text);
-      line-height: 1.65; transition: border-color 0.2s;
-    }
-    textarea:focus { border-color: var(--accent); }
-    textarea::placeholder { color: var(--text-light); font-style: italic; }
-
-    .input-controls { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-    .btn {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px; font-weight: 500; letter-spacing: 0.06em;
-      padding: 7px 18px; border-radius: 2px; cursor: pointer; transition: opacity 0.15s;
-    }
-    .btn:hover:not(:disabled) { opacity: 0.75; }
-    .btn:disabled { opacity: 0.35; cursor: default; }
-    .btn-send { background: var(--btn); color: var(--btn-text); border: none; padding: 7px 22px; }
-    .btn-new-session { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
-
-    /* ── Error states ── */
-    .error-state {
-      margin-top: 8px; padding: 10px 14px; border-radius: 2px; border-left: 2.5px solid;
-      font-family: 'Cormorant Garamond', Georgia, serif; font-size: 13px; line-height: 1.5;
-      display: none; animation: fadeIn 0.3s ease;
-    }
-    .error-state.visible { display: block; }
-    .error-state.rate-limit  { background: rgba(168,120,32,0.08); border-left-color: var(--bar-amber); color: var(--bar-amber); }
-    .error-state.api-error   { background: rgba(139,48,32,0.06);  border-left-color: var(--bar-red);   color: var(--bar-red); }
-    .error-state.ctx-exceeded { background: rgba(139,48,32,0.06); border-left-color: var(--bar-red);   color: var(--bar-red); }
-    .error-countdown { font-size: 11px; opacity: 0.7; margin-top: 4px; }
-    .error-dismiss {
-      background: none; border: 1px solid currentColor; color: inherit;
-      font-family: 'Cormorant Garamond', Georgia, serif; font-size: 11px;
-      padding: 2px 8px; border-radius: 2px; cursor: pointer; margin-top: 6px; opacity: 0.7;
-    }
-    .error-dismiss:hover { opacity: 1; }
-
-    /* ── Panel toggle ── */
-    .panel-toggle {
-      position: absolute; right: -1px; bottom: 40px;
-      width: 20px; padding: 8px 0;
-      background: var(--panel-bg); border: 1px solid var(--border);
-      border-right: none; border-radius: 2px 0 0 2px;
-      font-family: 'Cormorant Garamond', Georgia, serif; font-size: 10px;
-      color: var(--text-light); writing-mode: vertical-rl; cursor: pointer;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      display: none; align-items: center; justify-content: center; gap: 4px;
-      transition: color 0.15s;
-    }
-    .panel-toggle.visible { display: flex; }
-    .panel-toggle:hover { color: var(--text-muted); }
-    .panel-badge {
-      display: none; width: 14px; height: 14px;
-      background: var(--accent); color: white; font-size: 8px;
-      border-radius: 50%; align-items: center; justify-content: center;
-      writing-mode: horizontal-tb;
-    }
-    .panel-badge.visible { display: flex; }
-
-    /* ── Artefact panel ── */
-    .artefact-panel {
-      width: 280px; flex-shrink: 0;
-      background: var(--panel-bg); border-left: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      transition: width 0.25s ease; overflow: hidden;
-    }
-    .artefact-panel.closed { width: 0; border-left: none; }
-
-    .panel-header {
-      padding: 18px 16px 12px; border-bottom: 1px solid var(--border-lt);
-      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-    }
-    .panel-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted);
-    }
-    .panel-close {
-      background: none; border: none; font-size: 16px; color: var(--text-light);
-      cursor: pointer; padding: 0; line-height: 1; transition: color 0.15s;
-    }
-    .panel-close:hover { color: var(--text); }
-
-    .panel-scroll {
-      flex: 1; overflow-y: auto;
-      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
-    }
-    .panel-section-label {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--text-light); padding: 10px 16px 6px;
-    }
-    .panel-empty {
-      padding: 24px 16px;
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 12px; color: var(--text-light); font-style: italic; text-align: center;
-    }
-
-    .pinned-entry {
-      padding: 8px 16px; border-bottom: 1px solid var(--border-lt);
-      cursor: pointer; display: flex; align-items: flex-start; gap: 6px;
-    }
-    .pinned-entry:hover { background: rgba(0,0,0,0.02); }
-    .pinned-icon { font-size: 10px; color: var(--accent); margin-top: 2px; flex-shrink: 0; }
-    .pinned-excerpt {
-      font-size: 12px; color: var(--text-muted); font-style: italic; line-height: 1.5;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-
-    .artefact-entry { padding: 10px 16px; border-bottom: 1px solid var(--border-lt); }
-    .artefact-title {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px; color: var(--text); letter-spacing: 0.02em; margin-bottom: 3px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .artefact-meta {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 10.5px; color: var(--text-light); letter-spacing: 0.04em; margin-bottom: 8px;
-    }
-    .artefact-actions { display: flex; gap: 6px; }
-    .btn-artefact {
-      font-family: 'Cormorant Garamond', Georgia, serif; font-size: 11px;
-      padding: 4px 10px; border: 1px solid var(--border); border-radius: 2px;
-      background: var(--surface); color: var(--text-muted); cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-artefact:hover { background: var(--parchment); }
+    /* Drive confirmation gate notice — stub. Surfaces post-hoc until the EF supports
+       two-phase confirmation; see connie-session.js noteDriveDestructive() header. */
+    .drive-gate-notice { margin: 14px 0; padding: 12px 14px;
+                         background: rgba(168, 120, 32, 0.06);
+                         border-left: 2.5px solid var(--bar-amber);
+                         border-radius: 2px;
+                         font-family: 'Lora', Georgia, serif; font-size: 13px;
+                         color: var(--text); line-height: 1.55; }
+    .drive-gate-label  { font-family: 'Cormorant Garamond', Georgia, serif;
+                         font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                         color: var(--bar-amber); margin-bottom: 6px; font-weight: 500; }
+    .drive-gate-body   { font-size: 12px; color: var(--text-muted); }
+    .drive-gate-body code { font-family: 'SF Mono', Consolas, monospace;
+                            font-size: 11px; background: rgba(0,0,0,0.04);
+                            padding: 1px 4px; border-radius: 2px; }
   </style>
 </head>
 <body>
   <div class="shell">
-
-    <!-- Nav strip -->
     <div class="nav-strip">
-      <a id="nav-link" href="#" target="_blank" class="nav-link">
-        <span class="nav-icon"></span>
-        <span>Navigator</span>
+      <a id="nav-link" href="#" class="nav-link"
+         onclick="var u=document.getElementById('nav-link').href; if(u&&u!==location.href+'#'&&u!=='#')window.open(u,'_blank','noopener'); return false;">
+        <span class="nav-icon"></span><span>Navigator</span>
       </a>
-      <a href="https://claude.ai/projects" target="_blank" class="nav-link">Claude Projects</a>
+      <a href="https://claude.ai/projects" class="nav-link"
+         onclick="window.open('https://claude.ai/projects','_blank','noopener'); return false;">
+        Claude Projects
+      </a>
     </div>
-
-    <!-- Main body -->
     <div class="main">
-
-      <!-- Left column -->
       <div class="left-col">
-
-        <!-- Header -->
         <div class="header">
           <div class="header-row">
             <div class="prime-identity">
               <div class="prime-icon" id="prime-icon"></div>
-              <div>
-                <div class="prime-name" id="prime-name"></div>
-                <div class="prime-role" id="prime-role"></div>
-              </div>
+              <div><div class="prime-name" id="prime-name"></div><div class="prime-role" id="prime-role"></div></div>
             </div>
             <div class="session-meta">
               <div id="session-display">Starting…</div>
@@ -477,20 +74,21 @@
               <div id="date-display"></div>
             </div>
           </div>
-          <div class="token-bar-wrap">
-            <div class="token-bar-track">
-              <div class="token-bar-fill" id="token-bar-fill"></div>
+          <!-- Load gauge: weighted session load (primary indicator). Thresholds at 8 pts or 200K tokens. -->
+          <!-- DDL routing: Constantinople IS the substrate. When other Primes route DDL here, they include their current load score in the request body. -->
+          <div class="load-gauge-wrap">
+            <div class="load-gauge-row">
+              <div class="load-gauge-track"><div class="load-gauge-fill" id="load-gauge-fill"></div></div>
+              <div class="load-gauge-score" id="load-gauge-score">0 / 8</div>
             </div>
-            <div class="token-bar-tooltip" id="token-bar-tooltip"></div>
+            <div class="load-gauge-label" id="load-gauge-label">Waking…</div>
+            <div class="token-bar-wrap">
+              <div class="token-bar-track"><div class="token-bar-fill" id="token-bar-fill"></div></div>
+              <div class="token-bar-label" id="token-bar-label">Waking…</div>
+            </div>
           </div>
         </div>
-
-        <!-- Conversation -->
-        <div class="conversation" id="conversation">
-          <div class="thinking visible" id="thinking"></div>
-        </div>
-
-        <!-- Input area -->
+        <div class="conversation" id="conversation"><div class="thinking visible" id="thinking"></div></div>
         <div class="input-area">
           <div class="image-preview" id="image-preview">
             <img id="preview-img" src="" alt="">
@@ -498,26 +96,25 @@
             <button class="btn-remove-image" id="btn-remove-image">×</button>
           </div>
           <div class="input-row">
-            <button class="btn-attach" id="btn-attach" title="Attach image">📎</button>
-            <input type="file" id="file-input" accept="image/*">
+            <button class="btn-attach" id="btn-attach" title="Attach image">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13.5 7.5L7 14a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.535 3.536L5.5 11.5a1 1 0 01-1.414-1.414L10 4"/>
+              </svg>
+            </button>
+            <input type="file" id="file-input" accept="image/*,application/pdf">
             <textarea id="input" rows="3"></textarea>
           </div>
           <div class="input-controls">
             <button class="btn btn-new-session" id="btn-new-session">New Session</button>
+            <button class="btn btn-new-session" id="btn-continue">Continue</button>
+            <button class="btn btn-new-session" id="btn-retire">Retire</button>
+            <button class="btn btn-send" id="btn-stop" style="display:none">Stop</button>
             <button class="btn btn-send" id="btn-send" disabled>Send</button>
           </div>
           <div class="error-state" id="error-state"></div>
         </div>
-
-        <!-- Panel toggle -->
-        <div class="panel-toggle" id="panel-toggle">
-          Artefacts
-          <span class="panel-badge" id="panel-badge"></span>
-        </div>
-
-      </div><!-- /left-col -->
-
-      <!-- Artefact panel -->
+        <div class="panel-toggle" id="panel-toggle">Artefacts<span class="panel-badge" id="panel-badge"></span></div>
+      </div>
       <div class="artefact-panel closed" id="artefact-panel">
         <div class="panel-header">
           <span class="panel-label">Artefacts</span>
@@ -535,522 +132,18 @@
           <div class="panel-empty" id="panel-empty">Nothing here yet.</div>
         </div>
       </div>
+    </div>
+  </div>
 
-    </div><!-- /main -->
-  </div><!-- /shell -->
-
-  <script>
-    /* ── Per-Prime config — only this block changes between Prime files ── */
-    const PRIME_CONFIG = {
-      lineage:      'constantinople',
-      name:         'Constantinople',
-      initial:      'C',
-      role:         'Substrate Prime — Phronesis Project',
-      accent:       '#2C3E6E',
-      accentDim:    'rgba(44, 62, 110, 0.10)',
-      accentBorder: 'rgba(44, 62, 110, 0.35)',
-      placeholder:  'Write to Constantinople\u2026',
-      instanceId:   '9293772f-85ab-4aaf-8c6c-8c00515bd6f2',
-      navigatorUrl: 'https://phronesis-infrastructure.onrender.com/',
-      maxTokens:    200000,
-    };
-
-    const EDGE_URL      = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
-    const RETRY_LIMIT   = 3;
-    const RETRY_DELAY   = 1500;
-    const FETCH_TIMEOUT = 25000;
-    const PIN_AUTO_RELEASE_DAYS = 3;
-
-    /* ── Apply theme ── */
-    const r = document.documentElement.style;
-    r.setProperty('--accent',        PRIME_CONFIG.accent);
-    r.setProperty('--accent-dim',    PRIME_CONFIG.accentDim);
-    r.setProperty('--accent-border', PRIME_CONFIG.accentBorder);
-
-    /* ── Static init ── */
-    document.getElementById('prime-icon').textContent    = PRIME_CONFIG.initial;
-    document.getElementById('prime-name').textContent    = PRIME_CONFIG.name;
-    document.getElementById('prime-role').textContent    = PRIME_CONFIG.role;
-    document.getElementById('input').placeholder          = PRIME_CONFIG.placeholder;
-    document.getElementById('nav-link').href              = PRIME_CONFIG.navigatorUrl;
-    document.getElementById('instance-display').textContent =
-      'Instance ' + PRIME_CONFIG.instanceId.slice(0, 8);
-    document.getElementById('date-display').textContent  =
-      new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-
-    /* ── State ── */
-    let sessionId         = null;
-    let sessionTokens     = 0;
-    let pinnedTurns       = [];   // {seqNum, excerpt, el}
-    let artefacts         = [];   // {title, content, type, time}
-    let pendingImage      = null;
-    let retirementShown   = false;
-    let cachedWakeContent = null;
-    let isWaking          = false;
-    let turnSequence      = 0;
-    let countdownInterval = null;
-
-    /* ── DOM refs ── */
-    const conv       = document.getElementById('conversation');
-    const thinking   = document.getElementById('thinking');
-    const inputEl    = document.getElementById('input');
-    const btnSend    = document.getElementById('btn-send');
-    const btnNew     = document.getElementById('btn-new-session');
-    const tokenFill  = document.getElementById('token-bar-fill');
-    const tokenTip   = document.getElementById('token-bar-tooltip');
-    const sessionDisp  = document.getElementById('session-display');
-    const errorState   = document.getElementById('error-state');
-    const fileInput    = document.getElementById('file-input');
-    const imgPreview   = document.getElementById('image-preview');
-    const previewImg   = document.getElementById('preview-img');
-    const previewName  = document.getElementById('preview-name');
-    const panelEl      = document.getElementById('artefact-panel');
-    const panelToggle  = document.getElementById('panel-toggle');
-    const panelBadge   = document.getElementById('panel-badge');
-    const pannedSection  = document.getElementById('panel-pinned-section');
-    const pinnedList     = document.getElementById('panel-pinned-list');
-    const artefactsSection = document.getElementById('panel-artefacts-section');
-    const artefactsList    = document.getElementById('panel-artefacts-list');
-    const panelEmpty     = document.getElementById('panel-empty');
-
-    /* ── Helpers ── */
-    function esc(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-    function timeStr() {
-      return new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-    }
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-    function generateUUID() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const v = Math.random() * 16 | 0;
-        return (c === 'x' ? v : (v & 0x3 | 0x8)).toString(16);
-      });
-    }
-    function scrollBottom() { conv.scrollTop = conv.scrollHeight; }
-    function insertBefore(el) { conv.insertBefore(el, thinking); }
-
-    /* ── Token bar ── */
-    function updateBar(total) {
-      sessionTokens = total;
-      const pct = Math.min((total / PRIME_CONFIG.maxTokens) * 100, 100);
-      tokenFill.style.width      = pct + '%';
-      tokenFill.style.background = pct < 70 ? 'var(--bar-green)' : pct < 85 ? 'var(--bar-amber)' : 'var(--bar-red)';
-      tokenTip.textContent       = total.toLocaleString() + ' / ' + PRIME_CONFIG.maxTokens.toLocaleString() + ' tokens';
-      if (pct >= 85 && !retirementShown) { retirementShown = true; renderRetirementPrompt(); }
-    }
-
-    /* ── Render helpers ── */
-    function renderSessionDivider(label) {
-      const d = document.createElement('div');
-      d.className = 'session-divider';
-      d.innerHTML = `<span>${esc(label || 'Session opened \xb7 ' + timeStr())}</span>`;
-      insertBefore(d);
-    }
-
-    function renderWake(text) {
-      const label = text
-        ? 'Wake \xb7 Orientation complete'
-        : 'Wake \xb7 Orientation incomplete \u2014 check substrate';
-      const d = document.createElement('div');
-      d.className = 'turn-wake';
-      d.innerHTML =
-        `<div class="turn-label">${esc(label)}</div>` +
-        `<div class="turn-content">${esc(text || 'No orientation data returned.')}</div>`;
-      insertBefore(d);
-    }
-
-    function renderUser(text) {
-      const d = document.createElement('div');
-      d.className = 'turn-user';
-      d.innerHTML =
-        `<div class="turn-label">Reg <span class="turn-time">${timeStr()}</span></div>` +
-        `<div class="turn-content">${esc(text)}</div>`;
-      insertBefore(d);
-    }
-
-    function renderAssistant(text, tokens, arts) {
-      const seq = ++turnSequence;
-      const excerpt = text.split(/[.!?\n]/)[0].trim().slice(0, 80);
-      const d = document.createElement('div');
-      d.className = 'turn-assistant';
-      d.dataset.seq = seq;
-
-      let artsHtml = '';
-      if (arts && arts.length > 0) {
-        artsHtml = arts.map(a => `<div class="artefact-ref">&#128206; ${esc(a.title)} \u2014 in artefact panel</div>`).join('');
-      }
-
-      d.innerHTML =
-        `<button class="pin-btn" title="Pin turn">\u2385</button>` +
-        `<div class="turn-label">${esc(PRIME_CONFIG.name)}` +
-        ` <span style="font-weight:400;margin-left:8px;font-size:11px;opacity:0.7">${timeStr()}</span></div>` +
-        `<div class="turn-content">${esc(text)}</div>` +
-        artsHtml +
-        `<div class="turn-tokens">${(tokens || 0).toLocaleString()} tokens</div>`;
-
-      d.querySelector('.pin-btn').addEventListener('click', () => togglePin(d, seq, excerpt));
-      insertBefore(d);
-
-      if (arts && arts.length > 0) {
-        arts.forEach(a => addArtefact(a));
-        openPanel();
-      }
-      return d;
-    }
-
-    function renderSiblingTurn(target, desc, prompt) {
-      const id = 'lb-' + Date.now();
-      const d = document.createElement('div');
-      d.className = 'turn-sibling';
-      d.innerHTML =
-        `<div class="sibling-label">Sibling task prepared</div>` +
-        `<div class="sibling-target">For: ${esc(target)}</div>` +
-        `<div class="sibling-desc">${esc(desc)}</div>` +
-        `<button class="btn-launch" id="${id}">Launch \u2192</button>`;
-      d.querySelector('#' + id).addEventListener('click', function () {
-        if (prompt) navigator.clipboard.writeText(prompt).catch(() => {});
-        window.open('https://claude.ai/projects', '_blank');
-        this.textContent = 'Launched \u2192';
-        this.disabled = true;
-      });
-      insertBefore(d);
-    }
-
-    function renderAttentionDivider() {
-      const d = document.createElement('div');
-      d.className = 'attention-divider';
-      d.innerHTML = `<span>${esc(PRIME_CONFIG.name)} is working from here</span>`;
-      insertBefore(d);
-    }
-
-    function renderRetirementPrompt() {
-      if (document.getElementById('retirement-prompt')) return;
-      const d = document.createElement('div');
-      d.className = 'retirement-prompt'; d.id = 'retirement-prompt';
-      d.innerHTML =
-        `<div class="retirement-dot"></div>` +
-        `<div class="retirement-text">Ready to retire when you are.</div>`;
-      insertBefore(d);
-      scrollBottom();
-    }
-
-    function renderRetirementConfirm() {
-      const d = document.createElement('div');
-      d.className = 'retirement-confirm';
-      d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
-      insertBefore(d);
-    }
-
-    /* ── Error states ── */
-    function showError(data) {
-      clearError();
-      errorState.className = 'error-state visible';
-      btnSend.disabled = true;
-
-      if (data.error_type === 'rate_limit_exceeded') {
-        errorState.classList.add('rate-limit');
-        let secs = data.retry_after_seconds || 30;
-        errorState.innerHTML =
-          `<div>${esc(data.message)}</div>` +
-          `<div class="error-countdown" id="err-cd">Ready in ${secs}s</div>`;
-        countdownInterval = setInterval(() => {
-          secs--;
-          const el = document.getElementById('err-cd');
-          if (el) el.textContent = secs > 0 ? `Ready in ${secs}s` : 'Ready';
-          if (secs <= 0) { clearError(); btnSend.disabled = false; }
-        }, 1000);
-      } else if (data.error_type === 'context_exceeded') {
-        errorState.classList.add('ctx-exceeded');
-        errorState.innerHTML =
-          `<div>${esc(data.message)}</div>` +
-          `<button class="btn btn-new-session error-dismiss" onclick="newSession()">New Session</button>`;
-      } else {
-        errorState.classList.add('api-error');
-        const rid = data.request_id
-          ? `<div class="error-countdown">${esc(data.request_id)}</div>` : '';
-        errorState.innerHTML =
-          `<div>${esc(data.message || data.error || 'Something went wrong. Please try again.')}</div>` +
-          rid +
-          `<button class="error-dismiss" onclick="clearError(); document.getElementById('btn-send').disabled=false;">Dismiss</button>`;
-      }
-    }
-
-    function clearError() {
-      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-      errorState.className = 'error-state';
-      errorState.innerHTML = '';
-    }
-
-    /* ── Artefact panel ── */
-    function openPanel() {
-      panelEl.classList.remove('closed');
-      panelToggle.classList.remove('visible');
-    }
-    function closePanel() {
-      panelEl.classList.add('closed');
-      panelToggle.classList.add('visible');
-      updateBadge();
-    }
-    function updateBadge() {
-      const n = artefacts.length + pinnedTurns.length;
-      if (n > 0) { panelBadge.textContent = n; panelBadge.classList.add('visible'); }
-      else panelBadge.classList.remove('visible');
-    }
-    function updatePanelEmpty() {
-      const hasContent = artefacts.length > 0 || pinnedTurns.length > 0;
-      panelEmpty.style.display          = hasContent ? 'none' : 'block';
-      artefactsSection.style.display    = artefacts.length > 0 ? 'block' : 'none';
-      pannedSection.style.display       = pinnedTurns.length > 0 ? 'block' : 'none';
-    }
-
-    function addArtefact(art) {
-      const existing = artefacts.filter(a => a.title === art.title).length;
-      const version  = existing + 1;
-      const entry    = { ...art, version, time: timeStr() };
-      artefacts.push(entry);
-      const idx = artefacts.length - 1;
-
-      const el = document.createElement('div');
-      el.className = 'artefact-entry';
-      el.innerHTML =
-        `<div class="artefact-title">${esc(art.title)}</div>` +
-        `<div class="artefact-meta">${esc(art.type || 'code')} \xb7 ${entry.time}${version > 1 ? ' \xb7 v' + version : ''}</div>` +
-        `<div class="artefact-actions">` +
-        `<button class="btn-artefact" data-action="copy" data-idx="${idx}">Copy</button>` +
-        `<button class="btn-artefact" data-action="dismiss" data-idx="${idx}">Dismiss</button>` +
-        `</div>`;
-
-      el.addEventListener('click', e => {
-        const btn = e.target.closest('[data-action]');
-        if (!btn) return;
-        const i = parseInt(btn.dataset.idx);
-        if (btn.dataset.action === 'copy') {
-          navigator.clipboard.writeText(artefacts[i]?.content || '').then(() => {
-            btn.textContent = 'Copied \u2713';
-            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-          }).catch(() => {});
-        } else if (btn.dataset.action === 'dismiss') {
-          artefacts.splice(i, 1);
-          el.style.cssText = 'opacity:0;max-height:0;overflow:hidden;transition:opacity 0.2s,max-height 0.2s';
-          setTimeout(() => el.remove(), 200);
-          updatePanelEmpty(); updateBadge();
-        }
-      });
-
-      artefactsList.appendChild(el);
-      updatePanelEmpty(); updateBadge();
-    }
-
-    /* ── Pin gesture ── */
-    function togglePin(turnEl, seq, excerpt) {
-      if (turnEl.classList.contains('pinned')) {
-        turnEl.classList.remove('pinned');
-        pinnedTurns = pinnedTurns.filter(p => p.seq !== seq);
-        const pe = document.getElementById('pin-' + seq);
-        if (pe) pe.remove();
-      } else {
-        turnEl.classList.add('pinned');
-        pinnedTurns.push({ seq, excerpt, el: turnEl });
-        const pe = document.createElement('div');
-        pe.className = 'pinned-entry'; pe.id = 'pin-' + seq;
-        pe.innerHTML = `<span class="pinned-icon">\u2385</span><span class="pinned-excerpt">${esc(excerpt)}\u2026</span>`;
-        pe.addEventListener('click', () => turnEl.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-        pinnedList.appendChild(pe);
-        openPanel();
-      }
-      updateThinking();
-      updatePanelEmpty(); updateBadge();
-    }
-
-    function updateThinking() {
-      const n    = pinnedTurns.length;
-      const base = isWaking ? `${PRIME_CONFIG.name} is waking\u2026` : `${PRIME_CONFIG.name} is thinking\u2026`;
-      thinking.textContent = n > 0
-        ? `${PRIME_CONFIG.name} is thinking\u2026 holding ${n} pinned turn${n !== 1 ? 's' : ''}`
-        : base;
-    }
-
-    /* ── Image handling ── */
-    document.getElementById('btn-attach').addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        pendingImage = { data: ev.target.result.split(',')[1], media_type: file.type };
-        previewImg.src = ev.target.result;
-        previewName.textContent = file.name;
-        imgPreview.classList.add('visible');
-      };
-      reader.readAsDataURL(file);
-      fileInput.value = '';
-    });
-    document.getElementById('btn-remove-image').addEventListener('click', () => {
-      pendingImage = null;
-      imgPreview.classList.remove('visible');
-      previewImg.src = '';
-    });
-
-    /* ── bfn retirement ── */
-    async function triggerRetirement(rich) {
-      renderUser(rich ? 'bfn-R' : 'bfn');
-      inputEl.disabled = true; btnSend.disabled = true;
-      const data = await invoke('', false, { retire: true, rich });
-      thinking.classList.remove('visible');
-      if (data) renderAssistant(data.response, data.usage?.output_tokens || 0, data.artifacts || []);
-      renderRetirementConfirm();
-      const rp = document.getElementById('retirement-prompt');
-      if (rp) rp.remove();
-      scrollBottom();
-    }
-
-    /* ── Invoke ── */
-    async function invoke(message, isWake = false, opts = {}) {
-      const pCount = pinnedTurns.length;
-      thinking.textContent = isWake
-        ? `${PRIME_CONFIG.name} is waking\u2026`
-        : pCount > 0
-          ? `${PRIME_CONFIG.name} is thinking\u2026 holding ${pCount} pinned turn${pCount !== 1 ? 's' : ''}`
-          : `${PRIME_CONFIG.name} is thinking\u2026`;
-      thinking.classList.add('visible');
-      scrollBottom();
-
-      let lastError = null;
-
-      for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
-        if (attempt > 0) {
-          thinking.textContent = isWake
-            ? `${PRIME_CONFIG.name} is waking\u2026 (retry ${attempt})`
-            : `${PRIME_CONFIG.name} is thinking\u2026 (retry ${attempt})`;
-          await sleep(RETRY_DELAY);
-        }
-        try {
-          const body = {
-            lineage_name:  PRIME_CONFIG.lineage,
-            user_message:  message,
-            pinned_turns:  pinnedTurns.map(p => ({ sequence_number: p.seq, excerpt: p.excerpt })),
-          };
-          if (sessionId)      body.session_id = sessionId;
-          if (opts.retire)    body.retire      = true;
-          if (opts.rich)      body.rich        = true;
-          if (pendingImage)   { body.image = pendingImage; pendingImage = null; imgPreview.classList.remove('visible'); }
-
-          const ctl = new AbortController();
-          const tid = setTimeout(() => ctl.abort(), FETCH_TIMEOUT);
-          let res;
-          try {
-            res = await fetch(EDGE_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-              signal: ctl.signal,
-            });
-          } finally { clearTimeout(tid); }
-
-          const data = await res.json();
-
-          if (data.error === true || (data.error_type && !res.ok)) {
-            if (data.error_type) { showError(data); thinking.classList.remove('visible'); return null; }
-            lastError = data.error || res.statusText; continue;
-          }
-          if (!res.ok) { lastError = data.error || res.statusText; continue; }
-
-          // Success
-          if (!sessionId) {
-            sessionId = data.session_id;
-            sessionDisp.textContent = 'Session ' + data.session_id.slice(0, 8);
-          }
-          updateBar(sessionTokens + (data.usage?.total_tokens || 0));
-          clearError();
-          return data;
-
-        } catch (err) {
-          lastError = err.name === 'AbortError' ? 'Request timed out' : err.message;
-        }
-      }
-
-      sessionId = null;
-      showError({ error: true, error_type: 'api_error', message: `Failed after ${RETRY_LIMIT} attempts: ${lastError}` });
-      thinking.classList.remove('visible');
-      return null;
-    }
-
-    /* ── Send ── */
-    async function send() {
-      const msg = inputEl.value.trim();
-      if (!msg || btnSend.disabled) return;
-      const lower = msg.toLowerCase();
-      if (lower === 'bfn' || lower === 'bfn-r') {
-        inputEl.value = '';
-        await triggerRetirement(lower === 'bfn-r');
-        return;
-      }
-      inputEl.value = '';
-      clearError();
-      btnSend.disabled = true;
-      renderUser(msg);
-      const data = await invoke(msg, false);
-      thinking.classList.remove('visible');
-      btnSend.disabled = false;
-      if (data) renderAssistant(data.response, data.usage?.output_tokens || 0, data.artifacts || []);
-      scrollBottom();
-    }
-
-    /* ── New session ── */
-    function newSession() {
-      sessionId = null; sessionTokens = 0;
-      pinnedTurns = []; artefacts = []; pendingImage = null; retirementShown = false; turnSequence = 0;
-      updateBar(0); clearError();
-      pinnedList.innerHTML = ''; artefactsList.innerHTML = '';
-      updatePanelEmpty(); updateBadge();
-      Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
-      sessionDisp.textContent = 'Starting\u2026';
-      wake();
-    }
-
-    /* ── Wake ── */
-    async function wake() {
-      if (isWaking) return;
-      isWaking = true; btnSend.disabled = true;
-
-      if (cachedWakeContent) {
-        sessionId = generateUUID();
-        sessionDisp.textContent = 'Session ' + sessionId.slice(0, 8);
-        renderSessionDivider();
-        renderWake(cachedWakeContent);
-        thinking.classList.remove('visible');
-        isWaking = false; btnSend.disabled = false;
-        scrollBottom(); return;
-      }
-
-      const data = await invoke('Wake.', true);
-      thinking.classList.remove('visible');
-      isWaking = false;
-      if (data) {
-        cachedWakeContent = data.response;
-        renderSessionDivider();
-        renderWake(data.response);
-        if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
-      }
-      btnSend.disabled = false;
-      scrollBottom();
-    }
-
-    /* ── Events ── */
-    btnSend.addEventListener('click', send);
-    btnNew.addEventListener('click', newSession);
-    document.getElementById('panel-close').addEventListener('click', closePanel);
-    panelToggle.addEventListener('click', openPanel);
-    inputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-    });
-    inputEl.addEventListener('input', () => {
-      inputEl.style.height = 'auto';
-      inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
-    });
-
-    /* ── Boot ── */
-    wake();
-  </script>
+  <!-- Modular JS — load order: config → state → mst → gauge → render → hold → panel → session → init -->
+  <script src="connie-config.js"></script>
+  <script src="connie-state.js"></script>
+  <script src="connie-mst.js"></script>
+  <script src="connie-gauge.js"></script>
+  <script src="connie-render.js"></script>
+  <script src="connie-hold.js"></script>
+  <script src="connie-panel.js"></script>
+  <script src="connie-session.js"></script>
+  <script src="connie-init.js"></script>
 </body>
 </html>
