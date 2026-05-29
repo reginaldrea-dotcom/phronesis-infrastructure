@@ -86,7 +86,13 @@ btnContinue.addEventListener('click', continueSession);
 document.getElementById('btn-retire').addEventListener('click', () => {
   const btn = document.getElementById('btn-retire');
   if (btn.dataset.confirming === 'true') {
-    btn.textContent = 'Retire'; btn.dataset.confirming = 'false'; confirmRetirement(true);
+    btn.textContent = 'Retire'; btn.dataset.confirming = 'false';
+    // Interface-side TP filing: if Argos has placed a TP artefact in the panel,
+    // file it via REST instead of firing the bfn retirement turn. No artefact →
+    // existing retirement behaviour, unchanged.
+    const tp = findTpArtefact();
+    if (tp) confirmSuperTFiling(tp);
+    else confirmRetirement(true);
   } else {
     btn.textContent = 'Confirm?'; btn.dataset.confirming = 'true';
     setTimeout(() => { btn.textContent = 'Retire'; btn.dataset.confirming = 'false'; }, 3000);

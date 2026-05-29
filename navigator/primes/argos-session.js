@@ -1,7 +1,13 @@
 /* ── argos-session.js — session management and invoke layer ──
-   Depends on: argos-state.js, argos-config.js, argos-render.js, argos-gauge.js, argos-panel.js
-   Functions: invoke, send, wake, continueWake, newSession, continueSession, triggerRetirement
+   Depends on: argos-state.js, argos-config.js, argos-mst.js, argos-render.js, argos-gauge.js, argos-panel.js
+   Functions: invoke, send, wake, continueWake, newSession, continueSession, triggerRetirement,
+              findTpArtefact, fileSuperT, clearArtefactPanel
 */
+
+/* TP artefacts are surfaced by the edge function's extractArtifacts(): the
+   [ARTEFACT: TP_Argos_*.md]…[/ARTEFACT] block Argos emits is already parsed into
+   a structured entry in artefacts[] (title + content) before it reaches here. */
+var TP_ARTEFACT_RE = /^TP_Argos_.*\.md$/;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -201,4 +207,84 @@ async function wake() {
     if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
   }
   btnSend.disabled = false; scrollBottom();
+}
+
+/* ── Interface-side Super-T filing (Option A) ──
+   Files a TP artefact directly via Supabase REST, replacing the execute_sql
+   retirement path that fails under maximum context pressure. Generation
+   (Argos wraps the TP in artefact syntax) is separated from execution (this
+   filing, fired by the Retire button). See brief: "Retire Button — Interface-
+   Side TP Filing", 29 May 2026. */
+
+/* Latest matching TP artefact wins — Argos may have regenerated within a session. */
+function findTpArtefact() {
+  for (let i = artefacts.length - 1; i >= 0; i--) {
+    if (TP_ARTEFACT_RE.test(artefacts[i].title || '')) return artefacts[i];
+  }
+  return null;
+}
+
+/* Clear the artefact panel so a second Retire click cannot double-file.
+   Mirrors the panel reset in newSession(); the session is closing regardless. */
+function clearArtefactPanel() {
+  artefacts = []; artefactsList.innerHTML = '';
+  updatePanelEmpty(); updateBadge();
+}
+
+async function fileSuperT(tp) {
+  inputEl.disabled = true; btnSend.disabled = true;
+  const fail = (step, detail) => {
+    showError({ error: true, error_type: 'api_error',
+      message: `Retire filing failed at step ${step}: ${detail}` });
+    inputEl.disabled = false;   // do not block retry
+  };
+
+  /* Call 1 — insert artifact (supabaseRest adds Prefer: return=representation). */
+  const ins = await supabaseRest('POST', 'artifacts', null, {
+    instance_id:   PRIME_CONFIG.instanceId,
+    title:         tp.title,
+    artifact_type: 'TP',
+    content:       tp.content || '',
+    metadata:      { retirement_kind: 'interface_filed', storage: 'supabase_native' },
+  });
+  const artifactId = Array.isArray(ins) && ins[0] && ins[0].id;
+  if (!artifactId) return fail(1, 'artifact insert returned no id');
+
+  /* Call 2a — current (predecessor) chain head. Highest sequence_number is the
+     live head; tolerate >1 open-ended rows left by any prior failed retirement. */
+  const heads = await supabaseRest('GET', 'super_t_chains',
+    { lineage_name: 'eq.argos', successor_id: 'is.null', select: 'id,sequence_number' });
+  if (!Array.isArray(heads)) return fail('2a', 'could not read super_t_chains');
+  const predecessor = heads.slice()
+    .sort((a, b) => (b.sequence_number || 0) - (a.sequence_number || 0))[0] || null;
+  const newSeq = (predecessor ? (predecessor.sequence_number || 0) : 0) + 1;
+
+  /* Call 2b — insert new chain row. */
+  const chainRows = await supabaseRest('POST', 'super_t_chains', null, {
+    lineage_name:    'argos',
+    sequence_number: newSeq,
+    instance_id:     PRIME_CONFIG.instanceId,
+    tp_artifact_id:  artifactId,
+  });
+  const newChainId = Array.isArray(chainRows) && chainRows[0] && chainRows[0].id;
+  if (!newChainId) return fail('2b', 'chain insert returned no id');
+
+  /* Call 2c — link predecessor by its specific id (unambiguous). Skip when there
+     is no predecessor, i.e. this is the first chain row for the lineage. */
+  if (predecessor && predecessor.id) {
+    const patched = await supabaseRest('PATCH', 'super_t_chains',
+      { id: 'eq.' + predecessor.id }, { successor_id: newChainId });
+    if (!Array.isArray(patched) || !patched.length) return fail('2c', 'predecessor link not updated');
+  }
+
+  /* Success — surface, close session, clear panel. */
+  clearError();
+  const ok = document.createElement('div'); ok.className = 'retirement-confirm';
+  ok.textContent = `Super-T filed: ${tp.title} — artifact ${artifactId}, seq ${newSeq}`;
+  insertBefore(ok);
+  const closed = document.createElement('div'); closed.className = 'retirement-confirm';
+  closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
+  insertBefore(closed);
+  clearArtefactPanel();
+  scrollBottom();
 }
