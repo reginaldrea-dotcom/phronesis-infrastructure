@@ -37,7 +37,7 @@ async function invoke(message, isWake = false, opts = {}) {
         const body = {
           lineage_name: PRIME_CONFIG.lineage,
           user_message: message,
-          pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: p.el.querySelector('.turn-content')?.textContent || p.excerpt })),
+          pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: (p.el && p.el.querySelector('.turn-content')?.textContent) || p.content || p.excerpt })),
         };
         if (sessionId) body.session_id = sessionId;
         if (opts.retire) body.retire = true;
@@ -135,6 +135,7 @@ async function triggerRetirement(rich) {
 
 /* ── New session ── */
 function newSession() {
+  const carried = serializeUserPins();
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
@@ -143,12 +144,14 @@ function newSession() {
   resetGauge(); clearError(); artefactsList.innerHTML = '';
   updatePanelEmpty(); updateBadge();
   Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
+  restoreUserPins(carried);
   sessionDisp.textContent = 'Starting\u2026'; wake();
 }
 
 /* ── Continue session ── */
 function continueSession() {
   const elapsed = lastWakeTimestamp ? Date.now() - lastWakeTimestamp : Infinity;
+  const carried = serializeUserPins();
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
@@ -156,6 +159,7 @@ function continueSession() {
   resetGauge(); clearError(); artefactsList.innerHTML = '';
   updatePanelEmpty(); updateBadge();
   Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });
+  restoreUserPins(carried);
   if (elapsed > FOUR_HOURS || !cachedWakeContent) { sessionDisp.textContent = 'Starting\u2026'; wake(); }
   else continueWake();
 }

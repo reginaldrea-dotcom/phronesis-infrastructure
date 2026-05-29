@@ -69,30 +69,69 @@ function addArtefact(art) {
   updatePanelEmpty(); updateBadge();
 }
 
-/* ── Pin ── */
+/* ── Pin ──
+   A pin carries its own content (excerpt + full text) so it survives a session
+   reset: New Session / Continue clear the conversation DOM, but a pin no longer
+   depends on its turn node. See serializeUserPins / restoreUserPins. */
 function togglePin(turnEl, seq, excerpt) {
-  if (turnEl.classList.contains('pinned')) {
-    turnEl.classList.remove('pinned');
-    pinnedTurns = pinnedTurns.filter(p => p.seq !== seq);
-    const pe = document.getElementById('pin-' + seq); if (pe) pe.remove();
-  } else {
-    const turnTime = turnEl.querySelector('.turn-label span')?.textContent?.trim() || '';
-    turnEl.classList.add('pinned');
-    pinnedTurns.push({ seq, excerpt, el: turnEl });
-    const pe = document.createElement('div'); pe.className = 'pinned-entry'; pe.id = 'pin-' + seq;
-    pe.innerHTML = `<span class="pinned-icon">\u2385</span><span class="pinned-excerpt">${esc(excerpt)}\u2026</span>`;
-    pe.addEventListener('click', () => {
-      const fullContent = turnEl.querySelector('.turn-content')?.textContent || excerpt;
-      const modalTitle  = seq === 'wake'
-        ? `Wake orientation \u2014 ${PRIME_CONFIG.name}`
-        : `Pinned turn \u2014 ${PRIME_CONFIG.name}${turnTime ? ', '+turnTime : ''}`;
-      openInspectModal(modalTitle, fullContent, [
-        { label: 'Release pin', className: 'btn-artefact', action: (ov) => { ov.remove(); togglePin(turnEl, seq, excerpt); }},
-        { label: 'Close',       className: 'btn-artefact', action: (ov) => ov.remove() },
-      ]);
-    });
-    pinnedList.appendChild(pe); openPanel();
-  }
+  if (turnEl.classList.contains('pinned')) { releasePin(seq); return; }
+  const turnTime = turnEl.querySelector('.turn-label span')?.textContent?.trim() || '';
+  const content  = turnEl.querySelector('.turn-content')?.textContent || excerpt;
+  turnEl.classList.add('pinned');
+  const pin = { seq, excerpt, content, time: turnTime, el: turnEl };
+  pinnedTurns.push(pin);
+  addPinnedEntry(pin);
+  updateThinking(); updatePanelEmpty(); updateBadge();
+}
+
+/* Build the panel "Held in context" entry for a pin. Works with a live turn el
+   or without one (a pin carried across a reset) \u2014 content comes off the pin. */
+function addPinnedEntry(pin) {
+  const pe = document.createElement('div'); pe.className = 'pinned-entry'; pe.id = 'pin-' + pin.seq;
+  pe.innerHTML = `<span class="pinned-icon">\u2385</span><span class="pinned-excerpt">${esc(pin.excerpt)}\u2026</span>`;
+  pe.addEventListener('click', () => {
+    const fullContent = (pin.el && pin.el.querySelector('.turn-content')?.textContent) || pin.content || pin.excerpt;
+    const modalTitle  = pin.seq === 'wake'
+      ? `Wake orientation \u2014 ${PRIME_CONFIG.name}`
+      : `Pinned turn \u2014 ${PRIME_CONFIG.name}${pin.time ? ', '+pin.time : ''}`;
+    openInspectModal(modalTitle, fullContent, [
+      { label: 'Release pin', className: 'btn-artefact', action: (ov) => { ov.remove(); releasePin(pin.seq); }},
+      { label: 'Close',       className: 'btn-artefact', action: (ov) => ov.remove() },
+    ]);
+  });
+  pinnedList.appendChild(pe); openPanel();
+}
+
+/* Release a pin by seq; unhighlights its turn if one is live in the DOM. */
+function releasePin(seq) {
+  const pin = pinnedTurns.find(p => p.seq === seq);
+  if (pin && pin.el) pin.el.classList.remove('pinned');
+  pinnedTurns = pinnedTurns.filter(p => p.seq !== seq);
+  const pe = document.getElementById('pin-' + seq); if (pe) pe.remove();
+  updateThinking(); updatePanelEmpty(); updateBadge();
+}
+
+/* \u2500\u2500 Pin survival across reset (Move 1) \u2500\u2500
+   serializeUserPins() snapshots user pins as plain content objects BEFORE the
+   conversation DOM is cleared; restoreUserPins() re-renders them into the fresh
+   session. The wake-orientation pin is excluded \u2014 wake()/continueWake() re-pin it. */
+function serializeUserPins() {
+  return pinnedTurns
+    .filter(p => p.seq !== 'wake')
+    .map(p => ({
+      excerpt: p.excerpt,
+      content: (p.el && p.el.querySelector('.turn-content')?.textContent) || p.content || p.excerpt,
+      time:    p.time || '',
+    }));
+}
+
+function restoreUserPins(carried) {
+  if (!carried || !carried.length) return;
+  carried.forEach((c, i) => {
+    const pin = { seq: 'carry-' + i, excerpt: c.excerpt, content: c.content, time: c.time, el: null };
+    pinnedTurns.push(pin);
+    addPinnedEntry(pin);
+  });
   updateThinking(); updatePanelEmpty(); updateBadge();
 }
 
