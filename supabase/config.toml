@@ -1,0 +1,6 @@
+project_id = "vysenpymsfhgionqfulf"
+
+# api-prime-invoke is called by the Prime interfaces without a JWT (anon, no auth
+# header). It MUST deploy with verify_jwt disabled or the interface breaks.
+[functions.api-prime-invoke]
+verify_jwt = false
