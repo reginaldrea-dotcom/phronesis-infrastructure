@@ -12,7 +12,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { corsHeaders, errResponse } from "./lib/http.ts";
-import { GITHUB_OWNER, GITHUB_REPO, githubHeaders } from "./lib/github.ts";
+import { availableToolDefinitions, summarizeToolUse, runTool } from "./tools/index.ts";
 import type { Artifact, HoldThisPayload, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
@@ -24,71 +24,7 @@ import { loadBoundedHistory } from "./lib/history.ts";
 
 // ── Tools ─────────────────────────────────────────────────────────────────────
 
-const EXECUTE_SQL_TOOL = {
-  name: "execute_sql",
-  description: "Execute a SQL query against the Phronesis Supabase database. Use this for all database reads and writes. Returns results as a JSON array.",
-  input_schema: {
-    type: "object",
-    properties: {
-      query: { type: "string", description: "The SQL query to execute. Use single quotes for string literals." },
-    },
-    required: ["query"],
-  },
-};
-
-const DELIVER_ARTEFACT_TOOL = {
-  name: "deliver_artefact",
-  description: "Deliver content directly to the user's artefact panel. Use this for ALL large content delivery — database documents, code files, HTML. For DB content: provide a SQL query and the edge function fetches it directly. For content already in context (e.g. from GitHub): provide the content field directly. Never reproduce large content in your response text — use this tool instead.",
-  input_schema: {
-    type: "object",
-    properties: {
-      title:         { type: "string", description: "Filename or title for the artefact (e.g. 'super-t.md', 'argos.html')" },
-      query:         { type: "string", description: "SQL query to fetch content from DB. First row's content_field is used." },
-      content:       { type: "string", description: "Direct content to deliver (for content already in context, e.g. from GitHub MCP)" },
-      content_field: { type: "string", description: "Field to extract from SQL result. Default: content" },
-      type:          { type: "string", description: "Content type hint: html, markdown, typescript, document. Default: document" },
-    },
-    required: ["title"],
-  },
-};
-
-const READ_GITHUB_FILE_TOOL = {
-  name: "read_github_file",
-  description: "Read a file from the Phronesis GitHub repository. Returns the file content as a string. Path is relative to repository root.",
-  input_schema: {
-    type: "object",
-    properties: {
-      path: { type: "string", description: "File path within the repository (e.g. 'navigator/primes/argos-config.js')" },
-    },
-    required: ["path"],
-  },
-};
-
-const WRITE_GITHUB_FILE_TOOL = {
-  name: "write_github_file",
-  description: "Write or update a file in the Phronesis GitHub repository. REQUIRES explicit Reg authorisation per PI before each use. Scoped to prompts/ directory only unless explicitly authorised otherwise.",
-  input_schema: {
-    type: "object",
-    properties: {
-      path:    { type: "string", description: "File path within the repository" },
-      content: { type: "string", description: "Full file content to write" },
-      message: { type: "string", description: "Commit message" },
-    },
-    required: ["path", "content", "message"],
-  },
-};
-
-const LIST_GITHUB_DIRECTORY_TOOL = {
-  name: "list_github_directory",
-  description: "List files and directories at a path in the Phronesis GitHub repository.",
-  input_schema: {
-    type: "object",
-    properties: {
-      path: { type: "string", description: "Directory path within the repository. Use empty string for root." },
-    },
-    required: ["path"],
-  },
-};
+// Tool definitions + executors → ./tools/ (registry: ./tools/index.ts)
 
 // Artifact, HoldThisPayload, FileAttachment → ./lib/types.ts
 
@@ -401,13 +337,7 @@ Deno.serve(async (req: Request) => {
                 },
               ],
               messages: loopMessages,
-              tools: [
-                ...(isNewSession ? [] : [EXECUTE_SQL_TOOL]),
-                DELIVER_ARTEFACT_TOOL,
-                READ_GITHUB_FILE_TOOL,
-                WRITE_GITHUB_FILE_TOOL,
-                LIST_GITHUB_DIRECTORY_TOOL,
-              ],
+              tools: availableToolDefinitions({ isNewSession }),
             }),
           }
         );
@@ -458,14 +388,7 @@ Deno.serve(async (req: Request) => {
         allToolUses.push({ name: t.name, input: t.input });
       }
       if (toolUseBlocks.length > 0) {
-        const toolSummary = toolUseBlocks.map((t: any) => {
-          if (t.name === "execute_sql") return `execute_sql: ${String(t.input?.query ?? "").slice(0, 120)}`;
-          if (t.name === "deliver_artefact") return `deliver_artefact: "${t.input?.title ?? ""}"`;
-          if (t.name === "read_github_file") return `read_github_file: ${t.input?.path ?? ""}`;
-          if (t.name === "write_github_file") return `write_github_file: ${t.input?.path ?? ""}`;
-          if (t.name === "list_github_directory") return `list_github_directory: ${t.input?.path ?? ""}`;
-          return t.name;
-        }).join(" | ");
+        const toolSummary = toolUseBlocks.map((t: any) => summarizeToolUse(t.name, t.input)).join(" | ");
         console.log(`TOOL CALLS pass:${loop} →`, toolSummary);
       }
 
@@ -473,127 +396,8 @@ Deno.serve(async (req: Request) => {
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
-        if (toolUse.name === "execute_sql") {
-          try {
-            const { data: sqlData, error: sqlError } = await supabase.rpc("execute_raw_sql", { query: toolUse.input.query });
-            let resultContent: string;
-            if (sqlError) {
-              resultContent = `SQL Error: ${sqlError.message}\n[SYSTEM: this is the answer — surface this error to Reg immediately. Do not retry with another query.]`;
-            } else if (Array.isArray(sqlData) && sqlData.length === 0) {
-              resultContent = `[]\n[SYSTEM: empty result — this is the answer. Do not retry with a different query. Report to Reg what you queried and what it returned.]`;
-            } else {
-              resultContent = JSON.stringify(sqlData ?? []);
-            }
-            toolResults.push({
-              type: "tool_result", tool_use_id: toolUse.id,
-              content: resultContent,
-            });
-          } catch (err) {
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Execution error: ${String(err)}\n[SYSTEM: surface this error to Reg immediately. Do not retry.]` });
-          }
-        } else if (toolUse.name === "deliver_artefact") {
-          try {
-            const { title, query, content, type = "document" } = toolUse.input;
-            const contentField: string = toolUse.input.content_field ?? "content";
-            let artefactContent: string | null = null;
-
-            if (query) {
-              const { data: sqlData, error: sqlError } = await supabase.rpc("execute_raw_sql", { query });
-              if (sqlError) throw new Error(sqlError.message);
-              const rows: any[] = Array.isArray(sqlData) ? sqlData : [];
-              artefactContent = rows.length > 0 ? (rows[0][contentField] ?? null) : null;
-            } else if (content) {
-              artefactContent = content;
-            }
-
-            if (artefactContent) {
-              directArtefacts.push({ title, content: artefactContent, type, version: 1 });
-              toolResults.push({
-                type: "tool_result", tool_use_id: toolUse.id,
-                content: `Artefact delivered: "${title}" (${artefactContent.length} chars). It is now in the user's artefact panel — do not reproduce this content in your response.`,
-              });
-            } else {
-              toolResults.push({
-                type: "tool_result", tool_use_id: toolUse.id,
-                content: `No content found for artefact "${title}". Check query or content field.`,
-              });
-            }
-          } catch (err) {
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Artefact delivery error: ${String(err)}` });
-          }
-        } else if (toolUse.name === "read_github_file") {
-          try {
-            const filePath = String(toolUse.input.path ?? "").replace(/^\//, "");
-            const ghRes = await fetch(
-              `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`,
-              { headers: githubHeaders() }
-            );
-            if (!ghRes.ok) {
-              const errText = await ghRes.text();
-              toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `GitHub error ${ghRes.status}: ${errText}` });
-            } else {
-              const fileData = await ghRes.json();
-              const content = atob((fileData.content as string).replace(/\n/g, ""));
-              toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
-            }
-          } catch (err) {
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `read_github_file error: ${String(err)}` });
-          }
-        } else if (toolUse.name === "write_github_file") {
-          try {
-            const filePath = String(toolUse.input.path ?? "").replace(/^\//, "");
-            const shaRes = await fetch(
-              `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`,
-              { headers: githubHeaders() }
-            );
-            const sha: string | undefined = shaRes.ok ? ((await shaRes.json()).sha as string) : undefined;
-            const writeRes = await fetch(
-              `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}`,
-              {
-                method: "PUT",
-                headers: { ...githubHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  message: toolUse.input.message,
-                  content: btoa(unescape(encodeURIComponent(toolUse.input.content))),
-                  ...(sha ? { sha } : {}),
-                }),
-              }
-            );
-            if (!writeRes.ok) {
-              const errText = await writeRes.text();
-              toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `GitHub write error ${writeRes.status}: ${errText}` });
-            } else {
-              const writeData = await writeRes.json();
-              toolResults.push({
-                type: "tool_result", tool_use_id: toolUse.id,
-                content: `File written: ${filePath} — commit ${(writeData.commit?.sha as string)?.slice(0, 7) ?? "unknown"}`,
-              });
-            }
-          } catch (err) {
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `write_github_file error: ${String(err)}` });
-          }
-        } else if (toolUse.name === "list_github_directory") {
-          try {
-            const dirPath = String(toolUse.input.path ?? "").replace(/^\//, "");
-            const ghRes = await fetch(
-              `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${dirPath}`,
-              { headers: githubHeaders() }
-            );
-            if (!ghRes.ok) {
-              const errText = await ghRes.text();
-              toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `GitHub error ${ghRes.status}: ${errText}` });
-            } else {
-              const dirData = await ghRes.json();
-              const items: any[] = Array.isArray(dirData) ? dirData : [dirData];
-              const listing = items
-                .map((item: any) => `${item.type === "dir" ? "dir " : "file"} ${item.name}  ${item.path}`)
-                .join("\n");
-              toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: listing || "(empty directory)" });
-            }
-          } catch (err) {
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `list_github_directory error: ${String(err)}` });
-          }
-        }
+        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts });
+        toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
       loopMessages.push({ role: "user", content: toolResults });
