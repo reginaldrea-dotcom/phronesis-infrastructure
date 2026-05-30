@@ -133,6 +133,7 @@ async function triggerRetirement(rich) {
 /* ── New session ── */
 function newSession() {
   const carried = serializeUserPins();
+  inputEl.disabled = false; // re-enable input if a retirement left it disabled
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
@@ -149,6 +150,7 @@ function newSession() {
 function continueSession() {
   const elapsed = lastWakeTimestamp ? Date.now() - lastWakeTimestamp : Infinity;
   const carried = serializeUserPins();
+  inputEl.disabled = false; // re-enable input if a retirement left it disabled
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
