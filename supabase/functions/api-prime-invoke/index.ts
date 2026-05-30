@@ -268,7 +268,8 @@ Deno.serve(async (req: Request) => {
     let totalCacheReadTokens = 0;
     const directArtefacts: Artifact[] = [];
     const allToolUses: { name: string; input: unknown }[] = [];
-    const MAX_LOOPS = 3;
+    const MAX_LOOPS = 6;
+    let finishedCleanly = false; // false → loop hit the budget with tools still pending
 
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
@@ -353,7 +354,7 @@ Deno.serve(async (req: Request) => {
         console.log(`TOOL CALLS pass:${loop} →`, toolSummary);
       }
 
-      if (toolUseBlocks.length === 0 || anthropicData.stop_reason === "end_turn") break;
+      if (toolUseBlocks.length === 0 || anthropicData.stop_reason === "end_turn") { finishedCleanly = true; break; }
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
@@ -362,6 +363,58 @@ Deno.serve(async (req: Request) => {
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
       loopMessages.push({ role: "user", content: toolResults });
+    }
+
+    // Closing pass: if the loop hit MAX_LOOPS with tool results still unanswered,
+    // make one final tool-free call so the model produces a real answer instead of
+    // a dangling tool-use preamble (the "narrates but does nothing" symptom).
+    if (!finishedCleanly) {
+      console.log("CHECKPOINT 3b: closing pass (tool budget exhausted)");
+      try {
+        const closingRes = await fetchAnthropicWithRetry(
+          "https://api.anthropic.com/v1/messages",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
+              "anthropic-version": "2023-06-01",
+              "anthropic-beta": "prompt-caching-2024-07-31",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 8192,
+              system: [
+                {
+                  type: "text",
+                  text: isOrientedSession
+                    ? instructions.content + "\n\n" + orientationText
+                    : instructions.content,
+                  cache_control: { type: "ephemeral", ttl: "1h" },
+                },
+              ],
+              messages: loopMessages,
+              tools: availableToolDefinitions({ isNewSession }),
+              tool_choice: { type: "none" },
+            }),
+          }
+        );
+        if (closingRes.ok) {
+          const closingData = await closingRes.json();
+          totalInputTokens         += closingData.usage?.input_tokens ?? 0;
+          totalOutputTokens        += closingData.usage?.output_tokens ?? 0;
+          totalCacheCreationTokens += closingData.usage?.cache_creation_input_tokens ?? 0;
+          totalCacheReadTokens      = closingData.usage?.cache_read_input_tokens ?? totalCacheReadTokens;
+          const closingText = (closingData.content ?? []).filter((b: any) => b.type === "text");
+          if (closingText.length > 0) {
+            assistantContent = closingText.map((b: any) => b.text).join("\n");
+          }
+        } else {
+          console.log("Closing pass non-OK:", closingRes.status);
+        }
+      } catch (err) {
+        console.error("Closing pass failed:", err);
+      }
     }
 
     const { response: cleanResponse, artifacts: inlineArtifacts } = extractArtifacts(assistantContent);
