@@ -98,7 +98,7 @@ async function send() {
   const data = await invoke(msg, false);
   thinking.classList.remove('visible'); btnSend.disabled = false;
   if (data) {
-    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[], data.tool_uses||[]);
     if (!data.wake && !orientationCost) {
       captureOrientationCost(data.usage);
       pendingOrientationUsage = null;
@@ -118,7 +118,7 @@ async function triggerRetirement(rich) {
   const data = await invoke('', false, { retire: true, rich });
   thinking.classList.remove('visible');
   if (data) {
-    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[], data.tool_uses||[]);
     updateBudgetGauge(data.usage);
     updateLoadGauge(data);
     noteDriveDestructive(data);
@@ -179,7 +179,7 @@ async function continueWake() {
   if (data) {
     lastWakeTimestamp = Date.now();
     pendingOrientationUsage = data.usage;
-    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[]);
+    renderAssistant(data.response, data.usage?.output_tokens||0, data.artifacts||[], data.tool_uses||[]);
     updateLoadGauge(data);
     noteDriveDestructive(data);
   }

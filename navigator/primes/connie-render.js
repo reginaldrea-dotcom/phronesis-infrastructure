@@ -25,7 +25,16 @@ function renderUser(text) {
   insertBefore(d);
 }
 
-function renderAssistant(text, tokens, arts) {
+/* Show which tools actually ran this turn — makes a fabricated "I checked X" with
+   no real tool call visible at a glance (Homer confabulation report, 30 May 2026). */
+function formatToolUses(toolUses) {
+  if (!Array.isArray(toolUses) || toolUses.length === 0) return 'tools: none';
+  const counts = {};
+  toolUses.forEach(t => { const n = (t && t.name) ? t.name : 'unknown'; counts[n] = (counts[n] || 0) + 1; });
+  return 'tools: ' + Object.entries(counts).map(([n, c]) => c > 1 ? `${n} ×${c}` : n).join(', ');
+}
+
+function renderAssistant(text, tokens, arts, toolUses) {
   const seq = ++turnSequence; const excerpt = text.trim().slice(0,200);
   const d = document.createElement('div'); d.className = 'turn-assistant'; d.dataset.seq = seq;
   let artsHtml = '';
@@ -34,7 +43,7 @@ function renderAssistant(text, tokens, arts) {
     `<button class="pin-btn" title="Pin turn">⎅</button>` +
     `<div class="turn-label">${esc(PRIME_CONFIG.name)} <span style="font-weight:400;margin-left:8px;font-size:11px;opacity:0.7">${timeStr()}</span></div>` +
     `<div class="turn-content">${esc(text)}</div>` + artsHtml +
-    `<div class="turn-tokens">${(tokens||0).toLocaleString()} tokens</div>`;
+    `<div class="turn-tokens">${(tokens||0).toLocaleString()} tokens <span style="opacity:0.8">· ${esc(formatToolUses(toolUses))}</span></div>`;
   d.querySelector('.pin-btn').addEventListener('click', () => togglePin(d, seq, excerpt));
   insertBefore(d);
   if (arts && arts.length > 0) { arts.forEach(a => addArtefact(a)); openPanel(); }
