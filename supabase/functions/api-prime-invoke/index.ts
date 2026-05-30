@@ -11,15 +11,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, errResponse } from "./lib/http.ts";
+import { GITHUB_OWNER, GITHUB_REPO, githubHeaders } from "./lib/github.ts";
+import type { Artifact, HoldThisPayload, FileAttachment } from "./lib/types.ts";
+import { extractUserIdFromJwt } from "./lib/jwt.ts";
+import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
+import { loadBoundedHistory } from "./lib/history.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
 
-const GITHUB_OWNER = "reginaldrea-dotcom";
-const GITHUB_REPO  = "phronesis-infrastructure";
+// GITHUB_OWNER, GITHUB_REPO, githubHeaders → ./lib/github.ts
 
 // ── Tools ─────────────────────────────────────────────────────────────────────
 
@@ -89,27 +90,7 @@ const LIST_GITHUB_DIRECTORY_TOOL = {
   },
 };
 
-interface Artifact {
-  title: string;
-  content: string;
-  type: string;
-  version: number;
-}
-
-interface HoldThisPayload {
-  mode: "create" | "amend";
-  instance_id?: string;
-  title?: string;
-  content?: string;
-  metadata?: Record<string, unknown>;
-  id?: string;
-}
-
-interface FileAttachment {
-  data: string;
-  media_type: string;
-  name?: string;
-}
+// Artifact, HoldThisPayload, FileAttachment → ./lib/types.ts
 
 function inferCodeTitle(content: string, lang: string): string {
   if (lang === "html" || content.trimStart().startsWith("<!DOCTYPE") || content.trimStart().startsWith("<html")) return "output.html";
@@ -150,94 +131,18 @@ function extractArtifacts(text: string): { response: string; artifacts: Artifact
 
 const TOKEN_BUDGET_PER_USER_PER_MINUTE = 20_000;
 
-function extractUserIdFromJwt(authHeader: string | null): string | null {
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const payload = JSON.parse(atob(authHeader.slice(7).split(".")[1]));
-    const sub = payload.sub;
-    return typeof sub === "string" && /^[0-9a-f-]{36}$/.test(sub) ? sub : null;
-  } catch { return null; }
-}
-
-class AnthropicRateLimitError extends Error {
-  constructor() { super("Anthropic rate limit exceeded"); this.name = "AnthropicRateLimitError"; }
-}
-
-async function fetchAnthropicWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries = 3,
-  baseDelayMs = 1000
-): Promise<Response> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
-    if (response.status !== 429) return response;
-    if (attempt === maxRetries) throw new AnthropicRateLimitError();
-    const retryAfter = response.headers.get("retry-after");
-    const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : baseDelayMs * Math.pow(2, attempt);
-    await new Promise(r => setTimeout(r, delay));
-  }
-  throw new AnthropicRateLimitError();
-}
-
-function githubHeaders(): Record<string, string> {
-  return {
-    Authorization: `token ${Deno.env.get("GITHUB_TOKEN")}`,
-    Accept: "application/vnd.github.v3+json",
-    "User-Agent": "phronesis-argos",
-  };
-}
+// extractUserIdFromJwt → ./lib/jwt.ts
+// AnthropicRateLimitError, fetchAnthropicWithRetry → ./lib/anthropic.ts
+// githubHeaders → ./lib/github.ts
 
 function trim(s: string | null | undefined, max: number): string {
   if (!s) return "";
   return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
-function errResponse(message: string, status = 500): Response {
-  return new Response(
-    JSON.stringify({ error: true, message }),
-    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
+// errResponse → ./lib/http.ts
 
-async function loadBoundedHistory(
-  supabase: ReturnType<typeof createClient>,
-  sessionId: string | null,
-  tokenCeiling = 50000
-): Promise<{ role: "user" | "assistant"; content: string }[]> {
-  if (!sessionId) return [];
-
-  const { data: wakeRows } = await supabase
-    .from("prime_conversations")
-    .select("role, content, sequence_number")
-    .eq("session_id", sessionId)
-    .lte("sequence_number", 1)
-    .order("sequence_number", { ascending: true });
-
-  const { data: historyRows } = await supabase
-    .from("prime_conversations")
-    .select("role, content, sequence_number")
-    .eq("session_id", sessionId)
-    .gt("sequence_number", 1)
-    .order("sequence_number", { ascending: false })
-    .limit(500);
-
-  const wake = (wakeRows ?? []).filter((r: any) => r.role === "user" || r.role === "assistant");
-  const history = (historyRows ?? [])
-    .filter((r: any) => r.role === "user" || r.role === "assistant")
-    .reverse();
-
-  const combined = [...wake, ...history];
-  let charBudget = tokenCeiling * 4;
-  const trimmed: { role: "user" | "assistant"; content: string }[] = [];
-  for (let i = combined.length - 1; i >= 0; i--) {
-    const row = combined[i];
-    charBudget -= row.content.length;
-    if (charBudget < 0 && trimmed.length > 0) break;
-    trimmed.unshift({ role: row.role as "user" | "assistant", content: row.content });
-  }
-  return trimmed;
-}
+// loadBoundedHistory → ./lib/history.ts
 
 // Conference 8fe2add9 (ratified 20 May 2026): Super-T only at wake.
 // Wheel posts, prime_messages, current_priorities, and conferences are NOT
