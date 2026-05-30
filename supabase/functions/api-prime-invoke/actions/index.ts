@@ -4,9 +4,11 @@
 
 import type { Action, ActionContext } from "./types.ts";
 import { holdThisAction } from "./holdThis.ts";
+import { fileSuperTAction } from "./fileSuperT.ts";
 
 const ACTIONS: Record<string, Action> = {
   [holdThisAction.name]: holdThisAction,
+  [fileSuperTAction.name]: fileSuperTAction,
 };
 
 export function getAction(name: string): Action | undefined {

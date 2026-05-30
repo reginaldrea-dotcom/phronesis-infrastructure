@@ -213,12 +213,13 @@ async function wake() {
   btnSend.disabled = false; scrollBottom();
 }
 
-/* ── Interface-side Super-T filing (Option A) ──
-   Files a TP artefact directly via Supabase REST, replacing the execute_sql
-   retirement path that fails under maximum context pressure. Generation
-   (Argos wraps the TP in artefact syntax) is separated from execution (this
-   filing, fired by the Retire button). See brief: "Retire Button — Interface-
-   Side TP Filing", 29 May 2026. */
+/* ── Interface-side Super-T filing (Phase 3) ──
+   Files the TP artefact via the file_super_t Edge Function action, which runs an
+   atomic Postgres transaction (insert artifact → insert chain row → link
+   predecessor) with the service-role key. This replaces the original Option A
+   browser-REST mechanism, which RLS blocked (anon has no policies on artifacts /
+   super_t_chains). Generation (Argos wraps the TP in artefact syntax) stays
+   separated from execution (this filing, fired by the Retire button). */
 
 /* Latest matching TP artefact wins — Argos may have regenerated within a session. */
 function findTpArtefact() {
@@ -237,54 +238,39 @@ function clearArtefactPanel() {
 
 async function fileSuperT(tp) {
   inputEl.disabled = true; btnSend.disabled = true;
-  const fail = (step, detail) => {
+  const fail = (detail) => {
     showError({ error: true, error_type: 'api_error',
-      message: `Retire filing failed at step ${step}: ${detail}` });
+      message: `Retire filing failed: ${detail}` });
     inputEl.disabled = false;   // do not block retry
   };
 
-  /* Call 1 — insert artifact (supabaseRest adds Prefer: return=representation). */
-  const ins = await supabaseRest('POST', 'artifacts', null, {
-    instance_id:   PRIME_CONFIG.instanceId,
-    title:         tp.title,
-    artifact_type: 'TP',
-    content:       tp.content || '',
-    metadata:      { retirement_kind: 'interface_filed', storage: 'supabase_native' },
-  });
-  const artifactId = Array.isArray(ins) && ins[0] && ins[0].id;
-  if (!artifactId) return fail(1, 'artifact insert returned no id');
-
-  /* Call 2a — current (predecessor) chain head. Highest sequence_number is the
-     live head; tolerate >1 open-ended rows left by any prior failed retirement. */
-  const heads = await supabaseRest('GET', 'super_t_chains',
-    { lineage_name: 'eq.argos', successor_id: 'is.null', select: 'id,sequence_number' });
-  if (!Array.isArray(heads)) return fail('2a', 'could not read super_t_chains');
-  const predecessor = heads.slice()
-    .sort((a, b) => (b.sequence_number || 0) - (a.sequence_number || 0))[0] || null;
-  const newSeq = (predecessor ? (predecessor.sequence_number || 0) : 0) + 1;
-
-  /* Call 2b — insert new chain row. */
-  const chainRows = await supabaseRest('POST', 'super_t_chains', null, {
-    lineage_name:    'argos',
-    sequence_number: newSeq,
-    instance_id:     PRIME_CONFIG.instanceId,
-    tp_artifact_id:  artifactId,
-  });
-  const newChainId = Array.isArray(chainRows) && chainRows[0] && chainRows[0].id;
-  if (!newChainId) return fail('2b', 'chain insert returned no id');
-
-  /* Call 2c — link predecessor by its specific id (unambiguous). Skip when there
-     is no predecessor, i.e. this is the first chain row for the lineage. */
-  if (predecessor && predecessor.id) {
-    const patched = await supabaseRest('PATCH', 'super_t_chains',
-      { id: 'eq.' + predecessor.id }, { successor_id: newChainId });
-    if (!Array.isArray(patched) || !patched.length) return fail('2c', 'predecessor link not updated');
+  /* File atomically via the file_super_t EF action (service-role, bypasses RLS).
+     The EF runs the insert-artifact / insert-chain / link-predecessor transaction. */
+  let res, data;
+  try {
+    res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:      'file_super_t',
+        lineage:     PRIME_CONFIG.lineage,
+        instance_id: PRIME_CONFIG.instanceId,
+        title:       tp.title,
+        content:     tp.content || '',
+      }),
+    });
+    data = await res.json();
+  } catch (err) {
+    return fail(err.message || 'network error');
+  }
+  if (!res.ok || !data || data.error || !data.sequence_number) {
+    return fail((data && (data.message || data.error)) || ('HTTP ' + res.status));
   }
 
   /* Success — surface, close session, clear panel. */
   clearError();
   const ok = document.createElement('div'); ok.className = 'retirement-confirm';
-  ok.textContent = `Super-T filed: ${tp.title} — artifact ${artifactId}, seq ${newSeq}`;
+  ok.textContent = `Super-T filed: ${tp.title} — seq ${data.sequence_number}, artifact ${data.artifact_id}`;
   insertBefore(ok);
   const closed = document.createElement('div'); closed.className = 'retirement-confirm';
   closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
