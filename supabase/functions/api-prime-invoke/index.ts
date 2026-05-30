@@ -11,9 +11,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { corsHeaders, errResponse } from "./lib/http.ts";
+import { corsHeaders } from "./lib/http.ts";
 import { availableToolDefinitions, summarizeToolUse, runTool } from "./tools/index.ts";
-import type { Artifact, HoldThisPayload, FileAttachment } from "./lib/types.ts";
+import { getAction } from "./actions/index.ts";
+import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
 import { loadBoundedHistory } from "./lib/history.ts";
@@ -145,50 +146,10 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    if (action === "hold_this") {
-      const ht = hold_this_payload as HoldThisPayload | undefined;
-      if (!ht?.mode) return errResponse("Invalid hold_this_payload", 400);
-
-      if (ht.mode === "create") {
-        if (!ht.title || !ht.content) return errResponse("hold_this create requires title and content", 400);
-        const { data, error } = await supabase
-          .from("artifacts")
-          .insert({
-            instance_id: ht.instance_id ?? null,
-            title: ht.title,
-            artifact_type: "MST",
-            content: ht.content,
-            metadata: ht.metadata ?? {},
-          })
-          .select("id")
-          .single();
-        if (error) {
-          console.error("hold_this create error:", error);
-          return errResponse(error.message);
-        }
-        return new Response(
-          JSON.stringify({ id: (data as any).id }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      if (ht.mode === "amend") {
-        if (!ht.id || !ht.content) return errResponse("hold_this amend requires id and content", 400);
-        const { error } = await supabase
-          .from("artifacts")
-          .update({ content: ht.content, metadata: ht.metadata ?? {} })
-          .eq("id", ht.id);
-        if (error) {
-          console.error("hold_this amend error:", error);
-          return errResponse(error.message);
-        }
-        return new Response(
-          JSON.stringify({ id: ht.id }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return errResponse(`Unknown hold_this mode: ${ht.mode}`, 400);
+    if (action) {
+      const handler = getAction(action);
+      if (handler) return await handler.handle({ supabase, body });
+      // Unknown action → fall through to the normal invoke path (unchanged).
     }
 
     const userId = extractUserIdFromJwt(req.headers.get("authorization"));
