@@ -4,11 +4,14 @@ import type { Tool, ToolContext } from "./types.ts";
 import { executeSqlTool } from "./executeSql.ts";
 import { deliverArtefactTool } from "./deliverArtefact.ts";
 import { readGithubFileTool, writeGithubFileTool, listGithubDirectoryTool } from "./github.ts";
+import { getConferenceResultTool } from "./getConferenceResult.ts";
 
-// Order preserved from the original tools[] array.
+// execute_sql and get_conference_result are withheld on the wake turn (see each
+// tool's available()); the rest are always offered.
 const TOOLS: Tool[] = [
   executeSqlTool,
   deliverArtefactTool,
+  getConferenceResultTool,
   readGithubFileTool,
   writeGithubFileTool,
   listGithubDirectoryTool,

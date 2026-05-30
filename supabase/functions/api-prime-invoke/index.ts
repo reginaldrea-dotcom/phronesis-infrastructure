@@ -18,6 +18,8 @@ import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
 import { loadBoundedHistory } from "./lib/history.ts";
+import { modelForLineage } from "./lib/models.ts";
+import { SCHEMA_REFERENCE } from "./lib/schema.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
 
@@ -271,6 +273,15 @@ Deno.serve(async (req: Request) => {
     const MAX_LOOPS = 6;
     let finishedCleanly = false; // false → loop hit the budget with tools still pending
 
+    // Per-Prime model (Phase 2). Resolved once; used by the loop, the closing pass,
+    // the response payload, and the persisted metadata.
+    const model = modelForLineage(lineage_name);
+    // System prompt = instructions + schema reference (so execute_sql stops guessing
+    // columns), plus the wake orientation on a new session.
+    const systemText = isOrientedSession
+      ? instructions.content + "\n\n" + SCHEMA_REFERENCE + "\n\n" + orientationText
+      : instructions.content + "\n\n" + SCHEMA_REFERENCE;
+
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
 
@@ -287,14 +298,12 @@ Deno.serve(async (req: Request) => {
               "anthropic-beta": "prompt-caching-2024-07-31",
             },
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
+              model: model,
               max_tokens: 8192,
               system: [
                 {
                   type: "text",
-                  text: isOrientedSession
-                    ? instructions.content + "\n\n" + orientationText
-                    : instructions.content,
+                  text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
               ],
@@ -382,14 +391,12 @@ Deno.serve(async (req: Request) => {
               "anthropic-beta": "prompt-caching-2024-07-31",
             },
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
+              model: model,
               max_tokens: 8192,
               system: [
                 {
                   type: "text",
-                  text: isOrientedSession
-                    ? instructions.content + "\n\n" + orientationText
-                    : instructions.content,
+                  text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
               ],
@@ -467,7 +474,7 @@ Deno.serve(async (req: Request) => {
             uncached_input_tokens: totalInputTokens,
             total_input_tokens: totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens,
             total_tokens: totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens + totalOutputTokens,
-            model: "claude-sonnet-4-6",
+            model: model,
             instructions_version: instructions.version,
             orientation_preloaded: isOrientedSession,
             cache_creation_tokens: totalCacheCreationTokens,
@@ -496,7 +503,7 @@ Deno.serve(async (req: Request) => {
           total_input_tokens:    totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens,
           total_tokens:          totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens + totalOutputTokens,
         },
-        model: "claude-sonnet-4-6",
+        model: model,
         orientation_preloaded: isOrientedSession,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
