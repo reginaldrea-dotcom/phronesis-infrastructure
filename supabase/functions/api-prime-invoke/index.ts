@@ -20,6 +20,7 @@ import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropi
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
+import { claimIdempotency, markDone, markDoneFromResponse, awaitDuplicateResponse } from "./lib/idempotency.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
 
@@ -148,9 +149,23 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // D3 — request-level idempotency. A retry re-POSTs the same request_id; the first
+    // invocation keeps running server-side after a client timeout, so a duplicate must
+    // NOT re-run side effects. Claim the key before any work; a duplicate waits for and
+    // replays the original's result.
+    const requestId: string | undefined = body.request_id;
+    if (requestId) {
+      const claim = await claimIdempotency(supabase, requestId);
+      if (claim === "duplicate") return await awaitDuplicateResponse(supabase, requestId);
+    }
+
     if (action) {
       const handler = getAction(action);
-      if (handler) return await handler.handle({ supabase, body });
+      if (handler) {
+        const resp = await handler.handle({ supabase, body });
+        if (requestId) await markDoneFromResponse(supabase, requestId, resp.clone());
+        return resp;
+      }
       // Unknown action → fall through to the normal invoke path (unchanged).
     }
 
@@ -488,26 +503,25 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) console.error("DB insert failed:", JSON.stringify(insertError));
 
-    return new Response(
-      JSON.stringify({
-        session_id: activeSessionId,
-        wake: isNewSession,
-        response: cleanResponse,
-        artifacts,
-        tool_uses: allToolUses,
-        usage: {
-          input_tokens:          totalInputTokens,
-          output_tokens:         totalOutputTokens,
-          cache_creation_tokens: totalCacheCreationTokens,
-          cache_read_tokens:     totalCacheReadTokens,
-          total_input_tokens:    totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens,
-          total_tokens:          totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens + totalOutputTokens,
-        },
-        model: model,
-        orientation_preloaded: isOrientedSession,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const successBody = JSON.stringify({
+      session_id: activeSessionId,
+      wake: isNewSession,
+      response: cleanResponse,
+      artifacts,
+      tool_uses: allToolUses,
+      usage: {
+        input_tokens:          totalInputTokens,
+        output_tokens:         totalOutputTokens,
+        cache_creation_tokens: totalCacheCreationTokens,
+        cache_read_tokens:     totalCacheReadTokens,
+        total_input_tokens:    totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens,
+        total_tokens:          totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens + totalOutputTokens,
+      },
+      model: model,
+      orientation_preloaded: isOrientedSession,
+    });
+    if (requestId) await markDone(supabase, requestId, successBody, 200);
+    return new Response(successBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
     console.error("api-prime-invoke error:", err);

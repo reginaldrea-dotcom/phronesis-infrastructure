@@ -18,6 +18,11 @@ async function invoke(message, isWake = false, opts = {}) {
   thinking.classList.add('visible'); scrollBottom();
 
   let lastError = null;
+  // D3: one request_id per logical invocation, reused across retries so the EF can
+  // dedupe a re-POST (it returns the original's result instead of re-executing).
+  const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
 
   try {
     for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
@@ -34,6 +39,7 @@ async function invoke(message, isWake = false, opts = {}) {
           user_message: message,
           pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: (p.el && p.el.querySelector('.turn-content')?.textContent) || p.content || p.excerpt })),
         };
+        body.request_id = requestId;
         if (sessionId) body.session_id = sessionId;
         if (opts.retire) body.retire = true;
         if (opts.rich) body.rich = true;
@@ -46,7 +52,7 @@ async function invoke(message, isWake = false, opts = {}) {
         }
 
         const timeoutCtl = new AbortController();
-        const timeout = isWake ? 60000 : FETCH_TIMEOUT;
+        const timeout = FETCH_TIMEOUT;
         const tid = setTimeout(() => timeoutCtl.abort(), timeout);
         const signal = typeof AbortSignal.any === 'function'
           ? AbortSignal.any([invokeController.signal, timeoutCtl.signal])
@@ -68,6 +74,9 @@ async function invoke(message, isWake = false, opts = {}) {
       } catch (err) {
         if (invokeController.signal.aborted) break;
         lastError = err.name === 'AbortError' ? 'Request timed out' : err.message;
+        // D5: never auto-retry a side-effectful request — it may have completed
+        // server-side. (request_id idempotency covers the rest; this is the guard.)
+        if (opts.retire) break;
       }
     }
 
@@ -75,7 +84,9 @@ async function invoke(message, isWake = false, opts = {}) {
       showError({
         error: true,
         error_type: 'api_error',
-        message: sessionId
+        message: opts.retire
+          ? `Retirement timed out — it may have completed server-side. Do NOT resend: verify the Super-T was filed before retrying.`
+          : sessionId
           ? `Request timed out. Session ${sessionId.slice(0,8)} preserved — context intact. Dismiss and try again.`
           : `Request timed out after ${RETRY_LIMIT} attempts. Dismiss and try again.`
       });

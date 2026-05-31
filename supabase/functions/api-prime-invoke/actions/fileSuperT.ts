@@ -7,7 +7,7 @@ import { corsHeaders, errResponse } from "../lib/http.ts";
 export const fileSuperTAction: Action = {
   name: "file_super_t",
   handle: async ({ supabase, body }) => {
-    const { content, title, instance_id, lineage } = body ?? {};
+    const { content, title, instance_id, lineage, session_id } = body ?? {};
     if (!lineage || !title || !content) {
       return errResponse("file_super_t requires lineage, title, and content", 400);
     }
@@ -16,6 +16,7 @@ export const fileSuperTAction: Action = {
       p_instance_id: instance_id ?? null,
       p_title: title,
       p_content: content,
+      p_session_id: session_id ?? null,
     });
     if (error) {
       console.error("file_super_t error:", error);
