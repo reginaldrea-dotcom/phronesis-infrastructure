@@ -86,7 +86,10 @@ btnContinue.addEventListener('click', continueSession);
 document.getElementById('btn-retire').addEventListener('click', () => {
   const btn = document.getElementById('btn-retire');
   if (btn.dataset.confirming === 'true') {
-    btn.textContent = 'Retire'; btn.dataset.confirming = 'false'; confirmRetirement(true);
+    btn.textContent = 'Retire'; btn.dataset.confirming = 'false';
+    // Retire-via-button (shared prime-retire.js): if a TP_Constantinople_* artefact is in
+    // the panel, file it via the file_super_t action; no artefact → bfn retirement, unchanged.
+    if (!retireFile()) confirmRetirement(true);
   } else {
     btn.textContent = 'Confirm?'; btn.dataset.confirming = 'true';
     setTimeout(() => { btn.textContent = 'Retire'; btn.dataset.confirming = 'false'; }, 3000);

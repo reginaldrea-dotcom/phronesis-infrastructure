@@ -70,20 +70,8 @@ function confirmRetirement(rich) {
   document.getElementById('btn-cancel-retire').addEventListener('click',  () => { d.remove(); retirementPending = false; });
 }
 
-/* Super-T filing confirm — shown when a TP artefact is present at Retire.
-   On confirm, files via Supabase REST (fileSuperT) instead of the bfn turn. */
-function confirmSuperTFiling(tp) {
-  if (retirementPending) return; retirementPending = true;
-  const d = document.createElement('div'); d.className = 'retirement-prompt'; d.id = 'supert-confirm-prompt';
-  d.innerHTML =
-    `<div class="retirement-dot"></div>` +
-    `<div class="retirement-text">File Super-T <strong>${esc(tp.title)}</strong> and retire ${esc(PRIME_CONFIG.name)}?</div>` +
-    `<button class="btn btn-send" id="btn-confirm-file" style="margin-left:12px;padding:4px 14px;font-size:12px">Confirm</button>` +
-    `<button class="error-dismiss" id="btn-cancel-file" style="margin-left:6px">Cancel</button>`;
-  insertBefore(d); scrollBottom();
-  document.getElementById('btn-confirm-file').addEventListener('click', () => { d.remove(); retirementPending = false; fileSuperT(tp); });
-  document.getElementById('btn-cancel-file').addEventListener('click',  () => { d.remove(); retirementPending = false; });
-}
+/* confirmSuperTFiling (the TP-present Retire confirm) now lives in the shared
+   prime-retire.js module, alongside findTpArtefact / clearArtefactPanel / fileSuperT. */
 
 /* ── Inspect modal ── */
 function openInspectModal(title, content, footerConfig) {

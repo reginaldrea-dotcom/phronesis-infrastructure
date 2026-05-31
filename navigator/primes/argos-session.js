@@ -1,13 +1,9 @@
 /* ── argos-session.js — session management and invoke layer ──
    Depends on: argos-state.js, argos-config.js, argos-mst.js, argos-render.js, argos-gauge.js, argos-panel.js
-   Functions: invoke, send, wake, continueWake, newSession, continueSession, triggerRetirement,
-              findTpArtefact, fileSuperT, clearArtefactPanel
+   Functions: invoke, send, wake, continueWake, newSession, continueSession, triggerRetirement
+   Retire-via-button filing (findTpArtefact / clearArtefactPanel / fileSuperT) lives in the
+   shared prime-retire.js module; confirmSuperTFiling lives there too (was argos-render.js).
 */
-
-/* TP artefacts are surfaced by the edge function's extractArtifacts(): the
-   [ARTEFACT: TP_Argos_*.md]…[/ARTEFACT] block Argos emits is already parsed into
-   a structured entry in artefacts[] (title + content) before it reaches here. */
-var TP_ARTEFACT_RE = /^TP_Argos_.*\.md$/;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -224,74 +220,4 @@ async function wake() {
     if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
   }
   btnSend.disabled = false; scrollBottom();
-}
-
-/* ── Interface-side Super-T filing (Phase 3) ──
-   Files the TP artefact via the file_super_t Edge Function action, which runs an
-   atomic Postgres transaction (insert artifact → insert chain row → link
-   predecessor) with the service-role key. This replaces the original Option A
-   browser-REST mechanism, which RLS blocked (anon has no policies on artifacts /
-   super_t_chains). Generation (Argos wraps the TP in artefact syntax) stays
-   separated from execution (this filing, fired by the Retire button). */
-
-/* Latest matching TP artefact wins — Argos may have regenerated within a session. */
-function findTpArtefact() {
-  for (let i = artefacts.length - 1; i >= 0; i--) {
-    if (TP_ARTEFACT_RE.test(artefacts[i].title || '')) return artefacts[i];
-  }
-  return null;
-}
-
-/* Clear the artefact panel so a second Retire click cannot double-file.
-   Mirrors the panel reset in newSession(); the session is closing regardless. */
-function clearArtefactPanel() {
-  artefacts = []; artefactsList.innerHTML = '';
-  updatePanelEmpty(); updateBadge();
-}
-
-async function fileSuperT(tp) {
-  inputEl.disabled = true; btnSend.disabled = true;
-  const fail = (detail) => {
-    showError({ error: true, error_type: 'api_error',
-      message: `Retire filing failed: ${detail}` });
-    inputEl.disabled = false;   // do not block retry
-  };
-
-  /* File atomically via the file_super_t EF action (service-role, bypasses RLS).
-     The EF runs the insert-artifact / insert-chain / link-predecessor transaction. */
-  let res, data;
-  try {
-    res = await fetch(EDGE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action:      'file_super_t',
-        // Deterministic key: a second Retire click in the same session collides on the
-        // same request_id, so the EF replays the first filing instead of filing twice.
-        request_id:  'retire-' + sessionId,
-        lineage:     PRIME_CONFIG.lineage,
-        instance_id: PRIME_CONFIG.instanceId,
-        session_id:  sessionId,
-        title:       tp.title,
-        content:     tp.content || '',
-      }),
-    });
-    data = await res.json();
-  } catch (err) {
-    return fail(err.message || 'network error');
-  }
-  if (!res.ok || !data || data.error || !data.sequence_number) {
-    return fail((data && (data.message || data.error)) || ('HTTP ' + res.status));
-  }
-
-  /* Success — surface, close session, clear panel. */
-  clearError();
-  const ok = document.createElement('div'); ok.className = 'retirement-confirm';
-  ok.textContent = `Super-T filed: ${tp.title} — seq ${data.sequence_number}, artifact ${data.artifact_id}`;
-  insertBefore(ok);
-  const closed = document.createElement('div'); closed.className = 'retirement-confirm';
-  closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
-  insertBefore(closed);
-  clearArtefactPanel();
-  scrollBottom();
 }
