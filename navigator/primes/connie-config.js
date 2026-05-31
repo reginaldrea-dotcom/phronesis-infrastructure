@@ -1,7 +1,7 @@
 /* ── connie-config.js ── Per-Prime config, constants, hold prompts ── */
 
 var PRIME_CONFIG = {
-  lineage:      'Constantinople',
+  lineage:      'constantinople',
   name:         'Constantinople',
   initial:      'C',
   role:         'Substrate Prime — Phronesis Project',
