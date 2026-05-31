@@ -1,7 +1,7 @@
 /* ── connie-config.js ── Per-Prime config, constants, hold prompts ── */
 
 var PRIME_CONFIG = {
-  lineage:      'constantinople',
+  lineage:      'retirement_test',
   name:         'Constantinople',
   initial:      'C',
   role:         'Substrate Prime — Phronesis Project',
@@ -9,7 +9,7 @@ var PRIME_CONFIG = {
   accentDim:    'rgba(44, 62, 110, 0.10)',
   accentBorder: 'rgba(44, 62, 110, 0.35)',
   placeholder:  'Write to Constantinople…',
-  instanceId:   '9293772f-85ab-4aaf-8c6c-8c00515bd6f2',
+  instanceId:   '7e57ca5e-0000-4000-8000-000000000001',
   navigatorUrl: 'https://phronesis-infrastructure.onrender.com/',
   sessionBudget: 500000,
   supabaseUrl:  'https://vysenpymsfhgionqfulf.supabase.co',
