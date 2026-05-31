@@ -266,7 +266,9 @@ async function fileSuperT(tp) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action:      'file_super_t',
-        request_id:  (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        // Deterministic key: a second Retire click in the same session collides on the
+        // same request_id, so the EF replays the first filing instead of filing twice.
+        request_id:  'retire-' + sessionId,
         lineage:     PRIME_CONFIG.lineage,
         instance_id: PRIME_CONFIG.instanceId,
         session_id:  sessionId,
