@@ -134,6 +134,10 @@ Deno.serve(async (req: Request) => {
   console.log("CHECKPOINT 1: function invoked");
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Hoisted so the outer catch can resolve the idempotency key (Defect 1).
+  let supabase: ReturnType<typeof createClient> | undefined;
+  let requestId: string | undefined;
+
   try {
     const body = await req.json();
     console.log("CHECKPOINT 2: body parsed, size:", JSON.stringify(body).length);
@@ -144,7 +148,7 @@ Deno.serve(async (req: Request) => {
       pinned_turns, action, hold_this_payload,
     } = body;
 
-    const supabase = createClient(
+    supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
@@ -153,11 +157,20 @@ Deno.serve(async (req: Request) => {
     // invocation keeps running server-side after a client timeout, so a duplicate must
     // NOT re-run side effects. Claim the key before any work; a duplicate waits for and
     // replays the original's result.
-    const requestId: string | undefined = body.request_id;
+    requestId = body.request_id;
     if (requestId) {
       const claim = await claimIdempotency(supabase, requestId);
       if (claim === "duplicate") return await awaitDuplicateResponse(supabase, requestId);
     }
+
+    // Every terminal exit goes through finalize so the idempotency key is resolved
+    // (Defect 1: errors must store their result, not strand the key 'in_progress').
+    const sb = supabase;
+    const finalize = async (obj: unknown, status: number): Promise<Response> => {
+      const respBody = JSON.stringify(obj);
+      if (requestId) await markDone(sb, requestId, respBody, status);
+      return new Response(respBody, { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    };
 
     if (action) {
       const handler = getAction(action);
@@ -179,13 +192,10 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (instrError || !instructions) {
-      return new Response(
-        JSON.stringify({
-          error: true, error_type: "api_error",
-          message: `No active instructions found for lineage: ${lineage_name}`,
-        }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return await finalize({
+        error: true, error_type: "api_error",
+        message: `No active instructions found for lineage: ${lineage_name}`,
+      }, 404);
     }
 
     const activeSessionId: string = session_id || crypto.randomUUID();
@@ -265,16 +275,13 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       const currentUsage = usageRow?.input_tokens ?? 0;
       if (currentUsage >= TOKEN_BUDGET_PER_USER_PER_MINUTE) {
-        return new Response(
-          JSON.stringify({
-            error: true, error_type: "rate_limit_exceeded",
-            message: "You have sent a lot in the last minute. Please wait a moment before continuing.",
-            retry_after_seconds: 60,
-            budget_used: currentUsage,
-            budget_total: TOKEN_BUDGET_PER_USER_PER_MINUTE,
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return await finalize({
+          error: true, error_type: "rate_limit_exceeded",
+          message: "You have sent a lot in the last minute. Please wait a moment before continuing.",
+          retry_after_seconds: 60,
+          budget_used: currentUsage,
+          budget_total: TOKEN_BUDGET_PER_USER_PER_MINUTE,
+        }, 429);
       }
     }
 
@@ -329,13 +336,10 @@ Deno.serve(async (req: Request) => {
         );
       } catch (e) {
         if (e instanceof AnthropicRateLimitError) {
-          return new Response(
-            JSON.stringify({
-              error: true, error_type: "api_error",
-              message: "Service temporarily unavailable. Please try again in a moment.",
-            }),
-            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return await finalize({
+            error: true, error_type: "api_error",
+            message: "Service temporarily unavailable. Please try again in a moment.",
+          }, 503);
         }
         throw e;
       }
@@ -347,16 +351,13 @@ Deno.serve(async (req: Request) => {
         if (anthropicResponse.status === 400 && errText.includes("context_length_exceeded")) {
           errType = "context_exceeded";
         }
-        return new Response(
-          JSON.stringify({
-            error: true, error_type: errType,
-            message: errType === "context_exceeded"
-              ? "This session has grown too long. Please start a new session to continue."
-              : "Something went wrong. Please try again.",
-            request_id: anthropicResponse.headers.get("request-id") ?? undefined,
-          }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return await finalize({
+          error: true, error_type: errType,
+          message: errType === "context_exceeded"
+            ? "This session has grown too long. Please start a new session to continue."
+            : "Something went wrong. Please try again.",
+          request_id: anthropicResponse.headers.get("request-id") ?? undefined,
+        }, 502);
       }
 
       const anthropicData = await anthropicResponse.json();
@@ -503,7 +504,7 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) console.error("DB insert failed:", JSON.stringify(insertError));
 
-    const successBody = JSON.stringify({
+    return await finalize({
       session_id: activeSessionId,
       wake: isNewSession,
       response: cleanResponse,
@@ -519,18 +520,18 @@ Deno.serve(async (req: Request) => {
       },
       model: model,
       orientation_preloaded: isOrientedSession,
-    });
-    if (requestId) await markDone(supabase, requestId, successBody, 200);
-    return new Response(successBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }, 200);
 
   } catch (err) {
     console.error("api-prime-invoke error:", err);
-    return new Response(
-      JSON.stringify({
-        error: true, error_type: "api_error",
-        message: "Something went wrong. Please try again.",
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Defect 1: resolve the key so a retry replays the error instead of poll-locking.
+    const errorBody = JSON.stringify({
+      error: true, error_type: "api_error",
+      message: "Something went wrong. Please try again.",
+    });
+    if (requestId && supabase) {
+      try { await markDone(supabase, requestId, errorBody, 500); } catch (_e) { /* logged in markDone */ }
+    }
+    return new Response(errorBody, { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

@@ -18,16 +18,38 @@ const jsonResponse = (body: string, status: number) =>
 
 /** Atomically claim the key. 'first' → we own it and must markDone on the way out.
  *  'duplicate' → another invocation already holds it (in-progress or done). */
+// A key still 'in_progress' older than this is treated as abandoned (original was
+// evicted/killed before markDone) and may be taken over. Set ABOVE the platform's
+// hard wall-clock limit (Supabase edge: 150s free / 400s paid) so "stale" provably
+// means "the worker was already killed ⟹ dead" — a live original is never seized.
+const STALE_MS = 600_000; // 10 min — > 400s paid wall ceiling
+
 export async function claimIdempotency(
   supabase: SupabaseClient,
   requestId: string,
 ): Promise<"first" | "duplicate"> {
   const { error } = await supabase.from("idempotency_keys").insert({ request_id: requestId });
   if (!error) return "first";
-  if ((error as { code?: string }).code === "23505") return "duplicate"; // PK conflict
-  // Unexpected error: fail OPEN (run) rather than wrongly block — lose dedup, keep availability.
-  console.error("idempotency claim error:", error);
-  return "first";
+  if ((error as { code?: string }).code !== "23505") {
+    // Unexpected error: fail OPEN (run) rather than wrongly block — lose dedup, keep availability.
+    console.error("idempotency claim error:", error);
+    return "first";
+  }
+  // PK conflict — a prior request holds the key. Defect 2: recover from an abandoned
+  // original. If it's been 'in_progress' past STALE_MS, atomically take it over
+  // (re-stamp updated_at) instead of poll-locking forever.
+  const staleBefore = new Date(Date.now() - STALE_MS).toISOString();
+  const { data: took } = await supabase.from("idempotency_keys")
+    .update({ status: "in_progress", updated_at: new Date().toISOString() })
+    .eq("request_id", requestId)
+    .eq("status", "in_progress")
+    .lt("updated_at", staleBefore)
+    .select("request_id");
+  if (took && (took as unknown[]).length > 0) {
+    console.error("idempotency: took over abandoned key", requestId);
+    return "first";
+  }
+  return "duplicate";
 }
 
 /** Persist the response body for replay and mark the key done. */
