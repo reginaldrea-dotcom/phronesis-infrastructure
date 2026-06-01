@@ -3,6 +3,7 @@
 //  literal display Unicode; deferred to a later extraction phase.)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { renderToolLog } from "./provenance.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -15,23 +16,39 @@ export async function loadBoundedHistory(
 
   const { data: wakeRows } = await supabase
     .from("prime_conversations")
-    .select("role, content, sequence_number")
+    .select("role, content, sequence_number, metadata")
     .eq("session_id", sessionId)
     .lte("sequence_number", 1)
     .order("sequence_number", { ascending: true });
 
   const { data: historyRows } = await supabase
     .from("prime_conversations")
-    .select("role, content, sequence_number")
+    .select("role, content, sequence_number, metadata")
     .eq("session_id", sessionId)
     .gt("sequence_number", 1)
     .order("sequence_number", { ascending: false })
     .limit(500);
 
-  const wake = (wakeRows ?? []).filter((r: any) => r.role === "user" || r.role === "assistant");
+  // Provenance ledger (WO d4501dbc): append the per-turn tool record to each assistant
+  // turn so the model sees what it actually did and what came back — not just what it
+  // said. metadata.tool_log is absent on pre-ledger rows, so renderToolLog returns "" and
+  // nothing is appended (no false "none"). The appended block is bounded, so the existing
+  // char budget below keeps aggregate context in check.
+  const augment = (r: any): { role: "user" | "assistant"; content: string } => {
+    if (r.role === "assistant") {
+      const block = renderToolLog(r.metadata?.tool_log);
+      if (block) return { role: "assistant", content: `${r.content}\n\n${block}` };
+    }
+    return { role: r.role as "user" | "assistant", content: r.content };
+  };
+
+  const wake = (wakeRows ?? [])
+    .filter((r: any) => r.role === "user" || r.role === "assistant")
+    .map(augment);
   const history = (historyRows ?? [])
     .filter((r: any) => r.role === "user" || r.role === "assistant")
-    .reverse();
+    .reverse()
+    .map(augment);
 
   const combined = [...wake, ...history];
   let charBudget = tokenCeiling * 4;
@@ -40,7 +57,7 @@ export async function loadBoundedHistory(
     const row = combined[i];
     charBudget -= row.content.length;
     if (charBudget < 0 && trimmed.length > 0) break;
-    trimmed.unshift({ role: row.role as "user" | "assistant", content: row.content });
+    trimmed.unshift(row);
   }
   return trimmed;
 }

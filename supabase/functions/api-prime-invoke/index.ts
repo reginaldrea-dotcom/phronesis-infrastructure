@@ -20,6 +20,7 @@ import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropi
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
+import { digestToolCall, type ToolDigest } from "./lib/provenance.ts";
 import { claimIdempotency, markDone, markDoneFromResponse, awaitDuplicateResponse } from "./lib/idempotency.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
@@ -307,6 +308,7 @@ Deno.serve(async (req: Request) => {
     let totalCacheReadTokens = 0;
     const directArtefacts: Artifact[] = [];
     const allToolUses: { name: string; input: unknown }[] = [];
+    const toolLog: ToolDigest[] = []; // provenance ledger (WO d4501dbc) → persisted to metadata.tool_log
     const MAX_LOOPS = 6;
     let finishedCleanly = false; // false → loop hit the budget with tools still pending
 
@@ -399,6 +401,7 @@ Deno.serve(async (req: Request) => {
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
         const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts });
+        toolLog.push(digestToolCall(toolUse.name, toolUse.input, content));
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
@@ -511,6 +514,7 @@ Deno.serve(async (req: Request) => {
             cache_creation_tokens: totalCacheCreationTokens,
             cache_read_tokens: totalCacheReadTokens,
             artifact_count: artifacts.length,
+            tool_log: toolLog, // provenance ledger (WO d4501dbc) — what this turn actually did
           },
         },
       ],
