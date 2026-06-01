@@ -472,7 +472,7 @@ Deno.serve(async (req: Request) => {
         /\[\s*(queried|read|read back|listed|checked|verified|ran)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse)) {
       provenanceMismatch = true;
       cleanResponse +=
-        "\n\n⚠ PROVENANCE MISMATCH: this turn's text carries a \"… this turn\" tag claiming a tool result, but no tool ran this turn (tool record: none). Treat that claim as UNVERIFIED — run the actual call before relying on it.";
+        "\n\n⚠ PROVENANCE MISMATCH: this turn's text carries a \"… this turn\" tag claiming a tool result, but no tool ran this turn (tools-this-turn record: none). Treat that claim as UNVERIFIED — run the actual call before relying on it.";
       console.log("PROVENANCE MISMATCH: provenance tag present but tool_log empty");
     }
 
