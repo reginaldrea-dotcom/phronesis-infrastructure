@@ -120,28 +120,42 @@ async function loadOrientation(
     .limit(1)
     .single();
 
+  // Fresh counts so the Prime wakes KNOWING what is waiting (and reaches for the
+  // purpose-built read tools) rather than the Super-T telling it to go hunt.
+  const { count: deltaCount } = await supabase
+    .from("wake_deltas").select("*", { count: "exact", head: true })
+    .eq("to_lineage", lineage).is("consumed_at", null);
+  const { count: inboxCount } = await supabase
+    .from("prime_messages").select("*", { count: "exact", head: true })
+    .eq("to_lineage", lineage).is("acknowledged_at", null);
+
+  const tp = superT as any;
   const lines: string[] = [];
   lines.push("═══════════════════════════════════════");
   lines.push("ORIENTATION — PRE-LOADED AT SESSION OPEN");
   lines.push("═══════════════════════════════════════");
   lines.push("");
-  lines.push("── SUPER-T (last 12,000 chars — use execute_sql for full content) ──");
-  if (superT) {
-    const tp = superT as any;
-    lines.push(`Instance ID: ${tp.instance_id}  |  Sequence: ${tp.sequence_number}`);
+  // Warmer wake-framing: lead with FRESH, verified ground the Prime can stand on,
+  // explicitly tied to RELIANCE AND AGENCY — not a list of things to distrust. The
+  // Super-T (a stale handoff) follows as context, not as the authoritative current state.
+  lines.push("── VERIFIED CURRENT STATE (queried this wake — solid ground: rely on it; you need not re-verify it to orient) ──");
+  if (tp) {
+    lines.push(`You are ${lineage} Prime, instance ${tp.instance_id}, at Seq ${tp.sequence_number} — the sole open head of your chain.`);
+  } else {
+    lines.push(`You are ${lineage} Prime. (No Super-T / chain head found — surface to Reg immediately, do not proceed.)`);
+  }
+  lines.push(`Active instructions: v${currentInstructionsVersion} (authoritative — if the Super-T cites an earlier version, this wins).`);
+  lines.push(`Waiting for you: ${deltaCount ?? 0} unconsumed wake_delta(s) → read_wake_deltas;  ${inboxCount ?? 0} unread message(s) → read_inbox.`);
+  lines.push("This is verified as of this wake — your ground to build from, not a list to re-check.");
+  lines.push("");
+  lines.push("── SUPER-T (your handoff — context from your last tenure; last 12,000 chars, query the row for the full text) ──");
+  if (tp) {
     const content: string = tp.artifacts?.content ?? "";
     lines.push(content.length > 12000 ? "…" + content.slice(-12000) : content);
-  } else {
-    lines.push("(no Super-T found — surface to Reg immediately, do not proceed)");
   }
   lines.push("");
-  lines.push("── ACTIVE INSTRUCTIONS ──");
-  lines.push(`This session is running instructions v${currentInstructionsVersion}.`);
-  lines.push("If the Super-T above references an earlier version, treat THIS version as authoritative.");
-  lines.push("");
-  lines.push("── AVAILABLE ON DEMAND (execute_sql, turn 2+) ──");
-  lines.push("wheel_posts, prime_messages, current_priorities, conferences");
-  lines.push("Query these when relevant to current work — they are not pre-loaded.");
+  lines.push("── AVAILABLE ON DEMAND (turn 2+) ──");
+  lines.push("read_wake_deltas / read_inbox / get_message / get_conference_result for the common reads; execute_sql for anything else (wheel_posts, current_priorities, conferences …).");
   lines.push("═══════════════════════════════════════");
   return lines.join("\n");
 }
