@@ -468,20 +468,35 @@ Deno.serve(async (req: Request) => {
     // Only the all-zero-tool case is caught (the observed failure shape); a turn that ran
     // some tools but over-claims others is out of scope for v1.
     let provenanceMismatch = false;
-    // (A) FORGED RECORD: the EF only appends "[tools this turn — system record …]" to PRIOR
-    //     turns at history-load — NEVER to the current response. Its presence in the model's
-    //     own output is the model impersonating the ground-truth ledger. Always a forgery,
-    //     regardless of tool_log (zero false-positive: the model can never legitimately emit it).
-    const forgedRecord = cleanResponse.includes("[tools this turn — system record");
-    // (B) TAG WITHOUT TOOL: an affirmative "… this turn" provenance tag (read AND write verbs)
-    //     while no tool actually ran. The metadata tool_log is the arbiter, never the prose.
+    // The EF is the SOLE author of the "[tools this turn — system record …]" block (appended to
+    // PRIOR turns at history-load, never to the current response). A model authoring it is
+    // impersonating the ledger — handled proportionately:
+    //   - HONEST "none" ECHO: model wrote the none-variant AND no tool ran → content is TRUE,
+    //     just redundant. Strip it (the EF appends the real one), soft note, NOT a mismatch.
+    //   - FORGED RECORD: the ground-truth/with-tools header, "none" while tools ran, or any other
+    //     self-written record → a forgery → flag, UNVERIFIED.
+    const selfWroteRecord = cleanResponse.includes("[tools this turn — system record");
+    const honestNoneEcho  = selfWroteRecord && toolLog.length === 0 &&
+      cleanResponse.includes("[tools this turn — system record: none]") &&
+      !cleanResponse.includes("[tools this turn — system record, ground truth]");
+    const forgedRecord    = selfWroteRecord && !honestNoneEcho;
+    // (B) TAG WITHOUT TOOL: an affirmative "… this turn" tag (read AND write verbs), no tool run.
+    //     The metadata tool_log is the arbiter, never the prose.
     const tagWithoutTool = toolLog.length === 0 &&
       /\[\s*(queried|read|read back|listed|checked|verified|ran|updated|inserted|wrote|filed|re-filed|posted|created|sent|saved|deleted|redeemed|delivered)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse);
     if (forgedRecord) {
       provenanceMismatch = true;
       cleanResponse +=
-        "\n\n⚠ PROVENANCE MISMATCH: this turn's text FORGES a tools-this-turn record — the system-record block is the EF's to write, never yours. The metadata tools-this-turn record is the only ground truth. Treat the forged block as UNVERIFIED and run the actual calls.";
+        "\n\n⚠ PROVENANCE MISMATCH: this turn's text FORGES a tools-this-turn record — that block is the EF's to write, never yours, and its entries do not match what actually ran. The metadata tools-this-turn record is the only ground truth. Treat the forged block as UNVERIFIED and run the actual calls.";
       console.log("PROVENANCE MISMATCH: forged system-record block in model output");
+    } else if (honestNoneEcho) {
+      // Truthful but the Prime shouldn't author the block — strip it (EF appends the real one),
+      // gentle note, NOT a mismatch (nothing false was claimed).
+      cleanResponse = cleanResponse
+        .replace(/\n*\[tools this turn — system record: none\]\n*/g, "\n")
+        .trimEnd() +
+        "\n\nℹ The tools-this-turn record is written by the EF, not by you. This turn ran no tools (correct) — just omit that block; the EF appends the real one.";
+      console.log("provenance: stripped honest self-written 'none' record (no mismatch)");
     } else if (tagWithoutTool) {
       provenanceMismatch = true;
       cleanResponse +=
