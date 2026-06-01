@@ -557,6 +557,19 @@ Deno.serve(async (req: Request) => {
             cache_creation_tokens: totalCacheCreationTokens,
             cache_read_tokens: totalCacheReadTokens,
             artifact_count: artifacts.length,
+            // Panel-artefact persistence: inline [ARTEFACT] blocks and deliver_artefact are
+            // panel-only (neither writes the artifacts table), so work product was lost on
+            // session-drop. Persist a recoverable copy here (title/type/content, bounded). The
+            // typed artifacts table stays for deliberately-filed artefacts (file_super_t, etc.).
+            artefacts: artifacts.length
+              ? artifacts.map((a) => ({
+                  title: a.title,
+                  type: a.type,
+                  content: (typeof a.content === "string" && a.content.length > 100000)
+                    ? a.content.slice(0, 100000) + "\n…[truncated for storage]"
+                    : a.content,
+                }))
+              : undefined,
             tool_log: toolLog, // provenance ledger (WO d4501dbc) — what this turn actually did
             provenance_mismatch: provenanceMismatch, // true = claimed a tool result with no tool run
           },
