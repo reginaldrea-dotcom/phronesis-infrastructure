@@ -83,3 +83,41 @@ export const getMessageTool: Tool = {
       `no message with id starting '${id}' to or from you. Ids are table-scoped — this may be an id from another table (artifacts, conferences, wake_deltas), not prime_messages. This is the answer; do not retry.`);
   },
 };
+
+export const consumeWakeDeltasTool: Tool = {
+  definition: {
+    name: "consume_wake_deltas",
+    description: "Mark YOUR wake_deltas consumed (sets consumed_at) once you have read and actioned them. With no argument, consumes ALL your currently-unconsumed deltas; pass ids to consume a specific subset. Returns the ids consumed. Read them first with read_wake_deltas. (Consumed deltas are not deleted — still queryable; and a re-run consumes nothing, so it is safe to repeat.)",
+    input_schema: {
+      type: "object",
+      properties: {
+        ids: { type: "array", items: { type: "string" }, description: "Optional: specific delta ids (full UUID or hex prefix) to consume. Omit to consume all your unconsumed deltas." },
+      },
+      required: [],
+    },
+  },
+  available: ({ isNewSession }) => !isNewSession,
+  summarize: (input) =>
+    Array.isArray(input?.ids) && input.ids.length ? `consume_wake_deltas: ${input.ids.length} id(s)` : "consume_wake_deltas (all unconsumed)",
+  run: async (input, ctx) => {
+    const lin = callerLineage(ctx);
+    if (!lin) return "consume_wake_deltas error: caller lineage unavailable.\n[SYSTEM: surface to Reg.]";
+    let idClause = "";
+    if (Array.isArray(input?.ids) && input.ids.length > 0) {
+      const ids = input.ids.map((x: unknown) => String(x).trim()).filter((s: string) => ID_RE.test(s));
+      if (ids.length === 0) return "consume_wake_deltas error: ids must be UUIDs or hex prefixes.\n[SYSTEM: surface to Reg, do not retry.]";
+      idClause = " AND (" + ids.map((s: string) => `id::text LIKE '${s}%'`).join(" OR ") + ")";
+    }
+    try {
+      const { data, error } = await ctx.supabase.rpc("execute_raw_sql", {
+        query: `UPDATE wake_deltas SET consumed_at = now() WHERE to_lineage = '${lin}' AND consumed_at IS NULL${idClause} RETURNING id`,
+      });
+      if (error) return `consume_wake_deltas error: ${error.message}\n[SYSTEM: surface to Reg, do not retry.]`;
+      const rows = Array.isArray(data) ? data : [];
+      if (rows.length === 0) return "[]\n[SYSTEM: nothing to consume — no matching unconsumed deltas. This is the answer; do not retry.]";
+      return JSON.stringify({ consumed: rows.map((r: { id: string }) => r.id), count: rows.length });
+    } catch (err) {
+      return `consume_wake_deltas error: ${String(err)}\n[SYSTEM: surface to Reg, do not retry.]`;
+    }
+  },
+};

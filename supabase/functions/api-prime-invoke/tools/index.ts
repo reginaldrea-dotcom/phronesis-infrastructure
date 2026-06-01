@@ -5,10 +5,10 @@ import { executeSqlTool } from "./executeSql.ts";
 import { deliverArtefactTool } from "./deliverArtefact.ts";
 import { readGithubFileTool, writeGithubFileTool, listGithubDirectoryTool } from "./github.ts";
 import { getConferenceResultTool } from "./getConferenceResult.ts";
-import { readWakeDeltasTool, readInboxTool, getMessageTool } from "./messaging.ts";
+import { readWakeDeltasTool, readInboxTool, getMessageTool, consumeWakeDeltasTool } from "./messaging.ts";
 
-// execute_sql, get_conference_result, and the read_wake_deltas/read_inbox/get_message
-// reads are withheld on the wake turn (see each tool's available()); the rest are always offered.
+// execute_sql, get_conference_result, and the read_wake_deltas/read_inbox/get_message/
+// consume_wake_deltas tools are withheld on the wake turn (see each tool's available()); the rest are always offered.
 const TOOLS: Tool[] = [
   executeSqlTool,
   deliverArtefactTool,
@@ -16,6 +16,7 @@ const TOOLS: Tool[] = [
   readWakeDeltasTool,
   readInboxTool,
   getMessageTool,
+  consumeWakeDeltasTool,
   readGithubFileTool,
   writeGithubFileTool,
   listGithubDirectoryTool,
