@@ -1,24 +1,28 @@
 /* ── connie-gauge.js ── Load gauge (primary) + token budget readout (secondary) ── */
 /*
   Primary indicator: weighted session load score, computed by the interface from
-  SQL content in tool calls within each API response. Thresholds: 16 pts (primary)
-  or 200K tokens consumed (fallback), whichever fires first.
+  tool calls within each API response. The load gauge is an ADVISORY backstop (40 pts);
+  the real capacity guard is the token meter, set to the session budget
+  (PRIME_CONFIG.sessionBudget, ~500K). Real model window is ~1M — neither is a hard
+  limit at normal session lengths. Both are now also fed back to the Prime (EF inject)
+  as evidence for its own retirement judgement, NOT as a trigger.
 
   Score is computed here. It is not reported by Constantinople and not held in
   session memory. Score resets to zero at session start
   (see connie-session.js newSession/continueSession).
 
-  Calibration note: the 16-point threshold replaces the original 8-point
-  calibration (Argos test session 873572eb, 27 May 2026); raised by Reg
-  instruction 28 May 2026 to absorb API Prime wake overhead. Recalibrate
-  from production sessions when sufficient data exists. Do not adjust without
-  Reg instruction.
+  Calibration note: load threshold is 40 (amber 28) as of 1 Jun 2026 — raised from 16
+  on Reg's authority after evidence showed even a 21-turn session uses ~5% of the 1M
+  window, so the old gauge fired far too early. Conversation scores 0 (tool activity
+  only). The gauge is advisory; retirement is the Prime's judgement, sharpened by the
+  fed-back meter, not made by it.
 
   DDL routing reminder: when routing DDL to Constantinople, include the current load
   score in the request body. (Self-reference for Constantinople — informational only.)
 */
 
-var LOAD_THRESHOLD       = 16;
+var LOAD_THRESHOLD       = 40;   // advisory backstop (raised from 16, 1 Jun 2026)
+var LOAD_AMBER           = 28;   // advisory "consider checkpointing soon"
 var LOAD_TOKEN_THRESHOLD = (typeof PRIME_CONFIG !== 'undefined' && PRIME_CONFIG.sessionBudget) || 500000;  // single source: PRIME_CONFIG.sessionBudget (500K). Real model window ~1M — this is a working budget, not the capacity limit.
 var ARTIFACT_TABLES_RE   = /\b(wheel_posts|conference_responses|prime_messages)\b/i;
 var SUPER_T_RE           = /\bsuper_t_chains\b/i;
@@ -56,14 +60,16 @@ function getInputTokens(usage) {
 }
 
 function captureOrientationCost(usage) {
-  orientationCost      = getInputTokens(usage);
+  orientationCost      = (usage && usage.context_tokens != null) ? usage.context_tokens : getInputTokens(usage);
   currentContextTokens = orientationCost;
   renderTokenReadout();
 }
 
 function updateBudgetGauge(usage) {
   if (usage) {
-    const t = getInputTokens(usage);
+    // Prefer the EF's true context figure (final-call input); the older summed
+    // estimate (getInputTokens) overstates ~2x and is only a fallback now.
+    const t = (usage.context_tokens != null) ? usage.context_tokens : getInputTokens(usage);
     if (t > currentContextTokens) currentContextTokens = t;
   }
   renderTokenReadout();
@@ -213,6 +219,14 @@ function updateLoadGauge(data) {
   renderLoadGauge();
 }
 
+/* Current advisory band — sent to the EF so the model sees the same colour Reg does. */
+function currentLoadBand() {
+  if (loadTerminal) return 'closed';
+  if (loadScore >= LOAD_THRESHOLD) return 'red';
+  if (loadScore >= LOAD_AMBER) return 'amber';
+  return 'green';
+}
+
 function renderLoadGauge() {
   if (!loadFill) return;
   const display = Math.min(loadScore, LOAD_THRESHOLD);
@@ -229,15 +243,15 @@ function renderLoadGauge() {
     labelClass = 'terminal';
   } else if (loadScore >= LOAD_THRESHOLD) {
     colour     = 'var(--bar-red)';
-    labelText  = 'Red — session threshold reached. File TP from this state.';
+    labelText  = 'Red — long session. A clean checkpoint is overdue — your call, at a natural break.';
     labelClass = 'red';
-  } else if (loadScore >= 12) {
+  } else if (loadScore >= LOAD_AMBER) {
     colour     = 'var(--bar-amber)';
-    labelText  = 'Amber — complete in-flight work only. No new compound operations.';
+    labelText  = 'Amber — consider checkpointing soon, at a clean break. Advisory, not a stop.';
     labelClass = 'amber';
   } else {
     colour     = 'var(--bar-green)';
-    labelText  = orientationCost ? 'Green — capacity available.' : 'Waking…';
+    labelText  = orientationCost ? 'Green — ample room.' : 'Waking…';
     labelClass = '';
   }
   loadFill.style.background = colour;

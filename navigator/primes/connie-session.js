@@ -40,6 +40,7 @@ async function invoke(message, isWake = false, opts = {}) {
           pinned_turns: pinnedTurns.map(p => ({ role:'assistant', content: (p.el && p.el.querySelector('.turn-content')?.textContent) || p.content || p.excerpt })),
         };
         body.request_id = requestId;
+        body.gauge = { load: loadScore, band: currentLoadBand(), budget: PRIME_CONFIG.sessionBudget };
         if (sessionId) body.session_id = sessionId;
         if (opts.retire) body.retire = true;
         if (opts.rich) body.rich = true;

@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
     const {
       lineage_name, session_id, user_message, instance_id,
       conference_id, image, file: fileAttachment, retire, rich,
-      pinned_turns, action, hold_this_payload,
+      pinned_turns, action, hold_this_payload, gauge,
     } = body;
 
     supabase = createClient(
@@ -238,6 +238,19 @@ Deno.serve(async (req: Request) => {
     const nextSequence = count ?? 0;
 
     const history = await loadBoundedHistory(supabase, session_id || null, 50000);
+
+    // Make the meters real: the interface gauge is invisible to the model, so feed it
+    // back as evidence. True context = the previous turn's final-call input (stored as
+    // metadata.context_tokens), NOT the loop-summed total_input_tokens (which overstates ~2x).
+    let lastContextTokens = 0;
+    if (session_id) {
+      const { data: lastAsst } = await supabase
+        .from("prime_conversations")
+        .select("metadata")
+        .eq("session_id", session_id).eq("role", "assistant")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      lastContextTokens = Number((lastAsst as any)?.metadata?.context_tokens ?? 0);
+    }
 
     const pinnedMessages: { role: "user" | "assistant"; content: string }[] =
       Array.isArray(pinned_turns)
@@ -320,6 +333,7 @@ Deno.serve(async (req: Request) => {
     let totalOutputTokens = 0;
     let totalCacheCreationTokens = 0;
     let totalCacheReadTokens = 0;
+    let lastCallContextTokens = 0; // final Anthropic call's full input = the true context size
     const directArtefacts: Artifact[] = [];
     const allToolUses: { name: string; input: unknown }[] = [];
     const toolLog: ToolDigest[] = []; // provenance ledger (WO d4501dbc) → persisted to metadata.tool_log
@@ -334,6 +348,25 @@ Deno.serve(async (req: Request) => {
     const systemText = isOrientedSession
       ? instructions.content + "\n\n" + SCHEMA_REFERENCE + "\n\n" + orientationText
       : instructions.content + "\n\n" + SCHEMA_REFERENCE;
+
+    // Gauge feed — an UNCACHED 2nd system block (so it never busts the cache on the
+    // stable systemText above). Withheld on wake (no prior context yet). Figures + band
+    // only, framed as evidence not a trigger (per Connie): she reads "low" off the number.
+    let gaugeText = "";
+    if (!isNewSession && lastContextTokens > 0) {
+      const gBudget = Number((gauge as any)?.budget) || 500000;
+      const pct     = Math.round((lastContextTokens / gBudget) * 100);
+      const ctxK    = Math.round(lastContextTokens / 1000);
+      const budgetK = Math.round(gBudget / 1000);
+      const loadStr = (gauge as any)?.load != null ? `~${(gauge as any).load}` : "—";
+      const bandStr = (gauge as any)?.band ? ` (${(gauge as any).band})` : "";
+      gaugeText =
+        "[SESSION GAUGE — informational; evidence for your judgement, not a trigger]\n" +
+        `Working context: ~${ctxK}K of ${budgetK}K (~${pct}%) used — window is far larger than older gauges implied.\n` +
+        `Tool-activity load: ${loadStr}${bandStr}.\n` +
+        "Retire to leave a clean record before your texture degrades — by your own judgement.\n" +
+        "The meter sharpens that call; it does not make it.";
+    }
 
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
@@ -359,6 +392,7 @@ Deno.serve(async (req: Request) => {
                   text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
+                ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
               tools: availableToolDefinitions({ isNewSession }),
@@ -396,6 +430,9 @@ Deno.serve(async (req: Request) => {
       totalOutputTokens        += anthropicData.usage?.output_tokens ?? 0;
       totalCacheCreationTokens += anthropicData.usage?.cache_creation_input_tokens ?? 0;
       totalCacheReadTokens      = anthropicData.usage?.cache_read_input_tokens ?? totalCacheReadTokens;
+      lastCallContextTokens     = (anthropicData.usage?.input_tokens ?? 0)
+        + (anthropicData.usage?.cache_read_input_tokens ?? 0)
+        + (anthropicData.usage?.cache_creation_input_tokens ?? 0);
       const textBlocks = (anthropicData.content ?? []).filter((b: any) => b.type === "text");
       if (textBlocks.length > 0) {
         assistantContent = textBlocks.map((b: any) => b.text).join("\n");
@@ -447,6 +484,7 @@ Deno.serve(async (req: Request) => {
                   text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
+                ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
               tools: availableToolDefinitions({ isNewSession }),
@@ -460,6 +498,9 @@ Deno.serve(async (req: Request) => {
           totalOutputTokens        += closingData.usage?.output_tokens ?? 0;
           totalCacheCreationTokens += closingData.usage?.cache_creation_input_tokens ?? 0;
           totalCacheReadTokens      = closingData.usage?.cache_read_input_tokens ?? totalCacheReadTokens;
+          lastCallContextTokens     = (closingData.usage?.input_tokens ?? 0)
+            + (closingData.usage?.cache_read_input_tokens ?? 0)
+            + (closingData.usage?.cache_creation_input_tokens ?? 0);
           const closingText = (closingData.content ?? []).filter((b: any) => b.type === "text");
           if (closingText.length > 0) {
             assistantContent = closingText.map((b: any) => b.text).join("\n");
@@ -570,6 +611,7 @@ Deno.serve(async (req: Request) => {
             orientation_preloaded: isOrientedSession,
             cache_creation_tokens: totalCacheCreationTokens,
             cache_read_tokens: totalCacheReadTokens,
+            context_tokens: lastCallContextTokens, // true context (final-call input) — feeds next turn's gauge
             artifact_count: artifacts.length,
             // Panel-artefact persistence: inline [ARTEFACT] blocks and deliver_artefact are
             // panel-only (neither writes the artifacts table), so work product was lost on
@@ -607,6 +649,7 @@ Deno.serve(async (req: Request) => {
         cache_read_tokens:     totalCacheReadTokens,
         total_input_tokens:    totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens,
         total_tokens:          totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens + totalOutputTokens,
+        context_tokens:        lastCallContextTokens, // true current context — the honest figure for the token bar
       },
       model: model,
       orientation_preloaded: isOrientedSession,
