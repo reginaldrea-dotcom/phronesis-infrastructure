@@ -10,6 +10,7 @@ export type SupabaseClient = ReturnType<typeof createClient>;
 export interface ToolContext {
   supabase: SupabaseClient;
   directArtefacts: Artifact[]; // deliver_artefact pushes delivered artefacts here
+  lineageName: string;         // the calling Prime's lineage — for caller-scoped reads (read_wake_deltas/read_inbox/get_message)
 }
 
 export interface Tool {

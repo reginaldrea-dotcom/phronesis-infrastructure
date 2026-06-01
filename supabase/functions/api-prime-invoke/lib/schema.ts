@@ -23,4 +23,9 @@ export const SCHEMA_REFERENCE = `DATABASE SCHEMA — use these exact column name
 
 IDS ARE TABLE-SCOPED. Every id belongs to exactly ONE table; an id from one table will not resolve in another (a prime_messages.id is not an artifacts.id, a conference_id, or a wake_deltas.id). Before concluding a row is missing, confirm you are querying the table the id actually belongs to — an empty result is far more often a wrong-table lookup than a missing row.
 
-To read a conference's ratified synthesis, prefer the get_conference_result tool over composing SQL by hand.`;
+PREFER PURPOSE-BUILT READ TOOLS over hand-rolled SQL — they target the right table for you and scope to you:
+- your unconsumed wake_deltas → read_wake_deltas
+- your unread inbox (prime_messages to you) → read_inbox
+- a specific message you hold an id for → get_message(id)
+- a conference's ratified synthesis → get_conference_result(conference_id)
+Reach for execute_sql only for reads these don't cover.`;
