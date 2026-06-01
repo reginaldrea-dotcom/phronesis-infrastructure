@@ -468,8 +468,21 @@ Deno.serve(async (req: Request) => {
     // Only the all-zero-tool case is caught (the observed failure shape); a turn that ran
     // some tools but over-claims others is out of scope for v1.
     let provenanceMismatch = false;
-    if (toolLog.length === 0 &&
-        /\[\s*(queried|read|read back|listed|checked|verified|ran)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse)) {
+    // (A) FORGED RECORD: the EF only appends "[tools this turn — system record …]" to PRIOR
+    //     turns at history-load — NEVER to the current response. Its presence in the model's
+    //     own output is the model impersonating the ground-truth ledger. Always a forgery,
+    //     regardless of tool_log (zero false-positive: the model can never legitimately emit it).
+    const forgedRecord = cleanResponse.includes("[tools this turn — system record");
+    // (B) TAG WITHOUT TOOL: an affirmative "… this turn" provenance tag (read AND write verbs)
+    //     while no tool actually ran. The metadata tool_log is the arbiter, never the prose.
+    const tagWithoutTool = toolLog.length === 0 &&
+      /\[\s*(queried|read|read back|listed|checked|verified|ran|updated|inserted|wrote|filed|re-filed|posted|created|sent|saved|deleted|redeemed|delivered)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse);
+    if (forgedRecord) {
+      provenanceMismatch = true;
+      cleanResponse +=
+        "\n\n⚠ PROVENANCE MISMATCH: this turn's text FORGES a tools-this-turn record — the system-record block is the EF's to write, never yours. The metadata tools-this-turn record is the only ground truth. Treat the forged block as UNVERIFIED and run the actual calls.";
+      console.log("PROVENANCE MISMATCH: forged system-record block in model output");
+    } else if (tagWithoutTool) {
       provenanceMismatch = true;
       cleanResponse +=
         "\n\n⚠ PROVENANCE MISMATCH: this turn's text carries a \"… this turn\" tag claiming a tool result, but no tool ran this turn (tools-this-turn record: none). Treat that claim as UNVERIFIED — run the actual call before relying on it.";
