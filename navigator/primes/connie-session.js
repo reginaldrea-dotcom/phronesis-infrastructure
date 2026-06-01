@@ -138,6 +138,7 @@ async function triggerRetirement(rich) {
   d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(d);
   sessionClosed = true;   // clean retirement — disarm the accidental-close guard
+  inputEl.disabled = false; btnSend.disabled = false;   // allow a final goodbye after close
   const rp = document.getElementById('retirement-prompt'); if (rp) rp.remove();
   scrollBottom();
 }
