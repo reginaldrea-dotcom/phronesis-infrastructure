@@ -137,6 +137,7 @@ async function triggerRetirement(rich) {
   const d = document.createElement('div'); d.className = 'retirement-confirm';
   d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(d);
+  sessionClosed = true;   // clean retirement — disarm the accidental-close guard
   const rp = document.getElementById('retirement-prompt'); if (rp) rp.remove();
   scrollBottom();
 }
@@ -148,7 +149,7 @@ function newSession() {
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
-  retirementShown = false; retirementPending = false; turnSequence = 0;
+  retirementShown = false; retirementPending = false; turnSequence = 0; sessionClosed = false;
   cachedWakeContent = null; lastWakeTimestamp = null;
   resetGauge(); clearError(); artefactsList.innerHTML = '';
   updatePanelEmpty(); updateBadge();
@@ -165,7 +166,7 @@ function continueSession() {
   sessionId = null;
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
-  retirementShown = false; retirementPending = false; turnSequence = 0;
+  retirementShown = false; retirementPending = false; turnSequence = 0; sessionClosed = false;
   resetGauge(); clearError(); artefactsList.innerHTML = '';
   updatePanelEmpty(); updateBadge();
   Array.from(conv.children).forEach(el => { if (el !== thinking) el.remove(); });

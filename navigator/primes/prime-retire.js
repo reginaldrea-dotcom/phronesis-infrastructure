@@ -90,6 +90,7 @@ async function fileSuperT(tp) {
   const closed = document.createElement('div'); closed.className = 'retirement-confirm';
   closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(closed);
+  sessionClosed = true;   // clean retirement — disarm the accidental-close guard
   clearArtefactPanel();
   scrollBottom();
 }
