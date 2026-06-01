@@ -16,13 +16,19 @@
    Load AFTER config/state/render, BEFORE init. */
 
 /* TP artefacts are surfaced by the edge function's extractArtifacts(): the
-   [ARTEFACT: TP_<Name>_*.md]…[/ARTEFACT] block the Prime emits is parsed into a
+   [ARTEFACT: TP_<Name>_…]…[/ARTEFACT] block the Prime emits is parsed into a
    structured entry in artefacts[] (title + content) before it reaches here.
    The match pattern is derived per-Prime from PRIME_CONFIG.name — Argos →
-   /^TP_Argos_.*\.md$/ (reproduces the prior hard-coded literal exactly),
-   Constantinople → /^TP_Constantinople_.*\.md$/. */
+   TP_Argos_…, Constantinople → TP_Constantinople_….
+
+   Identity is the TP_<Name>_ prefix; the trailing ".md" is cosmetic and is NOT
+   required, and the match is case-insensitive. The old strict /^TP_Argos_.*\.md$/
+   rejected a well-formed TP titled "TP_Argos_2026-06-01_60" (no extension), which
+   silently sent the Retire button down the bfn fallback and risked losing a
+   retirement. Rejecting a real TP over a naming slip is far worse than occasionally
+   matching a TP_-prefixed artefact, so this fails safe toward matching. */
 function tpArtefactRe() {
-  return new RegExp('^TP_' + PRIME_CONFIG.name + '_.*\\.md$');
+  return new RegExp('^TP_' + PRIME_CONFIG.name + '_.+', 'i');
 }
 
 /* Latest matching TP artefact wins — the Prime may have regenerated within a session. */
