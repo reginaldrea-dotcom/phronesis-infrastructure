@@ -458,8 +458,23 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { response: cleanResponse, artifacts: inlineArtifacts } = extractArtifacts(assistantContent);
+    let { response: cleanResponse, artifacts: inlineArtifacts } = extractArtifacts(assistantContent);
     const artifacts = [...directArtefacts, ...inlineArtifacts];
+
+    // Provenance guardrail (WO d4501dbc fast-follow): a turn whose text carries a
+    // "[queried/read/listed … this turn]" tag while NO tool ran is a confabulation the
+    // ledger now makes visible. Flag it loudly — so Reg sees it immediately and the model
+    // sees its own flagged claim next turn — rather than relying on a human to catch each.
+    // Only the all-zero-tool case is caught (the observed failure shape); a turn that ran
+    // some tools but over-claims others is out of scope for v1.
+    let provenanceMismatch = false;
+    if (toolLog.length === 0 &&
+        /\[\s*(queried|read|read back|listed|checked|verified|ran)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse)) {
+      provenanceMismatch = true;
+      cleanResponse +=
+        "\n\n⚠ PROVENANCE MISMATCH: this turn's text carries a \"… this turn\" tag claiming a tool result, but no tool ran this turn (tool record: none). Treat that claim as UNVERIFIED — run the actual call before relying on it.";
+      console.log("PROVENANCE MISMATCH: provenance tag present but tool_log empty");
+    }
 
     if (userId && totalInputTokens > 0) {
       const bucket = new Date(); bucket.setSeconds(0, 0);
@@ -515,6 +530,7 @@ Deno.serve(async (req: Request) => {
             cache_read_tokens: totalCacheReadTokens,
             artifact_count: artifacts.length,
             tool_log: toolLog, // provenance ledger (WO d4501dbc) — what this turn actually did
+            provenance_mismatch: provenanceMismatch, // true = claimed a tool result with no tool run
           },
         },
       ],
