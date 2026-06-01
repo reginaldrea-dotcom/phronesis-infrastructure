@@ -49,8 +49,23 @@ function inferCodeTitle(content: string, lang: string): string {
 function extractArtifacts(text: string): { response: string; artifacts: Artifact[] } {
   const artifacts: Artifact[] = [];
 
+  // 1. Properly-closed blocks. Case-insensitive and tolerant of the ARTIFACT/ARTEFACT
+  //    spelling so a casing/spelling slip doesn't strand the block as chat text.
   let processed = text.replace(
-    /\[ARTEFACT:\s*([^\]]+)\]([\s\S]*?)\[\/ARTEFACT\]/g,
+    /\[ART[EI]FACT:\s*([^\]]+)\]([\s\S]*?)\[\/ART[EI]FACT\]/gi,
+    (_, title, content) => {
+      artifacts.push({ title: title.trim(), content: content.trim(), type: "document", version: 1 });
+      return `\u{1F4CE} ${title.trim()} — in artefact panel`;
+    }
+  );
+
+  // 2. Fallback for an opener with NO closing tag — the model routinely drops
+  //    [/ARTEFACT] on long documents (e.g. a full TP), which previously left the whole
+  //    block as literal chat text and kept it out of the panel (and so out of the Retire
+  //    flow). Capture from the opener to the next opener or end-of-text. Runs after the
+  //    closed-block pass, so it only ever sees genuinely unterminated openers.
+  processed = processed.replace(
+    /\[ART[EI]FACT:\s*([^\]]+)\]([\s\S]*?)(?=\[ART[EI]FACT:|$)/gi,
     (_, title, content) => {
       artifacts.push({ title: title.trim(), content: content.trim(), type: "document", version: 1 });
       return `\u{1F4CE} ${title.trim()} — in artefact panel`;
