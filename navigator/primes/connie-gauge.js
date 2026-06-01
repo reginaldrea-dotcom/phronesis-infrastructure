@@ -19,7 +19,7 @@
 */
 
 var LOAD_THRESHOLD       = 16;
-var LOAD_TOKEN_THRESHOLD = 200000;
+var LOAD_TOKEN_THRESHOLD = (typeof PRIME_CONFIG !== 'undefined' && PRIME_CONFIG.sessionBudget) || 500000;  // single source: PRIME_CONFIG.sessionBudget (500K). Real model window ~1M — this is a working budget, not the capacity limit.
 var ARTIFACT_TABLES_RE   = /\b(wheel_posts|conference_responses|prime_messages)\b/i;
 var SUPER_T_RE           = /\bsuper_t_chains\b/i;
 
