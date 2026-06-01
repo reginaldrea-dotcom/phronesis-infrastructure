@@ -385,7 +385,7 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               model: model,
-              max_tokens: 8192,
+              max_tokens: 32000,
               system: [
                 {
                   type: "text",
@@ -477,7 +477,7 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               model: model,
-              max_tokens: 8192,
+              max_tokens: 32000,
               system: [
                 {
                   type: "text",
@@ -621,8 +621,8 @@ Deno.serve(async (req: Request) => {
               ? artifacts.map((a) => ({
                   title: a.title,
                   type: a.type,
-                  content: (typeof a.content === "string" && a.content.length > 100000)
-                    ? a.content.slice(0, 100000) + "\n…[truncated for storage]"
+                  content: (typeof a.content === "string" && a.content.length > 300000)
+                    ? a.content.slice(0, 300000) + "\n…[truncated for storage]"
                     : a.content,
                 }))
               : undefined,

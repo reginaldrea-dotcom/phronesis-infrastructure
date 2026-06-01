@@ -19,7 +19,7 @@ var PRIME_CONFIG = {
 var EDGE_URL      = 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/api-prime-invoke';
 var RETRY_LIMIT   = 3;
 var RETRY_DELAY   = 1500;
-var FETCH_TIMEOUT = 150000;
+var FETCH_TIMEOUT = 240000;   // 4 min — headroom for large artefact generations (raised from 150s)
 var FOUR_HOURS    = 4 * 60 * 60 * 1000;
 
 /* ── Hold-this: prompt configs per domain ── */
