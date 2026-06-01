@@ -115,10 +115,15 @@ function stripSqlNoise(s) {
      3. exactly 1 write + ≥1 SELECT        → write with verification (2pt)
      4. INSERT into artifact table, no SELECT → artifact production (1.5pt)
      5. SELECT-only                          → simple read (1pt)
-     6. unknown                              → simple read (1pt)
+     6. a non-SQL tool ran (read_wake_deltas, deliver_artefact, github, …) → light work (1pt)
+     7. no tool ran at all (pure conversation) → NO LOAD (0pt). Talk is not substrate
+        work; only real tool/SQL activity moves the gauge. Conversational context growth
+        is caught by the token gauge, not here. (Reg, 1 Jun 2026 — the gauge was firing
+        too early and reading as anxiety because every exchange scored ≥1.)
 */
 function classifyExchange(data) {
-  const stmts = extractSqlStatements(data);
+  const stmts    = extractSqlStatements(data);
+  const toolUses = Array.isArray(data?.tool_uses) ? data.tool_uses : [];
   let writes = 0, selects = 0, artifactInserts = 0, superTWrite = false;
 
   for (const raw of stmts) {
@@ -140,7 +145,7 @@ function classifyExchange(data) {
   if (writes === 1 && selects >= 1)         return { kind: 'write_verified', score: 2   };
   if (artifactInserts >= 1 && selects === 0)return { kind: 'artifact',       score: 1.5 };
   if (selects >= 1 && writes === 0)         return { kind: 'simple_read',    score: 1   };
-  return { kind: 'simple_read', score: 1 };
+  return toolUses.length > 0 ? { kind: 'tool_light', score: 1 } : { kind: 'none', score: 0 };
 }
 
 /* Update load score after an exchange completes. Score updates AFTER the exchange,
