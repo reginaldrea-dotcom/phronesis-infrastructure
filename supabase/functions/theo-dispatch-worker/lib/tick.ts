@@ -210,7 +210,7 @@ async function handleDispatched(
       return;
     case "partial":
       await markPartial(supabase, row.id, {
-        response_raw: JSON.stringify(result.response.raw),
+        response_raw: JSON.stringify(result.response),
         reason: result.reason,
         tokens_in: result.response.usage.input_tokens,
         tokens_out: result.response.usage.output_tokens,
@@ -234,7 +234,7 @@ async function finalizeResponse(
   const partial = response.labels.some(l => l.key === "partial" && l.value === "true");
   if (partial) {
     await markPartial(supabase, rowId, {
-      response_raw: JSON.stringify(response.raw),
+      response_raw: JSON.stringify(response),
       reason: response.labels.find(l => l.key === "stop_reason")?.value ?? "max_tokens",
       tokens_in: response.usage.input_tokens,
       tokens_out: response.usage.output_tokens,
@@ -243,7 +243,7 @@ async function finalizeResponse(
     return;
   }
   await markCompleted(supabase, rowId, {
-    response_raw: JSON.stringify(response.raw),
+    response_raw: JSON.stringify(response),
     tokens_in: response.usage.input_tokens,
     tokens_out: response.usage.output_tokens,
   }, expectedStatus);

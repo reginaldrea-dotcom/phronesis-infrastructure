@@ -451,7 +451,7 @@ Deno.serve(async (req: Request) => {
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
-        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name });
+        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId });
         toolLog.push(digestToolCall(toolUse.name, toolUse.input, content));
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }

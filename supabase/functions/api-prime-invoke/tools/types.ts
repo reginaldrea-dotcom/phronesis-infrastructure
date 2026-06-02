@@ -11,6 +11,7 @@ export interface ToolContext {
   supabase: SupabaseClient;
   directArtefacts: Artifact[]; // deliver_artefact pushes delivered artefacts here
   lineageName: string;         // the calling Prime's lineage — for caller-scoped reads (read_wake_deltas/read_inbox/get_message)
+  userId?: string | null;      // end-user id from JWT — required by enqueue_dispatch; null when caller is unauthenticated
 }
 
 export interface Tool {
