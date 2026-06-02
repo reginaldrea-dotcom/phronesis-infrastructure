@@ -20,6 +20,7 @@ tokenFill       = document.getElementById('token-bar-fill');
 tokenLabel      = document.getElementById('token-bar-label');
 loadFill        = document.getElementById('load-gauge-fill');
 loadScoreEl     = document.getElementById('load-gauge-score');
+if (typeof LOAD_THRESHOLD !== 'undefined') loadScoreEl.textContent = '0 / ' + LOAD_THRESHOLD;  // ceiling tracks the constant — never hardcode it in markup
 loadLabel       = document.getElementById('load-gauge-label');
 sessionDisp     = document.getElementById('session-display');
 errorState      = document.getElementById('error-state');
