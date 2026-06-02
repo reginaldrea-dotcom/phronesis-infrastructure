@@ -162,12 +162,18 @@ export function pollStalenessMs(engine: EngineName): number {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Required env vars. Worker fails fast at startup if any are missing.
-// Provider API keys are NEVER in code — Vault/config only (clone-readiness gate).
+// Env vars. Provider API keys are NEVER in code — Vault/config only.
+// REQUIRED: worker fails fast at startup if any are missing.
+// EXPECTED: warned at startup if missing; lazily checked at adapter call time
+// (so the worker can still drain Anthropic-only sessions even if other provider
+// keys aren't configured yet).
 // ──────────────────────────────────────────────────────────────────────────
 export const REQUIRED_ENV = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
+export const EXPECTED_ENV = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
   "GEMINI_API_KEY",

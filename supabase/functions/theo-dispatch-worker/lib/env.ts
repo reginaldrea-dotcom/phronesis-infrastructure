@@ -1,14 +1,25 @@
-// Fail-fast env validation. Imported once at EF startup.
+// Env validation.
+// REQUIRED: throw at startup if missing (worker cannot function).
+// EXPECTED: warn at startup if missing; the per-provider env() call throws
+// only when the relevant adapter is actually invoked.
 
-import { REQUIRED_ENV } from "./config.ts";
+import { EXPECTED_ENV, REQUIRED_ENV } from "./config.ts";
 
 export function assertEnv(): void {
-  const missing: string[] = [];
+  const missingRequired: string[] = [];
   for (const name of REQUIRED_ENV) {
-    if (!Deno.env.get(name)) missing.push(name);
+    if (!Deno.env.get(name)) missingRequired.push(name);
   }
-  if (missing.length > 0) {
-    throw new Error(`theo-dispatch-worker missing env: ${missing.join(", ")}`);
+  if (missingRequired.length > 0) {
+    throw new Error(`theo-dispatch-worker missing required env: ${missingRequired.join(", ")}`);
+  }
+
+  const missingExpected: string[] = [];
+  for (const name of EXPECTED_ENV) {
+    if (!Deno.env.get(name)) missingExpected.push(name);
+  }
+  if (missingExpected.length > 0) {
+    console.warn(`theo-dispatch-worker missing expected env (adapters will fail when called): ${missingExpected.join(", ")}`);
   }
 }
 
