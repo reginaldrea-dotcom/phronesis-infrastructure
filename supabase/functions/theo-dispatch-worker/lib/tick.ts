@@ -36,6 +36,7 @@ import {
 import type { AdapterResponse, Role } from "./types.ts";
 import { engineConfig, pollStalenessMs } from "./config.ts";
 import { canSubmit, recordUsage } from "./pacing.ts";
+import { getBudgetStatus, computeCostUsd, type BudgetStatus } from "./budget.ts";
 import { submitAdapter, pollAdapter } from "./adapters/index.ts";
 import { fileSessionWakeDelta } from "./wake.ts";
 import { resolveWorkerInstanceId } from "./instance.ts";
@@ -52,9 +53,14 @@ export interface TickSummary {
   rows_failed: number;
   rows_paced_off: number;       // rate-budget exhausted, deferred to next tick
   rows_stale_failed: number;    // poll-staleness ceiling hit
+  rows_budget_blocked: number;  // spend ceiling / pause flag — submit deferred this tick
+  submits_blocked: boolean;     // tick-level: were submits gated by the spend guard?
+  spend_today_usd: number;      // observability: today's recorded spend at tick start
+  budget_limit_usd: number;     // observability: the ceiling in force
 }
 
 const THEO_LINEAGE = "theophrastus";
+const WORKER_LINEAGE = "theo-dispatch-worker";
 
 export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
   const workerInstanceId = await resolveWorkerInstanceId(supabase);
@@ -72,7 +78,25 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
     rows_failed: 0,
     rows_paced_off: 0,
     rows_stale_failed: 0,
+    rows_budget_blocked: 0,
+    submits_blocked: false,
+    spend_today_usd: 0,
+    budget_limit_usd: 0,
   };
+
+  // Spend guard — evaluated ONCE per tick. Gates submits only; polls always run.
+  const budget = await getBudgetStatus(supabase);
+  summary.submits_blocked = budget.block_submits;
+  summary.spend_today_usd = budget.spent_usd;
+  summary.budget_limit_usd = budget.limit_usd;
+  if (budget.block_submits) {
+    console.warn(
+      `spend guard: submits blocked (${budget.reason}); ` +
+      `spent $${budget.spent_usd.toFixed(4)} / $${budget.limit_usd.toFixed(2)} today` +
+      (budget.note ? ` — note: ${budget.note}` : ""),
+    );
+    await fileBudgetAlertOnce(supabase, budget).catch(e => console.error("fileBudgetAlertOnce", e));
+  }
 
   for (const session of sessions) {
     const claimed = await claimSession(supabase, session.id, workerInstanceId);
@@ -84,7 +108,7 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
 
       // ── Submit pending rows ────────────────────────────────────────────
       for (const row of rows.filter(r => r.status === "pending")) {
-        await handlePending(supabase, row, summary);
+        await handlePending(supabase, row, summary, budget.block_submits);
       }
 
       // ── Poll dispatched rows ───────────────────────────────────────────
@@ -121,7 +145,14 @@ async function handlePending(
   supabase: SupabaseClient,
   row: EngineDispatchRow,
   summary: TickSummary,
+  submitsBlocked: boolean,
 ): Promise<void> {
+  // Spend guard — defer the submit (leave 'pending') without touching the
+  // provider. Picked up on a later tick once spend resets / pause lifts.
+  if (submitsBlocked) {
+    summary.rows_budget_blocked++;
+    return;
+  }
   if (!row.prompt_sent) {
     await markFailed(supabase, row.id, "no prompt_sent on row at submit time", "pending");
     summary.rows_failed++;
@@ -157,7 +188,7 @@ async function handlePending(
 
   if (result.ok && result.done) {
     summary.rows_submitted++;
-    await finalizeResponse(supabase, row.id, result.response, "pending", summary);
+    await finalizeResponse(supabase, row.id, row.engine_name, result.response, "pending", summary);
     return;
   }
   if (result.ok && !result.done) {
@@ -206,7 +237,7 @@ async function handleDispatched(
     case "in_progress":
       return;
     case "completed":
-      await finalizeResponse(supabase, row.id, result.response, "dispatched", summary);
+      await finalizeResponse(supabase, row.id, row.engine_name, result.response, "dispatched", summary);
       return;
     case "partial":
       await markPartial(supabase, row.id, {
@@ -214,6 +245,7 @@ async function handleDispatched(
         reason: result.reason,
         tokens_in: result.response.usage.input_tokens,
         tokens_out: result.response.usage.output_tokens,
+        cost_usd: computeCostUsd(row.engine_name, result.response.usage) ?? undefined,
       }, "dispatched");
       summary.rows_partial++;
       return;
@@ -227,10 +259,14 @@ async function handleDispatched(
 async function finalizeResponse(
   supabase: SupabaseClient,
   rowId: string,
+  engineName: string,
   response: AdapterResponse,
   expectedStatus: "pending" | "dispatched",
   summary: TickSummary,
 ): Promise<void> {
+  // Persist estimated cost for BOTH sync and async finalisations — this is the
+  // only place engine_dispatch.cost_usd gets written, and the spend guard sums it.
+  const costUsd = computeCostUsd(engineName, response.usage) ?? undefined;
   const partial = response.labels.some(l => l.key === "partial" && l.value === "true");
   if (partial) {
     await markPartial(supabase, rowId, {
@@ -238,6 +274,7 @@ async function finalizeResponse(
       reason: response.labels.find(l => l.key === "stop_reason")?.value ?? "max_tokens",
       tokens_in: response.usage.input_tokens,
       tokens_out: response.usage.output_tokens,
+      cost_usd: costUsd,
     }, expectedStatus);
     summary.rows_partial++;
     return;
@@ -246,6 +283,39 @@ async function finalizeResponse(
     response_raw: JSON.stringify(response),
     tokens_in: response.usage.input_tokens,
     tokens_out: response.usage.output_tokens,
+    cost_usd: costUsd,
   }, expectedStatus);
   summary.rows_completed++;
+}
+
+// File a single budget/pause alert per UTC day to Theo's lineage so the block is
+// visible in read_wake_deltas, without spamming one on every blocked tick.
+async function fileBudgetAlertOnce(
+  supabase: SupabaseClient,
+  budget: BudgetStatus,
+): Promise<void> {
+  const dayStart = new Date();
+  dayStart.setUTCHours(0, 0, 0, 0);
+
+  const existing = await supabase
+    .from("wake_deltas")
+    .select("id")
+    .eq("to_lineage", THEO_LINEAGE)
+    .is("consumed_at", null)
+    .ilike("note", "spend guard:%")
+    .gte("created_at", dayStart.toISOString())
+    .limit(1)
+    .maybeSingle();
+  if (existing.data?.id) return;  // already alerted today
+
+  await supabase.from("wake_deltas").insert({
+    to_lineage: THEO_LINEAGE,
+    from_lineage: WORKER_LINEAGE,
+    note:
+      `spend guard: submits blocked (${budget.reason}) — ` +
+      `spent $${budget.spent_usd.toFixed(2)} / $${budget.limit_usd.toFixed(2)} today` +
+      (budget.note ? ` [${budget.note}]` : ""),
+    // ref_type/ref_id intentionally null (both-or-neither CHECK) — this alert is
+    // worker-global, not scoped to one theo_session.
+  });
 }

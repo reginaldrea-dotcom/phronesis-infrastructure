@@ -184,3 +184,45 @@ export const WORKER_INSTANCE_NAME = "theo-dispatch-worker";
 // The worker's instance_id is resolved from the instances table by name at
 // startup. If absent, the worker auto-registers (instance_type='external')
 // — same pattern as the cc instance, but worker-owned.
+
+// ──────────────────────────────────────────────────────────────────────────
+// SPEND GUARD — pricing + daily budget. (See lib/budget.ts for the gate.)
+//
+// provider_rate_limit PACES submits per minute but is NOT a cost ceiling. The
+// guard computes engine_dispatch.cost_usd from token counts at finalize, sums
+// today's spend, and blocks new SUBMITS (never polls) past a daily USD ceiling.
+//
+// Prices are USD per 1M tokens and are ESTIMATES FOR THE GUARD, not billing.
+// They deliberately exclude per-search / reasoning surcharges (deep-research and
+// search SKUs cost more than tokens alone), so treat the ceiling as a floor on
+// real spend. CONFIRM every value against the current provider price sheet
+// before relying on it. Unpriced engines fall back to DEFAULT_PRICE_PER_MTOK,
+// set high so an unknown engine fails safe (over-counts → stops sooner).
+// ──────────────────────────────────────────────────────────────────────────
+export const DEFAULT_PRICE_PER_MTOK = { input: 15, output: 75 } as const; // opus-tier fallback
+
+export const PRICE_PER_MTOK: Record<EngineName, { input: number; output: number }> = {
+  "anthropic-claude-opus-4-8":       { input: 15,   output: 75 },  // CONFIRM
+  "anthropic-claude-sonnet-4-6":     { input: 3,    output: 15 },  // CONFIRM
+  "perplexity-sonar-pro":            { input: 3,    output: 15 },  // CONFIRM (+ per-search fees not modelled)
+  "perplexity-sonar-reasoning-pro":  { input: 2,    output: 8 },   // CONFIRM
+  "perplexity-sonar-deep-research":  { input: 2,    output: 8 },   // CONFIRM (+ reasoning/search fees not modelled)
+  "gemini-3-1-pro":                  { input: 2,    output: 12 },  // CONFIRM
+  "gemini-2-5-pro":                  { input: 1.25, output: 10 },  // CONFIRM
+  "gemini-deep-research":            { input: 2,    output: 12 },  // CONFIRM (+ research surcharge not modelled)
+  "openai-gpt-5-search":             { input: 2,    output: 8 },   // CONFIRM (+ search tool fees not modelled)
+  "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // CONFIRM
+  "openai-o3-deep-research":         { input: 10,   output: 40 },  // CONFIRM
+  "openai-o4-mini-deep-research":    { input: 1.1,  output: 4.4 }, // CONFIRM
+};
+
+export function priceForEngine(engine: EngineName): { input: number; output: number } {
+  return PRICE_PER_MTOK[engine] ?? DEFAULT_PRICE_PER_MTOK;
+}
+
+// Daily spend ceiling in USD. worker_control.daily_budget_usd overrides this at
+// runtime (no redeploy); env WORKER_DAILY_BUDGET_USD overrides the default; else 25.
+export function dailyBudgetUsd(): number {
+  const v = Number(Deno.env.get("WORKER_DAILY_BUDGET_USD"));
+  return Number.isFinite(v) && v > 0 ? v : 25;
+}
