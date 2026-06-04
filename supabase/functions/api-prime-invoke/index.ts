@@ -178,9 +178,15 @@ Deno.serve(async (req: Request) => {
       pinned_turns, action, hold_this_payload, gauge,
     } = body;
 
+    // RLS-bypassing service client. New-format-only project: the legacy
+    // SUPABASE_SERVICE_ROLE_KEY is NOT RLS-bypassing, which silently blocks writes to
+    // auth.uid()-gated tables — e.g. enqueue_dispatch's theo_session INSERT. Use the
+    // project's sb_secret_ key via THEO_DISPATCH_SECRET_KEY (a non-reserved, project-wide
+    // secret; SUPABASE_* names are auto-managed and can't be overridden). Same fix as the
+    // theo-dispatch-worker. The EF scopes by explicit user_id/lineage WHERE clauses, not RLS.
     supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("THEO_DISPATCH_SECRET_KEY")!
     );
 
     // D3 — request-level idempotency. A retry re-POSTs the same request_id; the first
