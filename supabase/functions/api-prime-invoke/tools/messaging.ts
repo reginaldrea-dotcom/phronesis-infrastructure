@@ -6,8 +6,14 @@
 
 import type { Tool, ToolContext } from "./types.ts";
 
-const ID_RE      = /^[0-9a-f-]{4,36}$/i;   // full UUID or a leading hex prefix
-const LINEAGE_RE = /^[a-z][a-z0-9_]*$/i;   // simple identifier; guards the SQL interpolation
+const ID_RE        = /^[0-9a-f-]{4,36}$/i;   // full UUID or a leading hex prefix
+const LINEAGE_RE   = /^[a-z][a-z0-9_]*$/i;   // simple identifier; guards the SQL interpolation
+const FULL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// CHECK-enforced vocab on prime_messages (mirrored here to fail fast with a clear
+// message instead of a raw 23514). Keep in sync with the table constraints.
+const VALID_MESSAGE_TYPES = new Set(["nf", "mr_draft", "request", "response", "status", "schema_proposal", "broadcast"]);
+const VALID_ATTENTION     = new Set(["low", "moderate", "urgent"]);
 
 function callerLineage(ctx: ToolContext): string | null {
   return LINEAGE_RE.test(ctx.lineageName ?? "") ? ctx.lineageName : null;
@@ -81,6 +87,76 @@ export const getMessageTool: Tool = {
     return runSelect(ctx,
       `SELECT id, from_lineage, to_lineage, subject, body, message_type, attention_level, status, created_at, acknowledged_at FROM prime_messages WHERE id::text LIKE '${id}%' AND (to_lineage = '${lin}' OR from_lineage = '${lin}')`,
       `no message with id starting '${id}' to or from you. Ids are table-scoped — this may be an id from another table (artifacts, conferences, wake_deltas), not prime_messages. This is the answer; do not retry.`);
+  },
+};
+
+// send_message — the write counterpart to read_inbox/get_message. Replaces the
+// raw `INSERT INTO prime_messages …` via execute_sql, which returned no handle
+// and an ambiguous empty result (a sent message and a no-op read looked the
+// same). Here the sender is stamped from ToolContext (your own identity, not a
+// model claim), the body is parameterised (PostgREST, not interpolated SQL), and
+// the stored row is RETURNED so the send is self-verifying.
+export const sendMessageTool: Tool = {
+  definition: {
+    name: "send_message",
+    description:
+      "Send a prime_message to another Prime's inbox. Use THIS rather than an INSERT via execute_sql: it targets prime_messages, stamps you as the sender from your own identity, and RETURNS the stored row (id, created_at, status) so you can confirm it actually sent without re-checking. to_lineage must be the recipient's CANONICAL lineage (e.g. 'constantinople', never the nickname 'connie' — a message to the wrong lineage is invisible to its inbox).",
+    input_schema: {
+      type: "object",
+      properties: {
+        to_lineage:      { type: "string", description: "Recipient's canonical lineage (e.g. 'constantinople'). The lineage, not a nickname or URL." },
+        body:            { type: "string", description: "The message body." },
+        subject:         { type: "string", description: "Optional subject line." },
+        message_type:    { type: "string", enum: ["nf", "mr_draft", "request", "response", "status", "schema_proposal", "broadcast"], description: "Optional message type." },
+        attention_level: { type: "string", enum: ["low", "moderate", "urgent"], description: "Optional. Defaults to 'low'." },
+        related_ids:     { type: "array", items: { type: "string" }, description: "Optional: full UUIDs of related rows (artifacts, sessions, messages) for context." },
+      },
+      required: ["to_lineage", "body"],
+    },
+  },
+  available: ({ isNewSession }) => !isNewSession,
+  summarize: (input) => `send_message: to ${input?.to_lineage ?? "?"}`,
+  run: async (input, ctx) => {
+    const from = callerLineage(ctx);
+    if (!from) return "send_message error: caller lineage unavailable.\n[SYSTEM: surface to Reg.]";
+
+    const to = typeof input?.to_lineage === "string" ? input.to_lineage.trim() : "";
+    const body = typeof input?.body === "string" ? input.body : "";
+    if (!LINEAGE_RE.test(to)) {
+      return `send_message error: to_lineage must be a bare lineage identifier (got '${to.slice(0, 40)}'). Use the canonical lineage, e.g. 'constantinople' not 'connie'.\n[SYSTEM: surface to Reg, do not retry.]`;
+    }
+    if (!body.trim()) return "send_message error: body is required (non-empty string).\n[SYSTEM: surface to Reg, do not retry.]";
+
+    const row: Record<string, unknown> = { from_lineage: from, to_lineage: to, body };
+    if (typeof input?.subject === "string" && input.subject.trim()) row.subject = input.subject;
+    if (input?.message_type != null) {
+      const mt = String(input.message_type).trim();
+      if (!VALID_MESSAGE_TYPES.has(mt)) return `send_message error: message_type '${mt}' is invalid. Valid: ${[...VALID_MESSAGE_TYPES].join(", ")}.\n[SYSTEM: surface to Reg, do not retry.]`;
+      row.message_type = mt;
+    }
+    if (input?.attention_level != null) {
+      const al = String(input.attention_level).trim();
+      if (!VALID_ATTENTION.has(al)) return `send_message error: attention_level '${al}' is invalid. Valid: low, moderate, urgent.\n[SYSTEM: surface to Reg, do not retry.]`;
+      row.attention_level = al;
+    }
+    if (Array.isArray(input?.related_ids) && input.related_ids.length > 0) {
+      const ids = input.related_ids.map((x: unknown) => String(x).trim());
+      const bad = ids.find((s: string) => !FULL_UUID_RE.test(s));
+      if (bad) return `send_message error: related_ids must be full UUIDs (got '${bad.slice(0, 40)}').\n[SYSTEM: surface to Reg, do not retry.]`;
+      row.related_ids = ids;
+    }
+
+    const ins = await ctx.supabase
+      .from("prime_messages")
+      .insert(row)
+      .select("id, from_lineage, to_lineage, subject, message_type, attention_level, status, created_at")
+      .single();
+    if (ins.error) return `send_message error: ${ins.error.message}\n[SYSTEM: surface to Reg, do not retry.]`;
+
+    return JSON.stringify({
+      sent: ins.data,
+      "[SYSTEM]": `message ${String(ins.data.id).slice(0, 8)} is now in ${to}'s inbox (status '${ins.data.status}'). This is the authoritative record of the send — you do not need to re-send or re-check. You can read it back any time with get_message.`,
+    });
   },
 };
 
