@@ -8,9 +8,10 @@
 // The worker drains pending rows on its next tick. A completion wake_delta
 // arrives when all engines reach terminal status.
 //
-// Caller must have a userId in ToolContext (extracted from JWT in index.ts) AND
-// a matching open `conversation` row for that user. Phase 1 errors if no open
-// conversation exists — interface is expected to have one already.
+// Caller must have a userId in ToolContext (the JWT sub = auth_user_id, extracted
+// in index.ts). conversation.user_id and theo_session.user_id FK to app_user.id,
+// NOT auth_user_id, so this resolves app_user.id first. Caller must also have a
+// matching open `conversation` row. Phase 1 errors if no open conversation exists.
 
 import type { Tool, ToolContext } from "./types.ts";
 
@@ -124,11 +125,25 @@ export const enqueueDispatchTool: Tool = {
       rows.push({ prompt, engine_name: engine, role, role_description: roleDesc });
     }
 
+    // Resolve app_user.id ─────────────────────────────────────────────────
+    // ctx.userId is the JWT sub = auth_user_id. conversation.user_id and
+    // theo_session.user_id FK to app_user.id, not auth_user_id — resolve it here
+    // (the known enqueue_dispatch user-id bug). rate_limit_usage legitimately
+    // keys on auth_user_id, so ctx.userId is left untouched elsewhere.
+    const appUser = await ctx.supabase
+      .from("app_user")
+      .select("id")
+      .eq("auth_user_id", ctx.userId)
+      .maybeSingle();
+    if (appUser.error) return fail(`app_user lookup failed: ${appUser.error.message}`);
+    if (!appUser.data?.id) return fail(`no app_user profile for the authenticated user (auth_user_id ${ctx.userId}); cannot attach the dispatch.`);
+    const appUserId = appUser.data.id as string;
+
     // Find caller's open conversation ─────────────────────────────────────
     const convo = await ctx.supabase
       .from("conversation")
       .select("id")
-      .eq("user_id", ctx.userId)
+      .eq("user_id", appUserId)
       .eq("status", "open")
       .order("last_active_at", { ascending: false })
       .limit(1)
@@ -142,7 +157,7 @@ export const enqueueDispatchTool: Tool = {
       .from("theo_session")
       .insert({
         conversation_id: conversationId,
-        user_id: ctx.userId,
+        user_id: appUserId,
         state: "dispatched",
         original_brief: originalBrief,
         refined_prompt: refinedPrompt,
