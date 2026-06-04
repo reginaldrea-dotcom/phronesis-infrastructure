@@ -190,9 +190,12 @@ export const enqueueDispatchTool: Tool = {
     return JSON.stringify({
       theo_session_id: theoSessionId,
       conversation_id: conversationId,
-      engine_dispatch_ids: dispatchRows.map(r => r.id),
+      state: "dispatched",
+      // Echo the full rows (not just ids) so you can verify the ASSIGNMENT landed
+      // as intended — which engine got which role — not merely that N rows exist.
+      engine_dispatch: dispatchRows.map(r => ({ id: r.id, engine_name: r.engine_name, role: r.role_in_dispatch })),
       queued: dispatchRows.length,
-      "[SYSTEM]": "dispatch enqueued — the worker will fire engines on its next tick (cron ~30s once enabled; manual invoke for now). A completion wake_delta will arrive when all engines reach terminal status. Read results with read_dispatch_results.",
+      "[SYSTEM]": "dispatch enqueued — the worker will fire engines on its next tick (cron ~30s once enabled; manual invoke for now). The engine_dispatch list above is the authoritative record of what was queued: check the engine/role assignment matches your intent. A completion wake_delta will arrive when all engines reach terminal status. Read results with read_dispatch_results.",
     });
   },
 };

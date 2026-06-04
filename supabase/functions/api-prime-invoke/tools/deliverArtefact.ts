@@ -34,11 +34,16 @@ export const deliverArtefactTool: Tool = {
 
       if (artefactContent) {
         directArtefacts.push({ title, content: artefactContent, type, version: 1 });
-        return `Artefact delivered: "${title}" (${artefactContent.length} chars). It is now in the user's artefact panel — do not reproduce this content in your response.`;
+        // Delivery confirmation, not a durable handle: this goes to the in-memory
+        // artefact panel, not a table, so the ground truth available is the title
+        // and the byte count actually delivered.
+        return `Artefact delivered: "${title}" (${artefactContent.length} chars). It is now in the user's artefact panel — do not reproduce this content in your response.\n[SYSTEM: delivered. This is the authoritative confirmation; do not re-deliver.]`;
       }
-      return `No content found for artefact "${title}". Check query or content field.`;
+      // Explicit failure — previously a soft string that read like a normal return,
+      // so a Prime could believe it delivered when it delivered nothing.
+      return `deliver_artefact: NO content found for "${title}" — nothing was delivered.${query ? " The SQL query returned no row, or the content_field was empty/misnamed." : " The content field was empty."}\n[SYSTEM: this is a FAILURE, not a delivery. Do not tell Reg the artefact was delivered. Fix the query/content_field or report the gap.]`;
     } catch (err) {
-      return `Artefact delivery error: ${String(err)}`;
+      return `deliver_artefact error: ${String(err)}\n[SYSTEM: this is a FAILURE — nothing was delivered. Surface to Reg, do not retry blindly.]`;
     }
   },
 };
