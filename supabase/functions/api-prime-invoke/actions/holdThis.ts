@@ -33,16 +33,24 @@ export const holdThisAction: Action = {
 
     if (ht.mode === "amend") {
       if (!ht.id || !ht.content) return errResponse("hold_this amend requires id and content", 400);
-      const { error } = await supabase
+      // RETURNING so we confirm a row was actually updated. Without this an amend
+      // of a non-existent id changed zero rows, raised no error, and echoed the
+      // input id back as if it succeeded — a false confirmation.
+      const { data, error } = await supabase
         .from("artifacts")
         .update({ content: ht.content, metadata: ht.metadata ?? {} })
-        .eq("id", ht.id);
+        .eq("id", ht.id)
+        .select("id");
       if (error) {
         console.error("hold_this amend error:", error);
         return errResponse(error.message);
       }
+      const updated = (data ?? []) as Array<{ id: string }>;
+      if (updated.length === 0) {
+        return errResponse(`hold_this amend matched no artifact with id ${ht.id} — nothing was updated. Verify the id (it is table-scoped to artifacts).`, 404);
+      }
       return new Response(
-        JSON.stringify({ id: ht.id }),
+        JSON.stringify({ id: updated[0].id, updated: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
