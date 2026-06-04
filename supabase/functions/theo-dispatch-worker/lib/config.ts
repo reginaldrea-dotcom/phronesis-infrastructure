@@ -170,7 +170,10 @@ export function pollStalenessMs(engine: EngineName): number {
 // ──────────────────────────────────────────────────────────────────────────
 export const REQUIRED_ENV = [
   "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  // RLS-bypassing service credential. New-format-only project → the project's sb_secret_
+  // key, set under a non-reserved name (SUPABASE_* are auto-managed, not overridable).
+  // The legacy SUPABASE_SERVICE_ROLE_KEY does NOT bypass RLS here.
+  "THEO_DISPATCH_SECRET_KEY",
   // Shared secret the pg_cron drainer must present in the `apikey` header. The
   // worker runs verify_jwt=false (the platform does not guard it), so this is
   // the worker's own door lock — see lib/auth.ts. REQUIRED so the worker fails
