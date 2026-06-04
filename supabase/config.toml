@@ -4,3 +4,11 @@ project_id = "vysenpymsfhgionqfulf"
 # header). It MUST deploy with verify_jwt disabled or the interface breaks.
 [functions.api-prime-invoke]
 verify_jwt = false
+
+# theo-dispatch-worker is invoked by pg_cron (service-to-service), which presents
+# a secret key in the `apikey` header. The new Supabase API keys are not JWTs and
+# cannot pass the verify_jwt gate, so per Supabase guidance verify_jwt is disabled
+# and the worker validates the caller itself (see functions/theo-dispatch-worker/
+# lib/auth.ts). MUST deploy with --no-verify-jwt.
+[functions.theo-dispatch-worker]
+verify_jwt = false

@@ -136,7 +136,7 @@ export async function markCompleted(
 export async function markPartial(
   supabase: SupabaseClient,
   rowId: string,
-  args: { response_raw: string; reason: string; tokens_in?: number; tokens_out?: number },
+  args: { response_raw: string; reason: string; tokens_in?: number; tokens_out?: number; cost_usd?: number },
   expectedStatus: "pending" | "dispatched",
 ): Promise<void> {
   const { error } = await supabase
@@ -148,6 +148,7 @@ export async function markPartial(
       error_detail: `partial: ${args.reason}`,
       tokens_in: args.tokens_in ?? null,
       tokens_out: args.tokens_out ?? null,
+      cost_usd: args.cost_usd ?? null,
     })
     .eq("id", rowId)
     .eq("status", expectedStatus);
