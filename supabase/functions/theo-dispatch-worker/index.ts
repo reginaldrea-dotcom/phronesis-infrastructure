@@ -1,8 +1,11 @@
 // theo-dispatch-worker — entry point.
 //
-// Invoked by pg_cron (via net.http_post) every ~30s with the service-role key
-// as Authorization. verify_jwt=true at the EF level rejects unauthenticated
-// callers; the worker assumes any caller that reached this handler is trusted.
+// Invoked by pg_cron (via net.http_post) on a fixed cadence. The caller presents
+// a shared secret in the `apikey` header (Supabase's new secret-key model: secret
+// keys go in `apikey`, not as a Bearer JWT). The worker deploys with
+// verify_jwt=false, so the platform does NOT guard it — the worker guards itself
+// via isAuthorizedCaller() (see lib/auth.ts). All DB work uses the worker's OWN
+// env SUPABASE_SERVICE_ROLE_KEY; the caller's secret is only the door lock.
 //
 // One invocation = one tick. The tick reads pending/dispatched engine_dispatch
 // rows, submits or polls them, and files completion wake_deltas. State across
@@ -10,6 +13,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { assertEnv } from "./lib/env.ts";
+import { isAuthorizedCaller } from "./lib/auth.ts";
 import { makeClient } from "./lib/supabase.ts";
 import { tick } from "./lib/tick.ts";
 
@@ -20,6 +24,15 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST" && req.method !== "GET") {
     return new Response(JSON.stringify({ error: "method not allowed" }), {
       status: 405,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  // Self-guard: verify_jwt=false means the platform lets anyone reach this
+  // handler. Reject callers that don't present the shared secret in `apikey`.
+  if (!(await isAuthorizedCaller(req))) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
       headers: { "content-type": "application/json" },
     });
   }

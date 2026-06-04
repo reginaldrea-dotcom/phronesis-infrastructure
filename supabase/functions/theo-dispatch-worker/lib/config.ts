@@ -171,6 +171,11 @@ export function pollStalenessMs(engine: EngineName): number {
 export const REQUIRED_ENV = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
+  // Shared secret the pg_cron drainer must present in the `apikey` header. The
+  // worker runs verify_jwt=false (the platform does not guard it), so this is
+  // the worker's own door lock — see lib/auth.ts. REQUIRED so the worker fails
+  // to boot rather than running unguarded if it is ever unset.
+  "WORKER_INVOKE_KEY",
 ] as const;
 
 export const EXPECTED_ENV = [

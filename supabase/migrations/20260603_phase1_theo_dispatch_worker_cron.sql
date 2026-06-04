@@ -9,36 +9,41 @@
 -- is the mechanism the architecture already assumes (DR §5). Theo never holds
 -- or handles the invocation token; the schedule owns it.
 --
--- The worker (EF `theo-dispatch-worker`, verify_jwt=true) uses its OWN env
--- SUPABASE_SERVICE_ROLE_KEY for all DB work. The caller's token is used ONLY to
--- pass the verify_jwt gate — the worker never acts on the caller's behalf. That
--- is why the token below should be the LEAST-PRIVILEGE token that still passes
--- the gate (see "Token choice").
+-- The worker (EF `theo-dispatch-worker`, verify_jwt=FALSE) uses its OWN env
+-- SUPABASE_SERVICE_ROLE_KEY for all DB work. The caller's secret is used ONLY as
+-- the worker's door lock — the worker never acts on the caller's behalf. Because
+-- verify_jwt is off, the platform does not guard the endpoint; the worker
+-- validates this secret itself (functions/theo-dispatch-worker/lib/auth.ts),
+-- constant-time comparing the `apikey` header to its WORKER_INVOKE_KEY env.
 --
 -- ============================================================================
--- PREREQUISITE — run ONCE, manually, out of band (NOT part of this migration;
--- the key must never live in a committed file or in cron.job.command):
+-- PREREQUISITES — run ONCE, manually, out of band (NOT part of this migration;
+-- the secret must never live in a committed file or in cron.job.command):
 --
---   SELECT vault.create_secret(
---     '<PASTE_TOKEN_HERE>',          -- see "Token choice" below
---     'theo_worker_invoke_token',
---     'Bearer token used by the pg_cron drainer to invoke theo-dispatch-worker'
---   );
+--   1. Store the invoke secret in Vault for the cron caller:
+--        SELECT vault.create_secret(
+--          '<PASTE_SECRET_HERE>',        -- see "Secret choice" below
+--          'theo_worker_invoke_token',
+--          'apikey secret used by the pg_cron drainer to invoke theo-dispatch-worker'
+--        );
+--   2. Set the SAME value as the worker's env secret so its self-guard matches:
+--        supabase secrets set WORKER_INVOKE_KEY='<SAME_SECRET>' \
+--          --project-ref vysenpymsfhgionqfulf
+--      (By hand / CLI — never commit it. The worker fails to boot without it.)
 --
--- Token choice (review decision):
---   RECOMMENDED: the project ANON (publishable) key. It passes verify_jwt, is
---   not a high-value secret, and grants the caller nothing beyond triggering a
---   drain (the tick response is counts only — no user content). Keeping the
---   SERVICE-ROLE key out of the call means it never transits pg_net's stored
---   request/response rows (net.http_request_queue / net._http_response), which
---   would otherwise be a high-value secret sitting in those tables.
---   ALTERNATIVE: the service-role key — conventional, but larger blast radius
---   if the `net` schema history is ever exposed. Prefer anon unless review finds
---   a reason the worker needs a privileged caller token (it does not today).
+-- Secret choice (review decision):
+--   RECOMMENDED: the project SECRET key (sb_secret_…). Two reasons. (a) With
+--   verify_jwt off, the gateway may still require a valid project apikey to route
+--   to the function; a real secret key satisfies that AND the worker's own check,
+--   whereas a dedicated random string could be refused at the gateway. (b) It is
+--   the key Reg already manages, so there is one secret to rotate, not two.
+--   EXPOSURE NOTE: the apikey travels in the request headers pg_net records in
+--   net._http_response (privileged-only schema) — see the FOLLOW-UP on pruning it
+--   so the secret does not accumulate in history indefinitely.
 --
--- ASSUMPTION TO CONFIRM IN REVIEW: verify_jwt accepts the anon key. It validates
--- the JWT signature; the anon key is a validly-signed project JWT (role=anon),
--- so it should pass. Confirm with one manual invoke before relying on it.
+-- CONFIRM IN REVIEW with one manual invoke before relying on the schedule:
+--   * a call WITH the correct apikey returns 200 (tick summary);
+--   * a call WITHOUT it (or wrong) returns 401 from the worker's self-guard.
 -- ============================================================================
 
 -- Extensions are already installed on this project; these are idempotent and
@@ -71,10 +76,11 @@ begin
         url     := 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/theo-dispatch-worker',
         body    := '{}'::jsonb,
         headers := jsonb_build_object(
-          'Content-Type',  'application/json',
-          -- Token fetched at run time from Vault — the plaintext token does NOT
-          -- appear in cron.job.command, only this lookup does.
-          'Authorization', 'Bearer ' || (
+          'Content-Type', 'application/json',
+          -- Secret fetched at run time from Vault — the plaintext secret does NOT
+          -- appear in cron.job.command, only this lookup does. Sent in `apikey`
+          -- (the new-key model); the worker validates it in lib/auth.ts.
+          'apikey', (
             select decrypted_secret
             from vault.decrypted_secrets
             where name = 'theo_worker_invoke_token'
@@ -99,7 +105,7 @@ $$;
 --     from cron.job_run_details
 --    where jobid = (select jobid from cron.job where jobname='theo-dispatch-worker-tick')
 --    order by start_time desc limit 5;
---   -- pg_net delivery (token is in headers here — net schema is privileged-only):
+--   -- pg_net delivery (apikey is in headers here — net schema is privileged-only):
 --   select id, status_code, created from net._http_response order by created desc limit 5;
 --
 -- ----------------------------------------------------------------------------
