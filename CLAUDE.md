@@ -19,7 +19,8 @@ Antechamber) coordinating over a shared Supabase substrate. Two halves:
     getConferenceResult, enqueueDispatch, readDispatchResults, write/readSynthesis — registered in
     `tools/index.ts`), `actions/` (fileSuperT, holdThis). Anthropic only, raw `fetch()`.
   - **`theo-dispatch-worker/`** — async multi-LLM research dispatch worker (the [[Theo]] engine).
-    `verify_jwt=true`, one invocation = one tick. `lib/`: adapters (anthropic/openai/gemini/perplexity,
+    `verify_jwt=false` (the platform gate is off; the worker self-guards via an `apikey` secret —
+    `lib/auth.ts` vs `WORKER_INVOKE_KEY`), one invocation = one tick. `lib/`: adapters (anthropic/openai/gemini/perplexity,
     raw fetch, no SDKs), `config.ts` (engine registry + role→engine + pricing), `queue.ts`, `pacing.ts`,
     `tick.ts`, `budget.ts`.
 - **`supabase/migrations/`** — DDL. **All schema changes go here** (see clone-readiness below).
@@ -48,8 +49,8 @@ and the token persists in the shell — deploy directly from the repo **root**:
 ```bash
 # api-prime-invoke — MUST pass --no-verify-jwt (interface calls without a JWT; also pinned in config.toml)
 npx --yes supabase functions deploy api-prime-invoke --project-ref vysenpymsfhgionqfulf --use-api --no-verify-jwt
-# theo-dispatch-worker — verify_jwt=true, deploy WITHOUT that flag
-npx --yes supabase functions deploy theo-dispatch-worker --project-ref vysenpymsfhgionqfulf --use-api
+# theo-dispatch-worker — verify_jwt=false (self-guards via apikey); deploy WITH --no-verify-jwt
+npx --yes supabase functions deploy theo-dispatch-worker --project-ref vysenpymsfhgionqfulf --use-api --no-verify-jwt
 ```
 
 Wrong working dir → 400 on entrypoint. Rollback = `git revert` + redeploy.
