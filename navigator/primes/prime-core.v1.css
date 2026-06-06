@@ -63,6 +63,15 @@
   --bar-amber:     #A87820;
   --bar-red:       #8B3020;
 
+  /* ── DISPLAY/VERIFY LAYER (Eames render spec — artifact 2835520b, MR 1ad5b49e)
+   * Amber is INFORMATION, never alarm — red is NOT used in this layer.
+   * Used by: divergent-open claims, technical-failure gaps, dead/mismatched citations.
+   * Additive only (consumed by the new theo render); no change to existing Prime styles.
+   * ──────────────────────────────────────────────────────────── */
+  --status-amber:     #A87820;                   /* = --bar-amber; separate so the two systems can diverge */
+  --status-amber-dim: rgba(168, 120, 32, 0.10);  /* amber left-border fills                                 */
+  --claim-infer:      #F5F1EB;                    /* synthesis_inference bg (= --parchment; named for legibility) */
+
   /* ── BUTTON BASE ─────────────────────────────────────────────
    * Primary action button — shared appearance, not Prime-tinted.
    * ──────────────────────────────────────────────────────────── */
