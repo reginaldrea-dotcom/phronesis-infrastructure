@@ -75,8 +75,10 @@ body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, 
                     color: var(--text); margin: 0 0 8px; }
 .synth-section .needs-review { margin-left: 8px; }
 .synth-section .join-note { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 6px; }
-.synth-body { color: var(--text); }
-.synth-body p { margin: 0 0 12px; }
+.synth-body { color: var(--text); line-height: 1.7; }
+/* near-black prose: set colour on the <p> itself (the div colour doesn't reach the <p>,
+   which otherwise inherits the muted default) + breathing room — Eames 1f210e5b */
+.synth-body p { color: var(--text); margin: 0 0 1em; }
 
 /* ── READING: strata navigator (question-axis) ───────────────── */
 .strata-nav { border-top: 1px solid var(--border); padding-top: 8px; }

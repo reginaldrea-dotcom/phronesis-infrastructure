@@ -74,7 +74,7 @@
       try { var j = JSON.parse(eng.content); if (j && typeof j.text === 'string') preview = j.text; } catch (e) {}
       preview = preview.slice(0, 400);
       var meta = engineDisplayName(eng.source_name) + ' · ' + stateChip(eng, true) +
-        (eng.source_count != null ? ' · ' + eng.source_count + ' sources cited' : '') +
+        (eng.source_count > 0 ? ' · ' + eng.source_count + ' sources cited' : '') +
         (eng.cost_usd != null ? ' · $' + Number(eng.cost_usd).toFixed(3) : '') +
         (s.stance === 'diverges' ? ' · <span style="color:var(--status-amber)">diverges</span>' : '');
       return '<div class="ee-row"><div class="ee-meta">' + meta + '</div>' +
@@ -201,7 +201,8 @@
     var engs = d.engines || [];
     if (!engs.length) return '';
     var items = engs.map(function (e) {
-      return '<span class="footer-engine">' + esc(engineDisplayName(e.source_name)) + ' ' + stateChip(e, true) + '</span>';
+      return '<span class="footer-engine">' + esc(engineDisplayName(e.source_name)) + ' ' + stateChip(e, true) +
+        (e.source_count > 0 ? ' <span class="sources">' + e.source_count + ' sources cited</span>' : '') + '</span>';
     }).join('');
     var totalSources = engs.reduce(function (a, e) { return a + (e.source_count || 0); }, 0);
     var totalCost = engs.reduce(function (a, e) { return a + (Number(e.cost_usd) || 0); }, 0);
@@ -252,7 +253,7 @@
         '<span class="engine-state">' + stateChip(eng, false) + '</span>' +
         '<div class="engine-name">' + esc(engineDisplayName(eng.source_name)) + '</div>' +
         '<div class="engine-meta">' + (eng.role ? esc(eng.role) : '') +
-          (eng.source_count != null ? '<span class="sources"> · ' + eng.source_count + ' sources cited</span>' : '') + '</div>' +
+          (eng.source_count > 0 ? '<span class="sources"> · ' + eng.source_count + ' sources cited</span>' : '') + '</div>' +
         (eng.cost_usd != null ? '<div class="engine-cost">$' + Number(eng.cost_usd).toFixed(3) +
           (eng.tokens_in != null ? ' · ' + eng.tokens_in + ' in / ' + (eng.tokens_out || 0) + ' out' : '') + '</div>' : '') +
       '</div>';
