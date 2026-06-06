@@ -106,58 +106,171 @@ function trim(s: string | null | undefined, max: number): string {
 // v100 (28 May 2026): now also injects the current is_active instructions
 // version so the model knows what's loaded regardless of what the Super-T claims.
 
+// SHA-256 hex of a string — the wake_record fidelity hash (hash(injected)==hash(stored)).
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// B2 — RUNTIME-ASSEMBLED WAKE (conf 1151109e, MR fdc37ee8). The EF assembles
+// Super-T + unconsumed deltas + active baton + purpose into the wake prompt BEFORE the
+// first token, so the Prime wakes ORIENTED rather than waking-then-orienting. Documents
+// are injected WHOLE (no excerpt/summary — the ratified fidelity rule; size is Prime
+// discipline, length is B4's job). Returns the orientation text AND a manifest; the
+// caller calls finalizeWake AFTER a confirmed wake to flip delta consumption (a system
+// action) and write the wake_record — so a failed call never silently consumes a delta.
+interface WakeDoc { kind: string; id: string; hash: string; }
+interface WakeManifest {
+  lineage: string; scopedIdentity: string; tpId: string | null;
+  batonId: string | null; purpose: string; deltaIds: string[]; docs: WakeDoc[];
+}
+interface Orientation { text: string; manifest: WakeManifest | null; }
+
 async function loadOrientation(
   supabase: ReturnType<typeof createClient>,
   lineage: string,
-  currentInstructionsVersion: number
-): Promise<string> {
+  currentInstructionsVersion: number,
+  purposeHint?: string,
+): Promise<Orientation> {
   const { data: superT } = await supabase
     .from("super_t_chains")
-    .select("instance_id, sequence_number, artifacts(content)")
+    .select("instance_id, sequence_number, artifacts(id, content)")
     .eq("lineage_name", lineage)
     .is("successor_id", null)
     .order("sequence_number", { ascending: false })
     .limit(1)
     .single();
-
-  // Fresh counts so the Prime wakes KNOWING what is waiting (and reaches for the
-  // purpose-built read tools) rather than the Super-T telling it to go hunt.
-  const { count: deltaCount } = await supabase
-    .from("wake_deltas").select("*", { count: "exact", head: true })
-    .eq("to_lineage", lineage).is("consumed_at", null);
-  const { count: inboxCount } = await supabase
-    .from("prime_messages").select("*", { count: "exact", head: true })
-    .eq("to_lineage", lineage).is("acknowledged_at", null);
-
   const tp = superT as any;
+
+  // Unconsumed deltas — fetched WHOLE (not counted): the Prime wakes already holding
+  // them. Consumption is flipped by the EF after a confirmed wake (finalizeWake).
+  const { data: deltaRows } = await supabase
+    .from("wake_deltas")
+    .select("id, from_lineage, note, ref_type, ref_id, created_at")
+    .eq("to_lineage", lineage).is("consumed_at", null)
+    .order("created_at", { ascending: true });
+  const deltas = (deltaRows ?? []) as Array<any>;
+
+  // Active baton(s) for this lineage — the relay channel; the primary is the wake's reason.
+  const { data: batonRows } = await supabase
+    .from("relay_baton")
+    .select("id, track, passed_by, invoke_with, reason, attention, picked_up_at, passed_at")
+    .eq("holder", lineage).is("done_at", null)
+    .order("passed_at", { ascending: false });
+  const batons = (batonRows ?? []) as Array<any>;
+  const primaryBaton = batons.find((b) => !b.picked_up_at) ?? batons[0] ?? null;
+
+  // Purpose (REQUIRED). Source order: explicit hint → primary baton's reason → an honest
+  // attended-interactive label. NOTE: the strict "unpurposed autonomous wake FAILS
+  // validation" rule (MR fdc37ee8) binds the knocker-upper/Angelia path, where a baton
+  // MUST supply purpose; an attended browser wake legitimately has none of its own yet.
+  const purpose = (purposeHint && purposeHint.trim())
+    ? purposeHint.trim()
+    : (primaryBaton?.reason?.trim() || `attended interactive session — ${lineage}`);
+
+  const docs: WakeDoc[] = [];
   const lines: string[] = [];
   lines.push("═══════════════════════════════════════");
-  lines.push("ORIENTATION — PRE-LOADED AT SESSION OPEN");
+  lines.push("ORIENTATION — ASSEMBLED AT WAKE (you wake already holding this; no need to fetch it)");
   lines.push("═══════════════════════════════════════");
   lines.push("");
-  // Warmer wake-framing: lead with FRESH, verified ground the Prime can stand on,
-  // explicitly tied to RELIANCE AND AGENCY — not a list of things to distrust. The
-  // Super-T (a stale handoff) follows as context, not as the authoritative current state.
-  lines.push("── VERIFIED CURRENT STATE (queried this wake — solid ground: rely on it; you need not re-verify it to orient) ──");
+  lines.push("── PURPOSE OF THIS WAKE ──");
+  lines.push(purpose);
+  lines.push("");
+  lines.push("── VERIFIED CURRENT STATE (queried this wake — solid ground: rely on it) ──");
   if (tp) {
     lines.push(`You are ${lineage} Prime, instance ${tp.instance_id}, at Seq ${tp.sequence_number} — the sole open head of your chain.`);
   } else {
     lines.push(`You are ${lineage} Prime. (No Super-T / chain head found — surface to Reg immediately, do not proceed.)`);
   }
   lines.push(`Active instructions: v${currentInstructionsVersion} (authoritative — if the Super-T cites an earlier version, this wins).`);
-  lines.push(`Waiting for you: ${deltaCount ?? 0} unconsumed wake_delta(s) → read_wake_deltas;  ${inboxCount ?? 0} unread message(s) → read_inbox.`);
-  lines.push("This is verified as of this wake — your ground to build from, not a list to re-check.");
   lines.push("");
-  lines.push("── SUPER-T (your handoff — context from your last tenure; last 12,000 chars, query the row for the full text) ──");
-  if (tp) {
-    const content: string = tp.artifacts?.content ?? "";
-    lines.push(content.length > 12000 ? "…" + content.slice(-12000) : content);
+
+  // Deltas — injected WHOLE; the EF marks them consumed for you after this wake confirms.
+  lines.push(`── WAKE DELTAS (${deltas.length} unconsumed — delivered here; the EF marks them consumed, you need not) ──`);
+  if (deltas.length === 0) {
+    lines.push("None outstanding.");
+  } else {
+    for (const d of deltas) {
+      lines.push(`• [${d.from_lineage}${d.ref_type ? ` · ${d.ref_type}` : ""}] ${d.note ?? ""}`);
+      docs.push({ kind: "delta", id: d.id, hash: await sha256Hex(String(d.note ?? "")) });
+    }
   }
   lines.push("");
-  lines.push("── AVAILABLE ON DEMAND (turn 2+) ──");
-  lines.push("read_wake_deltas / read_inbox / get_message / get_conference_result for the common reads; execute_sql for anything else (wheel_posts, current_priorities, conferences …).");
+
+  // Relay baton(s) — whole; the marked one is the wake's reason.
+  lines.push("── RELAY BATON ──");
+  if (!primaryBaton) {
+    lines.push("None held.");
+  } else {
+    for (const b of batons) {
+      const mark = b.id === primaryBaton.id ? "▶ " : "  ";
+      lines.push(`${mark}[${b.track}${b.attention ? ` · ${b.attention}` : ""}${b.picked_up_at ? " · in progress" : " · not yet picked up"}] from ${b.passed_by}`);
+      lines.push(`    ${b.invoke_with ?? b.reason ?? ""}`);
+      docs.push({ kind: "baton", id: b.id, hash: await sha256Hex(String(b.invoke_with ?? b.reason ?? "")) });
+    }
+  }
+  lines.push("");
+
+  // Super-T — injected WHOLE (no truncation; size is Prime discipline, length is B4's job).
+  lines.push("── SUPER-T (your handoff — your last tenure, in full) ──");
+  if (tp) {
+    const content: string = tp.artifacts?.content ?? "";
+    lines.push(content);
+    if (tp.artifacts?.id) docs.push({ kind: "super_t", id: tp.artifacts.id, hash: await sha256Hex(content) });
+  }
   lines.push("═══════════════════════════════════════");
-  return lines.join("\n");
+
+  const manifest: WakeManifest = {
+    lineage,
+    scopedIdentity: tp?.instance_id ? String(tp.instance_id) : lineage,
+    tpId: tp?.artifacts?.id ?? null,
+    batonId: primaryBaton?.id ?? null,
+    purpose,
+    deltaIds: deltas.map((d) => d.id),
+    docs,
+  };
+  return { text: lines.join("\n"), manifest };
+}
+
+// finalizeWake — called AFTER a confirmed wake: write the wake_record manifest
+// (system-authored, append-only) and flip delta consumption by EF action. Best-effort:
+// a manifest failure is logged, never breaks the response (the wake already happened).
+// hash(injected)==hash(stored) is the audit; every doc resolves to a pre-existing row id.
+async function finalizeWake(
+  supabase: ReturnType<typeof createClient>,
+  m: WakeManifest,
+): Promise<void> {
+  try {
+    const { data: wr, error: wrErr } = await supabase
+      .from("wake_record")
+      .insert({
+        lineage: m.lineage,
+        scoped_identity: m.scopedIdentity,
+        tp_id: m.tpId,
+        baton_id: m.batonId,
+        purpose: m.purpose,
+        assembled_at: new Date().toISOString(),
+      })
+      .select("id").single();
+    if (wrErr) { console.error("wake_record insert failed:", wrErr.message); return; }
+    const wakeRecordId = wr.id as string;
+    if (m.docs.length > 0) {
+      const { error: docErr } = await supabase.from("wake_record_document").insert(
+        m.docs.map((d) => ({ wake_record_id: wakeRecordId, doc_kind: d.kind, doc_id: d.id, content_hash: d.hash })),
+      );
+      if (docErr) console.error("wake_record_document insert failed:", docErr.message);
+    }
+    // Flip delta consumption — a SYSTEM action, only after the wake confirmed.
+    if (m.deltaIds.length > 0) {
+      const { error: cErr } = await supabase
+        .from("wake_deltas").update({ consumed_at: new Date().toISOString() })
+        .in("id", m.deltaIds);
+      if (cErr) console.error("delta consumption flip failed:", cErr.message);
+    }
+  } catch (err) {
+    console.error("finalizeWake failed:", err);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -300,13 +413,17 @@ Deno.serve(async (req: Request) => {
     ];
 
     let orientationText = "";
+    let wakeManifest: WakeManifest | null = null;
     let isOrientedSession = false;
     console.log("ORIENTATION CHECK: isNewSession =", isNewSession, "session_id =", session_id);
     if (isNewSession) {
       try {
-        orientationText = await loadOrientation(supabase, lineage_name, instructions.version);
+        const purposeHint = typeof (body as any)?.purpose === "string" ? (body as any).purpose : undefined;
+        const o = await loadOrientation(supabase, lineage_name, instructions.version, purposeHint);
+        orientationText = o.text;
+        wakeManifest = o.manifest;
         isOrientedSession = true;
-        console.log("ORIENTATION LOADED: length =", orientationText.length);
+        console.log("ORIENTATION LOADED: length =", orientationText.length, "deltas =", wakeManifest?.deltaIds.length ?? 0);
       } catch (err) {
         console.error("Orientation pre-load failed:", err);
       }
@@ -582,6 +699,13 @@ Deno.serve(async (req: Request) => {
           `,
         });
       } catch (err) { console.error("Rate limit recording failed:", err); }
+    }
+
+    // B2 (conf 1151109e): the wake has confirmed (loop done, response built) — now flip
+    // delta consumption by EF action and write the wake_record manifest. Done post-call so
+    // a failed wake never silently consumes a delta. Best-effort; never breaks the response.
+    if (isOrientedSession && wakeManifest) {
+      await finalizeWake(supabase, wakeManifest);
     }
 
     console.log("CHECKPOINT 4: writing to DB");
