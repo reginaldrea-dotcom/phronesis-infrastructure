@@ -9,10 +9,11 @@
 // reads with the service-role credential and SCOPES by ownership (theo_session.user_id =
 // the caller's app_user.id) — the tables stay sealed, the caller sees only their own work.
 //
-// Auth: sub extracted from the bearer JWT, matching api-prime-invoke (verify_jwt=false;
-// deploy with --no-verify-jwt). The sub is NOT signature-verified here — consistent with
-// the house interface flow, and acceptable while the render is Reg/Prime-facing; hardening
-// (verified JWT) before tenant-facing exposure is Aegis's lane. Flagged, not hidden.
+// Access control: at the CLOUDFLARE EDGE. The render surface (theo.html) is Cloudflare-gated
+// exactly like argos.html / connie.html — only authorised people reach it; the page then
+// talks to Supabase with the publishable key (no per-user Supabase session). So this EF is
+// UUID-addressed (session_id is the capability), verify_jwt=false, and does NOT scope per
+// user. Per-tenant scoping is a future hardening (Aegis) for external-tenant exposure.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -27,21 +28,6 @@ function env(k: string): string {
   const v = Deno.env.get(k);
   if (!v) throw new Error(`missing env ${k}`);
   return v;
-}
-
-// auth_user_id (JWT sub) from the Authorization bearer. No signature verify (see header).
-function subFromAuth(authHeader: string | null): string | null {
-  if (!authHeader) return null;
-  const m = authHeader.match(/^Bearer\s+(.+)$/i);
-  if (!m) return null;
-  const parts = m[1].split(".");
-  if (parts.length < 2) return null;
-  try {
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof payload?.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
 }
 
 function json(body: unknown, status = 200): Response {
@@ -64,23 +50,14 @@ Deno.serve(async (req: Request) => {
   const sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
   if (!UUID_RE.test(sessionId)) return json({ error: "session_id must be a full UUID" }, 400);
 
-  const authUserId = subFromAuth(req.headers.get("authorization"));
-  if (!authUserId) return json({ error: "unauthenticated — no bearer sub" }, 401);
-
   const supabase = createClient(env("SUPABASE_URL"), env("THEO_DISPATCH_SECRET_KEY"));
 
-  // app_user.id — theo_session.user_id FKs app_user.id, not auth_user_id.
-  const appUser = await supabase.from("app_user").select("id").eq("auth_user_id", authUserId).maybeSingle();
-  if (appUser.error) return json({ error: `app_user lookup: ${appUser.error.message}` }, 500);
-  if (!appUser.data?.id) return json({ error: "no app_user profile for caller" }, 403);
-  const appUserId = appUser.data.id as string;
-
-  // Session — the ownership filter IS the access control.
+  // Session by UUID. Access control is at the Cloudflare edge (see header) — no per-user
+  // scoping here; session_id is the capability.
   const sess = await supabase
     .from("theo_session")
     .select("id, state, original_brief, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
     .eq("id", sessionId)
-    .eq("user_id", appUserId)
     .maybeSingle();
   if (sess.error) return json({ error: `session lookup: ${sess.error.message}` }, 500);
   if (!sess.data?.id) return json({ error: "session not found for this caller" }, 404);
