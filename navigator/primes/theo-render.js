@@ -177,7 +177,23 @@
     var unlinked = (d.claims || []).filter(function (c) { return !c.question_id; });
     if (unlinked.length) html += renderQuestionRow({ question_text: 'Further claims', status: '' }, unlinked, ctx);
     html += '</div>';
+    html += renderFooter(d);
     return html;
+  }
+
+  /* session metadata footer (Eames §2) — names every engine used + its outcome */
+  function renderFooter(d) {
+    var engs = d.engines || [];
+    if (!engs.length) return '';
+    var items = engs.map(function (e) {
+      return '<span class="footer-engine">' + esc(engineDisplayName(e.source_name)) + ' ' + stateChip(e, true) + '</span>';
+    }).join('');
+    var totalSources = engs.reduce(function (a, e) { return a + (e.source_count || 0); }, 0);
+    var totalCost = engs.reduce(function (a, e) { return a + (Number(e.cost_usd) || 0); }, 0);
+    return '<div class="render-footer"><div class="footer-label">Engines used</div>' +
+      '<div class="footer-engines">' + items + '</div>' +
+      '<div class="footer-meta">' + totalSources + ' source' + (totalSources === 1 ? '' : 's') + ' cited' +
+      (totalCost > 0 ? ' · $' + totalCost.toFixed(3) : '') + '</div></div>';
   }
 
   function renderQuestionRow(q, claims, ctx) {
