@@ -76,6 +76,7 @@ Deno.serve(async (req: Request) => {
   let sections: unknown[] = [];
   let claims: Array<Record<string, unknown>> = [];
   let citations: unknown[] = [];
+  let claimSources: unknown[] = [];
 
   if (synthesis?.id) {
     const [secs, clm] = await Promise.all([
@@ -88,9 +89,14 @@ Deno.serve(async (req: Request) => {
     claims = (clm.data ?? []) as Array<Record<string, unknown>>;
     const claimIds = claims.map((c) => c.claim_id).filter(Boolean) as string[];
     if (claimIds.length > 0) {
-      const cit = await supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id").in("claim_id", claimIds);
+      const [cit, cs] = await Promise.all([
+        supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id").in("claim_id", claimIds),
+        supabase.from("claim_source").select("claim_id, dispatch_id, stance").in("claim_id", claimIds),
+      ]);
       if (cit.error) return json({ error: `citations: ${cit.error.message}` }, 500);
+      if (cs.error) return json({ error: `claim_sources: ${cs.error.message}` }, 500);
       citations = cit.data ?? [];
+      claimSources = cs.data ?? [];
     }
   }
 
@@ -105,6 +111,7 @@ Deno.serve(async (req: Request) => {
     sections,
     claims,
     citations,
+    claim_sources: claimSources,
     generated_at: new Date().toISOString(),
   });
 });

@@ -1,0 +1,150 @@
+/* theo-display.css — Display/Verify render components.
+ * Build to Eames's spec (artifact 2835520b, MR 1ad5b49e). Uses prime-core.v1.css :root
+ * tokens (incl. the display vars --status-amber / --status-amber-dim / --claim-infer).
+ * AMBER IS INFORMATION, NEVER ALARM. No red in this layer.
+ *
+ * The render is not a per-Prime themed chat, so it defines its own calm accent here
+ * (prime-core's --accent* are injected per-Prime by prime-config.js; absent here).
+ */
+
+:root {
+  --accent:        #3D6B50;                  /* calm scholarly accent (= --bar-green) */
+  --accent-dim:    rgba(61, 107, 80, 0.10);  /* active question tint; returned-engine fill */
+  --accent-border: rgba(61, 107, 80, 0.35);  /* returned-engine border; comparison section */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, serif;
+       margin: 0; line-height: 1.6; }
+
+.render-shell { max-width: 860px; margin: 0 auto; padding: 32px 28px 96px; }
+.render-status { color: var(--text-muted); font-style: italic; padding: 48px 0; text-align: center; }
+.render-error  { color: var(--status-amber); padding: 24px 0; }  /* amber, not red — even errors */
+
+/* ── HEADER (both postures) ──────────────────────────────────── */
+.render-header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 28px; }
+.render-title  { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 26px; font-weight: 600;
+                 color: var(--text); margin: 0 0 6px; }
+.render-counts { font-size: 13px; color: var(--text-muted); }
+.render-counts .dot { opacity: 0.5; margin: 0 6px; }
+.posture-tag   { font-size: 11px; color: var(--text-muted); font-variant: small-caps; letter-spacing: 1px; }
+
+/* ── chips / pills (shared) ──────────────────────────────────── */
+.chip { display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em;
+        padding: 2px 9px; border-radius: 11px; border: 1px solid var(--border); color: var(--text-muted);
+        background: var(--surface); white-space: nowrap; }
+.chip.returned   { background: var(--accent-dim); border-color: var(--accent-border); color: var(--text); }
+.chip.empty      { border-color: var(--border); }
+.chip.amber      { background: var(--status-amber-dim); border-color: var(--status-amber); color: var(--status-amber); }
+.chip.pending    { border-color: var(--border); }
+.chip.pending::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--text-light);
+                        margin-right: 6px; animation: theo-pulse 1.4s ease-in-out infinite; }
+@keyframes theo-pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+.pill { font-size: 10px; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 9px;
+        border: 1px solid var(--border-lt); color: var(--text-muted); background: var(--surface); }
+.pill.amber { border-color: var(--status-amber); color: var(--status-amber); background: var(--status-amber-dim); }
+
+/* ── PRODUCTION: engine box grid ─────────────────────────────── */
+.engine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;
+               margin-bottom: 28px; }
+.engine-box  { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 12px 14px;
+               position: relative; }
+.engine-box .engine-name { font-size: 13px; color: var(--text); font-weight: 500; padding-right: 80px; }
+.engine-box .engine-state { position: absolute; top: 12px; right: 12px; }
+.engine-meta { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.engine-meta .sources { color: var(--text-muted); }      /* coverage signal — never a grade */
+.engine-cost { font-size: 11px; color: var(--text-light); margin-top: 4px; display: none; }  /* collapsed */
+.engine-box:hover .engine-cost { display: block; }
+
+/* ── PRODUCTION: synthesis-pending + strata preview ──────────── */
+.synthesis-pending { color: var(--text-muted); text-align: center; padding: 32px 16px; font-style: normal; }
+.strata-preview    { border-top: 1px solid var(--border-lt); padding-top: 16px; }
+.strata-preview .q  { font-size: 13px; color: var(--text-muted); padding: 6px 0; }
+
+/* action affordance vs historical record (interactive flag, Eames §9) */
+.action-btn { font-family: 'Cormorant Garamond', serif; font-size: 14px; letter-spacing: 0.04em;
+              padding: 9px 22px; background: var(--btn); color: var(--btn-text); border: none;
+              border-radius: 3px; cursor: pointer; }
+.action-record { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+/* ── READING: synthesis document ─────────────────────────────── */
+.synthesis-doc { margin-bottom: 36px; }
+.synth-section { margin-bottom: 22px; }
+.synth-section.comparison { border-left: 3px solid var(--accent-border); padding-left: 16px; }
+.synth-section h3 { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 600;
+                    color: var(--text); margin: 0 0 8px; }
+.synth-section .needs-review { margin-left: 8px; }
+.synth-section .join-note { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 6px; }
+.synth-body { color: var(--text); }
+.synth-body p { margin: 0 0 12px; }
+
+/* ── READING: strata navigator (question-axis) ───────────────── */
+.strata-nav { border-top: 1px solid var(--border); padding-top: 8px; }
+.q-row { border-bottom: 1px solid var(--border-lt); }
+.q-head { display: flex; align-items: baseline; gap: 10px; padding: 14px 10px; cursor: pointer; }
+.q-row.active { background: var(--accent-dim); }           /* the one accent use in the strata */
+.q-text { flex: 1; font-size: 15px; color: var(--text); }
+.q-status { font-size: 11px; font-variant: small-caps; letter-spacing: 0.5px; color: var(--text-muted); }
+.q-status.withdrawn { text-decoration: line-through; }
+.q-counts { font-size: 12px; color: var(--text-muted); }
+.q-chevron { color: var(--text-light); font-size: 12px; transition: transform 0.15s; }
+.q-row.active .q-chevron { transform: rotate(180deg); }
+.q-claims { display: none; padding: 4px 10px 16px; }
+.q-row.active .q-claims { display: block; }
+
+/* ── claims — five grammars ──────────────────────────────────── */
+.claim { padding: 10px 0; border-top: 1px solid var(--border-lt); }
+.claim:first-child { border-top: none; }
+.claim-text { color: var(--text); }
+.claim-attrib, .claim-cite-link { font-size: 12px; color: var(--text-muted); cursor: pointer;
+                                  margin-left: 8px; text-decoration: underline; text-underline-offset: 2px; }
+
+/* convergent — settled register, no special treatment beyond attribution */
+.claim.convergent .claim-text { color: var(--text); }
+
+/* divergent — structural; disagreement visible as a shape */
+.claim.divergent .divergence { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+@media (max-width: 600px) { .claim.divergent .divergence { grid-template-columns: 1fr; } }
+.divergence-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+                    padding: 8px 10px; font-size: 13px; }
+.divergence-panel .engine { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.claim.divergent.resolved .resolution { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 6px; }
+.claim.divergent.open { border-left: 3px solid var(--status-amber); padding-left: 12px; }
+.claim.divergent.open .open-label { color: var(--status-amber); font-size: 11px; letter-spacing: 0.04em; }
+
+/* single_source — same register as convergent + a named qualifier */
+.claim.single_source .ss-label { /* uses .pill in --border-lt */ }
+.claim.single_source.open { border-left: 3px solid var(--status-amber); padding-left: 12px; }
+
+/* synthesis_inference — transparent as inference */
+.claim.synthesis_inference { background: var(--claim-infer); border-radius: 3px; padding: 10px 12px; }
+.claim.synthesis_inference .claim-text { font-style: italic; }
+.claim.synthesis_inference .infer-label { font-size: 12px; color: var(--text-muted); font-style: italic; margin-right: 6px; }
+
+/* gap — two sub-types by scope */
+.claim.gap.honest .claim-text { color: var(--text); }      /* full typographic weight — a finding */
+.claim.gap.technical { border-left: 3px solid var(--status-amber); padding-left: 12px; }
+.claim.gap.technical .claim-text { font-size: 13px; color: var(--text-muted); }
+.claim.gap.technical .not-run { color: var(--status-amber); font-size: 11px; letter-spacing: 0.04em; }
+
+/* ── Level 4: engine return expansion ────────────────────────── */
+.engine-expansion { display: none; background: var(--panel-bg); border: 1px solid var(--border-lt);
+                    border-radius: 3px; padding: 10px 12px; margin-top: 8px; }
+.engine-expansion.open { display: block; }
+.engine-expansion .ee-row { padding: 6px 0; border-top: 1px solid var(--border-lt); }
+.engine-expansion .ee-row:first-child { border-top: none; }
+.engine-expansion .ee-meta { font-size: 11px; color: var(--text-muted); }
+.engine-expansion .ee-preview { font-size: 13px; color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+.engine-expansion .ee-error { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+/* ── Level 5: citation drawer (truth layer, two grades) ──────── */
+.citation-drawer { display: none; border-top: 1px solid var(--border-lt); margin-top: 8px; padding-top: 8px; }
+.citation-drawer.open { display: block; }
+.citation { padding: 7px 0; }
+.citation a { color: var(--text); text-underline-offset: 2px; }
+.citation .cite-date { font-size: 11px; color: var(--text-muted); }   /* system-authored — quiet authority */
+.cite-resolution { margin-left: 8px; }                                /* model-claimed — lesser authority */
+.cite-resolution.unchecked { /* .pill neutral */ }
+.cite-resolution.resolved  { color: var(--text-muted); }
+.cite-resolution.dead, .cite-resolution.mismatched { /* .pill.amber */ }
+.citation .cite-note { font-size: 12px; color: var(--text-muted); font-style: italic; }
