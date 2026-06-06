@@ -112,6 +112,19 @@ export async function markDispatched(
   if (error) throw new Error(`markDispatched failed: ${error.message}`);
 }
 
+// source_count — a DERIVED coverage signal (engine_dispatch.source_count): the
+// count of DISTINCT source URLs the engine cited in its raw return. Re-derivable
+// and NEVER authoritative — response_raw remains the source of truth, and a low
+// count is a coverage signal, not a verdict (gaps render with dignity). Citation
+// liveness/resolution is a separate later pass; this is only "how many cited".
+const URL_RE = /https?:\/\/[^\s"'<>)\]}]+/gi;
+function countSources(responseRaw: string | null | undefined): number {
+  if (!responseRaw) return 0;
+  const urls = responseRaw.match(URL_RE) ?? [];
+  const distinct = new Set(urls.map((u) => u.replace(/[.,;:'")\]}>]+$/, "").toLowerCase()));
+  return distinct.size;
+}
+
 export async function markCompleted(
   supabase: SupabaseClient,
   rowId: string,
@@ -124,6 +137,7 @@ export async function markCompleted(
       status: "completed",
       response_raw: args.response_raw,
       response_received_at: new Date().toISOString(),
+      source_count: countSources(args.response_raw),
       tokens_in: args.tokens_in ?? null,
       tokens_out: args.tokens_out ?? null,
       cost_usd: args.cost_usd ?? null,
@@ -145,6 +159,7 @@ export async function markPartial(
       status: "partial",
       response_raw: args.response_raw,
       response_received_at: new Date().toISOString(),
+      source_count: countSources(args.response_raw),
       error_detail: `partial: ${args.reason}`,
       tokens_in: args.tokens_in ?? null,
       tokens_out: args.tokens_out ?? null,
