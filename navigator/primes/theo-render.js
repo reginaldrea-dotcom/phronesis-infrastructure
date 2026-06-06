@@ -105,12 +105,27 @@
     return '<div class="citation-drawer" data-drawer="' + esc(claimId) + '">' + rows + '</div>';
   }
 
-  /* attribution + citation links (shared by the source-backed grammars) */
-  function attribLinks(cl) {
+  /* per-answer attribution (Eames note bfa3c7bb, issues 1+2): two-level — type label over
+     model string. One engine: the two lines. Multiple (convergence): inline "N engines:
+     type · type" (the count is the convergence signal), model strings on hover. The block
+     is also the L4 drill. The citation (L5) link follows. */
+  function attribLinks(cl, ctx) {
+    var srcs = (ctx && ctx.sourcesByClaim[cl.claim_id]) || [];
+    var engs = [], seen = {};
+    srcs.forEach(function (s) {
+      var e = ctx.enginesByDispatch[s.dispatch_id];
+      if (e && !seen[e.source_name]) { seen[e.source_name] = 1; engs.push(e); }
+    });
     var out = '';
-    if (cl.supporting_engines > 0 || cl.diverging_engines > 0) {
-      var n = (cl.supporting_engines || 0) + (cl.diverging_engines || 0);
-      out += '<span class="claim-attrib" data-attrib="' + esc(cl.claim_id) + '">' + n + (n === 1 ? ' engine' : ' engines') + '</span>';
+    if (engs.length === 1) {
+      out += '<div class="attribution" data-attrib="' + esc(cl.claim_id) + '">' +
+        '<span class="attr-type">' + esc(engineType(engs[0].source_name)) + '</span>' +
+        '<span class="attr-model">' + esc(engs[0].source_name) + '</span></div>';
+    } else if (engs.length > 1) {
+      var types = engs.map(function (e) { return engineType(e.source_name); }).join(' · ');
+      var models = engs.map(function (e) { return e.source_name; }).join(', ');
+      out += '<div class="attribution multi" data-attrib="' + esc(cl.claim_id) + '" title="' + esc(models) + '">' +
+        '<span class="attr-type">' + engs.length + ' engines: ' + esc(types) + '</span></div>';
     }
     if (cl.citations_total > 0) {
       out += '<span class="claim-cite-link" data-cite="' + esc(cl.claim_id) + '">' + cl.citations_total + (cl.citations_total === 1 ? ' source' : ' sources') + '</span>';
@@ -122,17 +137,17 @@
   function renderClaim(cl, ctx) {
     var st = cl.claim_status, body, cls = 'claim ' + st;
     if (st === 'convergent') {
-      body = '<span class="claim-text">' + esc(cl.claim_text) + '</span>' + attribLinks(cl);
+      body = '<span class="claim-text">' + esc(cl.claim_text) + '</span>' + attribLinks(cl, ctx);
     } else if (st === 'divergent') {
       var open = cl.divergence_status === 'open';
       cls += open ? ' open' : ' resolved';
       body = (open ? '<span class="open-label">Open divergence</span> ' : '') +
-        '<span class="claim-text">' + esc(cl.claim_text) + '</span>' + attribLinks(cl) +
+        '<span class="claim-text">' + esc(cl.claim_text) + '</span>' + attribLinks(cl, ctx) +
         (cl.resolution_note ? '<div class="resolution">' + (open ? '' : 'Resolved: ') + esc(cl.resolution_note) + '</div>' : '');
     } else if (st === 'single_source') {
       if (cl.divergence_status === 'open') cls += ' open';
       body = '<span class="claim-text">' + esc(cl.claim_text) + '</span> <span class="pill ss-label">Single source</span>' +
-        attribLinks(cl) +
+        attribLinks(cl, ctx) +
         (cl.divergence_status === 'open' && cl.resolution_note ? '<div class="resolution">' + esc(cl.resolution_note) + '</div>' : '');
     } else if (st === 'synthesis_inference') {
       body = '<span class="infer-label">Synthesist note</span><span class="claim-text">' + esc(cl.claim_text) + '</span>' +
@@ -202,14 +217,27 @@
     });
     var counts = {};
     claims.forEach(function (c) { counts[c.claim_status] = (counts[c.claim_status] || 0) + 1; });
-    var summary = Object.keys(CLAIM_ORDER).filter(function (k) { return counts[k]; })
+    var countSummary = Object.keys(CLAIM_ORDER).filter(function (k) { return counts[k]; })
       .map(function (k) { return counts[k] + ' ' + k.replace('_', '-'); }).join(' · ');
+    // Collapsed-row summary (Eames issue 3): contested questions show amber "Divergent
+    // answers"; multi-engine agreement shows "N engines agreed"; otherwise the claim counts.
+    var engSet = {};
+    claims.forEach(function (c) {
+      (ctx.sourcesByClaim[c.claim_id] || []).forEach(function (s) {
+        var e = ctx.enginesByDispatch[s.dispatch_id]; if (e) engSet[engineType(e.source_name)] = 1;
+      });
+    });
+    var engN = Object.keys(engSet).length;
+    var hasDivergent = claims.some(function (c) { return c.claim_status === 'divergent'; });
+    var summaryHtml = hasDivergent
+      ? '<span class="q-divergent">Divergent answers</span>'
+      : '<span class="q-counts">' + (engN > 1 ? engN + ' engines agreed' : esc(countSummary)) + '</span>';
     var statusCls = 'q-status' + (q.status === 'withdrawn' ? ' withdrawn' : '');
     return '<div class="q-row">' +
       '<div class="q-head" data-q="1">' +
         '<span class="q-text">' + esc(q.question_text) + '</span>' +
         (q.status ? '<span class="' + statusCls + '">' + esc(q.status) + '</span>' : '') +
-        '<span class="q-counts">' + esc(summary) + '</span>' +
+        summaryHtml +
         '<span class="q-chevron">▾</span>' +
       '</div>' +
       '<div class="q-claims">' + (claims.map(function (c) { return renderClaim(c, ctx); }).join('') || '<div class="claim"><span class="claim-text" style="color:var(--text-muted)">No claims recorded.</span></div>') + '</div>' +

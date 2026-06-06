@@ -98,6 +98,12 @@ body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, 
 .claim-text { color: var(--text); }
 .claim-attrib, .claim-cite-link { font-size: 12px; color: var(--text-muted); cursor: pointer;
                                   margin-left: 8px; text-decoration: underline; text-underline-offset: 2px; }
+/* per-answer attribution block (Eames bfa3c7bb): type label over model string */
+.attribution { margin-top: 6px; cursor: pointer; }
+.attr-type  { display: block; font-size: 12px; color: var(--text); }
+.attr-model { display: block; font-size: 11px; color: var(--text-muted); }
+.attribution.multi .attr-type { color: var(--text-muted); }   /* convergence: count + types inline */
+.q-divergent { font-size: 12px; color: var(--status-amber); }  /* collapsed-row "Divergent answers" */
 
 /* convergent — settled register, no special treatment beyond attribution */
 .claim.convergent .claim-text { color: var(--text); }

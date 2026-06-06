@@ -29,3 +29,22 @@ var ENGINE_DISPLAY = {
   'anthropic-claude-sonnet-4-6':    'Claude Sonnet 4.6',
 };
 function engineDisplayName(key) { return ENGINE_DISPLAY[key] || key; }
+
+// Type labels — version-stable family name (Eames note bfa3c7bb, issue 2): the PRIMARY
+// attribution line, over the model string (source_name) as the quiet secondary line.
+// Eames owns the exact labels — easy to refine here.
+var ENGINE_TYPE = {
+  'perplexity-sonar-pro':           'Perplexity Sonar',
+  'perplexity-sonar-deep-research': 'Perplexity Deep Research',
+  'perplexity-sonar-reasoning-pro': 'Perplexity Sonar Reasoning',
+  'gemini-deep-research':           'Gemini Deep Research',
+  'gemini-3-1-pro':                 'Gemini 3 Pro',
+  'gemini-2-5-pro':                 'Gemini 2.5 Pro',
+  'openai-o3-deep-research':        'OpenAI o3 Deep Research',
+  'openai-o4-mini-deep-research':   'OpenAI o4-mini Deep Research',
+  'openai-gpt-5-search':            'OpenAI GPT-5',
+  'openai-gpt-4o-search':           'OpenAI GPT-4o',
+  'anthropic-claude-opus-4-8':      'Claude Opus',
+  'anthropic-claude-sonnet-4-6':    'Claude Sonnet',
+};
+function engineType(key) { return ENGINE_TYPE[key] || engineDisplayName(key); }
