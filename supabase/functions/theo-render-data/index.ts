@@ -22,7 +22,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ID_RE = /^[0-9a-f-]{4,36}$/i;  // full UUID or a leading hex prefix
 
 function env(k: string): string {
   const v = Deno.env.get(k);
@@ -47,13 +47,24 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: "invalid JSON body" }, 400);
   }
-  const sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
-  if (!UUID_RE.test(sessionId)) return json({ error: "session_id must be a full UUID" }, 400);
+  let sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
+  if (!ID_RE.test(sessionId)) return json({ error: "session_id must be a UUID or hex prefix" }, 400);
 
   const supabase = createClient(env("SUPABASE_URL"), env("THEO_DISPATCH_SECRET_KEY"));
 
-  // Session by UUID. Access control is at the Cloudflare edge (see header) — no per-user
-  // scoping here; session_id is the capability.
+  // Prefix-tolerant resolve (sessionId is ID_RE-validated hex, safe to interpolate). Access
+  // control is at the Cloudflare edge (see header) — no per-user scoping; the id/prefix is
+  // the capability.
+  const resolved = await supabase.rpc("execute_raw_sql", {
+    query: `SELECT id FROM theo_session WHERE id::text LIKE '${sessionId}%' LIMIT 2`,
+  });
+  if (resolved.error) return json({ error: `resolve: ${resolved.error.message}` }, 500);
+  const matches = (resolved.data ?? []) as Array<{ id: string }>;
+  if (matches.length === 0) return json({ error: `no session with id/prefix '${sessionId}'` }, 404);
+  if (matches.length > 1) return json({ error: `ambiguous prefix '${sessionId}' — supply more characters` }, 400);
+  sessionId = matches[0].id;
+
+  // Session row (full id now). Access control is the Cloudflare edge.
   const sess = await supabase
     .from("theo_session")
     .select("id, state, original_brief, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
