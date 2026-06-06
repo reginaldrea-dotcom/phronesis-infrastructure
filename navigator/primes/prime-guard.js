@@ -1,20 +1,23 @@
-/* ── prime-guard.js — accidental-close guard (shared) ──
-   A Prime browser tab has no recovery: closing argos.html / connie.html ends the
-   session, and if no Super-T was filed the work is gone (unlike .ai mode, which
-   reopens the same thread). This arms the browser's native "Leave site?" confirm
-   whenever a live, unretired session exists, so a stray click on the tab's X, a
-   Ctrl-W, or an accidental refresh prompts instead of silently discarding.
+/* ── prime-guard.js — unsaved-work guard (shared) ──
+   The session now PERSISTS across tab-close: resumeOrWake() (session module) restores the
+   same thread on reopen — context server-side, tail redrawn — until formal retirement. So a
+   stray close is no longer destructive to the conversation, and we no longer warn on every
+   live session (that would just be a nag).
 
-   `sessionClosed` is set true on a clean retirement (triggerRetirement / the shared
-   fileSuperT) so the confirm doesn't misleadingly fire straight after "Session
-   closed", and reset false when a new/continued session begins. Global, shared with
-   the session module; depends on the global `sessionId` (state). Loaded by both
-   interfaces, after the retire module and before session/init. */
+   What a close CAN still lose is genuinely-unsaved work: text typed but not yet sent, or a
+   request in flight. Warn only then, so the prompt is meaningful. (Note: browsers also require
+   a prior interaction with the page before they will show this native dialog at all.)
+
+   `sessionClosed` is set true on a clean retirement (triggerRetirement / the shared fileSuperT)
+   and reset false when a new/continued/resumed session begins. Depends on the globals
+   inputEl / invokeController / isWaking (state + session). Loaded by both interfaces. */
 var sessionClosed = false;
 
 window.addEventListener('beforeunload', function (e) {
-  // Warn only when there's a live session worth protecting.
-  if (typeof sessionId !== 'undefined' && sessionId && !sessionClosed) {
+  var hasUnsent = typeof inputEl !== 'undefined' && inputEl && inputEl.value.trim().length > 0;
+  var inFlight  = (typeof invokeController !== 'undefined' && invokeController) ||
+                  (typeof isWaking !== 'undefined' && isWaking);
+  if ((hasUnsent || inFlight) && !sessionClosed) {
     e.preventDefault();
     e.returnValue = '';   // required to trigger the native confirmation dialog
   }

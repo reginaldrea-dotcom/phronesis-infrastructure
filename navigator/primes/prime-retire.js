@@ -97,6 +97,7 @@ async function fileSuperT(tp) {
   closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(closed);
   sessionClosed = true;   // clean retirement — disarm the accidental-close guard
+  clearPersistedSession();   // retirement is the only thing that ends the persistent thread
   inputEl.disabled = false; btnSend.disabled = false;   // allow a final goodbye after close
   clearArtefactPanel();
   scrollBottom();

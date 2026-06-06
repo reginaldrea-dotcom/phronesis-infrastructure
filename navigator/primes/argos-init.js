@@ -104,4 +104,4 @@ inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey)
 inputEl.addEventListener('input', () => { inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px'; });
 
 /* ── Boot ── */
-wake();
+resumeOrWake();

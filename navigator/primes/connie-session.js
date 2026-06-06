@@ -69,7 +69,7 @@ async function invoke(message, isWake = false, opts = {}) {
           lastError = data.error || res.statusText; continue;
         }
         if (!res.ok) { lastError = data.error || res.statusText; continue; }
-        if (!sessionId) { sessionId = data.session_id; sessionDisp.textContent = 'Session ' + data.session_id.slice(0,8); }
+        if (!sessionId) { sessionId = data.session_id; sessionDisp.textContent = 'Session ' + data.session_id.slice(0,8); persistSession(); }
         clearError(); return data;
 
       } catch (err) {
@@ -139,6 +139,7 @@ async function triggerRetirement(rich) {
   d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(d);
   sessionClosed = true;   // clean retirement — disarm the accidental-close guard
+  clearPersistedSession();   // retirement is the only thing that ends the persistent thread
   inputEl.disabled = false; btnSend.disabled = false;   // allow a final goodbye after close
   const rp = document.getElementById('retirement-prompt'); if (rp) rp.remove();
   scrollBottom();
@@ -230,6 +231,57 @@ async function wake() {
     if (data.artifacts?.length > 0) data.artifacts.forEach(a => addArtefact(a));
   }
   btnSend.disabled = false; scrollBottom();
+}
+
+/* ── Browser durability: persist the session id so a reopened tab resumes the SAME
+   thread (server context endures via the EF; the visible tail is redrawn from
+   prime_conversations through the EF's load_history read). The persistent thread ends
+   only on formal retirement — this is the .ai-style "reopen the same thread" behaviour. ── */
+function sessionStoreKey() { return 'phronesis_session_' + PRIME_CONFIG.lineage; }
+function persistSession() { try { if (sessionId) localStorage.setItem(sessionStoreKey(), sessionId); } catch (e) {} }
+function clearPersistedSession() { try { localStorage.removeItem(sessionStoreKey()); } catch (e) {} }
+
+/* Boot entry (replaces the bare wake() call): resume a stored session if one survives,
+   else wake fresh. */
+async function resumeOrWake() {
+  let stored = null;
+  try { stored = localStorage.getItem(sessionStoreKey()); } catch (e) {}
+  if (stored) await resumeSession(stored);
+  else wake();
+}
+
+async function resumeSession(sid) {
+  if (isWaking) return; isWaking = true; btnSend.disabled = true;
+  sessionDisp.textContent = 'Resuming…';
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lineage_name: PRIME_CONFIG.lineage, session_id: sid, load_history: true }),
+    });
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.turns) && data.turns.length) {
+      sessionId = sid; sessionClosed = false; lastWakeTimestamp = Date.now();
+      renderSessionDivider('Session resumed \xb7 ' + timeStr());
+      data.turns.forEach(replayTurn);
+      sessionDisp.textContent = 'Session ' + sid.slice(0, 8) + ' \xb7 resumed';
+    } else {
+      clearPersistedSession(); sessionId = null;
+      isWaking = false; btnSend.disabled = false; wake(); return;
+    }
+  } catch (e) {
+    sessionId = sid;
+    sessionDisp.textContent = 'Session ' + sid.slice(0, 8) + ' \xb7 resumed (tail unavailable)';
+  }
+  isWaking = false; btnSend.disabled = false; scrollBottom();
+}
+
+function replayTurn(t) {
+  if (!t) return;
+  let c = t.content;
+  if (c && typeof c === 'object') c = c.text || c.content || JSON.stringify(c);
+  if (!c) return;
+  if (t.role === 'user') renderUser(c);
+  else renderAssistant(c, 0, [], []);
 }
 
 /* ── Drive confirmation gate — STUB ──────────────────────────────────────────

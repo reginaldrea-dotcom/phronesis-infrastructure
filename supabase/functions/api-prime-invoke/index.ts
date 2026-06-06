@@ -321,6 +321,19 @@ Deno.serve(async (req: Request) => {
       return new Response(respBody, { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     };
 
+    // SESSION RESUME (browser durability): return a session's conversation tail so a reopened
+    // tab can restore the visible thread. prime_conversations is RLS-sealed from the publishable
+    // key, so this read goes through the EF. Pure read — no model call, no wake, no side effects.
+    if (body.load_history && session_id) {
+      const { data: turns, error: thErr } = await supabase
+        .from("prime_conversations")
+        .select("role, content, created_at, metadata")
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: true });
+      if (thErr) return await finalize({ error: true, error_type: "api_error", message: thErr.message }, 500);
+      return await finalize({ session_id, turns: turns ?? [] }, 200);
+    }
+
     if (action) {
       const handler = getAction(action);
       if (handler) {
