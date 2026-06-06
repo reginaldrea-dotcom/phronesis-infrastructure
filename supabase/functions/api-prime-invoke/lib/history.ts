@@ -7,6 +7,33 @@ import { renderToolLog } from "./provenance.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
+type Turn = { role: "user" | "assistant"; content: string };
+
+// B4 — in-loop compaction, preserve-purpose (conf 1151109e). Persistent sessions accumulate
+// context; heavy OLDER turns (large pasted documents, long returns) crowd out the recent
+// overview the Prime actually needs to keep working. Ease them: a turn beyond the recent
+// window that exceeds a size threshold is compacted to its head + a pointer. The GIST is
+// preserved, the FULL turn stays in prime_conversations (recoverable, and still rendered in
+// the browser tail), and the freed budget keeps more recent turns whole. The wake/orientation
+// turn is never eased (it carries identity/purpose). No-op for short or light sessions.
+const EASE_RECENT_WINDOW = 6;      // most-recent history turns always kept whole
+const EASE_SIZE_THRESHOLD = 2400;  // chars (~600 tokens) — only ease genuinely heavy turns
+const EASE_HEAD_CHARS = 400;       // gist retained from an eased turn
+
+function easeOlderTurns(turns: Turn[]): Turn[] {
+  const cutoff = turns.length - EASE_RECENT_WINDOW;
+  return turns.map((t, i) => {
+    if (i >= cutoff) return t;                              // recent window: whole
+    if (t.content.length <= EASE_SIZE_THRESHOLD) return t;  // light turn: whole
+    const head = t.content.slice(0, EASE_HEAD_CHARS).trimEnd();
+    const elided = t.content.length - head.length;
+    return {
+      role: t.role,
+      content: `${head}\n\n[… ${elided} chars eased here to preserve context budget; the full turn is retained in this session's record …]`,
+    };
+  });
+}
+
 export async function loadBoundedHistory(
   supabase: SupabaseClient,
   sessionId: string | null,
@@ -50,7 +77,8 @@ export async function loadBoundedHistory(
     .reverse()
     .map(augment);
 
-  const combined = [...wake, ...history];
+  // B4: ease heavy older history turns before the budget trim (wake kept whole).
+  const combined = [...wake, ...easeOlderTurns(history)];
   let charBudget = tokenCeiling * 4;
   const trimmed: { role: "user" | "assistant"; content: string }[] = [];
   for (let i = combined.length - 1; i >= 0; i--) {
