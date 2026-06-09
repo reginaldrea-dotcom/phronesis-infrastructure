@@ -137,7 +137,9 @@
     else if (st === 'divergent') { text = 'Divergent' + (div ? ' · ' + div : ''); if (div === 'open') accent = ' amber'; }
     else if (st === 'single_source') { text = 'Single source' + (div ? ' · ' + div : ''); if (div === 'open') accent = ' amber'; }
     else if (st === 'gap') { text = 'Gap'; accent = ' gap'; }
-    else if (st === 'synthesis_inference') { text = 'Synthesist inference'; accent = ' infer'; }
+    // Eames reopen 5992c6ea: keep the WARM "Synthesist note" voice (violet released). Keys off
+    // claim_status='synthesis_inference'; the warm tint reads as the synthesist's own voice.
+    else if (st === 'synthesis_inference') { text = 'Synthesist note'; accent = ' warm'; }
     else { text = st || 'Claim'; }
     return '<span class="claim-chip' + accent + '"' + (cl.scope ? ' title="' + esc(cl.scope) + '"' : '') + '>' + esc(text) + '</span>';
   }
@@ -173,6 +175,45 @@
       var open = arr.filter(function (c) { return c.divergence_status === 'open'; }).length;
       return n + ' ' + o[1] + (open > 0 ? (n === 1 ? ' (open)' : ' (' + open + ' open)') : '');
     }).join(' · ');
+  }
+
+  /* ── repair-pass helpers (Eames reopen brief 5992c6ea) ───────── */
+  // Q-label: ONE convention everywhere — "Q1)" in the mono signals face (the (1)/Q1/Q1: drift,
+  // settled). question_index is 0-based in the substrate, so display index+1. '' when no index
+  // (the trailing "Further claims" group).
+  function qLabel(idx) { return (idx != null && idx !== '') ? 'Q' + (Number(idx) + 1) + ')' : ''; }
+  // A synthesis json field may arrive parsed (jsonb) or as a string (text col) — tolerate both.
+  function asArray(v) { if (Array.isArray(v)) return v; if (typeof v === 'string') { var p = safeParse(v); return Array.isArray(p) ? p : []; } return []; }
+  // §F9 answer-state: one grammar per question — a lead STATE-WORD (amber only for unresolved
+  // divergence, per Eames's amber=divergence map) + a quiet breakdown. Default vocabulary; Eames
+  // finalises the words at sign-off.
+  function answerState(claims) {
+    var has = {}; (claims || []).forEach(function (c) { has[c.claim_status] = (has[c.claim_status] || 0) + 1; });
+    var openDiv = (claims || []).some(function (c) { return (c.claim_status === 'divergent' || c.claim_status === 'single_source') && c.divergence_status === 'open'; });
+    if (openDiv) return { word: 'Divergent', cls: 'amber' };
+    if (has.divergent) return { word: 'Reconciled', cls: '' };
+    if (has.single_source) return { word: 'Single-source', cls: '' };
+    if (has.convergent) return { word: 'Convergent', cls: '' };
+    if (has.gap) return { word: 'Gap', cls: 'muted' };
+    if (has.synthesis_inference) return { word: 'Inference', cls: '' };
+    return { word: '', cls: '' };
+  }
+  // Material status (the reader's "what can I use"): confidence_ratings_json as a first-class
+  // block — claims by confidence tier (high -> low) with their basis. Synthesis-level.
+  var CONF_ORDER = ['high', 'medium-high', 'medium', 'low-medium', 'low'];
+  function renderMaterialStatus(d) {
+    var rows = asArray(d.synthesis && d.synthesis.confidence_ratings_json);
+    if (!rows.length) return '';
+    rows = rows.slice().sort(function (a, b) {
+      return CONF_ORDER.indexOf(String(a.confidence || '').toLowerCase()) - CONF_ORDER.indexOf(String(b.confidence || '').toLowerCase());
+    });
+    var items = rows.map(function (r) {
+      var conf = String(r.confidence || '').toLowerCase().replace(/[^a-z-]/g, '');
+      return '<li class="mat-row"><span class="mat-tier mat-' + esc(conf || 'unk') + '">' + esc(r.confidence || '?') + '</span>' +
+        '<span class="mat-claim">' + esc(r.claim || '') + '</span>' +
+        (r.basis ? '<div class="mat-basis">' + esc(r.basis) + '</div>' : '') + '</li>';
+    }).join('');
+    return '<div class="cover-block"><div class="cover-label">Material status — what you can rely on</div><ul class="material-status">' + items + '</ul></div>';
   }
 
   /* ── engine state chip (Eames §4b / §6) ──────────────────────── */
@@ -282,8 +323,10 @@
         html += '<div class="' + c + '">' +
           (s.title ? '<h3>' + esc(s.title) + (s.needs_review ? ' <span class="pill needs-review">Needs review</span>' : '') + '</h3>' : '') +
           '<div class="synth-body">' + nl2p(s.content_md) + '</div>' +
-          // §7: join_note is review scaffolding — only where the section is flagged for review.
-          (s.join_note && s.needs_review ? '<div class="join-note">' + esc(s.join_note) + '</div>' : '') + '</div>';
+          // Eames reopen 5992c6ea: join_note holds transition prose ("section 2 turns to..."),
+          // not review metadata — suppress it entirely (default all-off; section-0 opening pointer
+          // special-case is Reg's call). Removing the render removes them all cleanly.
+          '</div>';
       });
     } else {
       html += '<div class="synth-body">' + nl2p(d.synthesis.layer_1_synthesis_md) + '</div>';
@@ -323,21 +366,24 @@
     claims = claims.slice().sort(function (a, b) {
       return (CLAIM_ORDER[a.claim_status] - CLAIM_ORDER[b.claim_status]) || (new Date(a.created_at) - new Date(b.created_at));
     });
-    // §5: enumerated rollup in fixed status order with open/resolved qualifiers — the
-    // "Divergent answers" vagueness and the open/resolved blindness (F8, F2) are retired.
-    var rollup = rollupEnum(claims);
+    // §F9 (reopen): one grammar — a lead state-word (amber = unresolved divergence) + a quiet
+    // breakdown (the enumeration). "Divergent answers" vagueness + open/resolved blindness retired.
+    var state = answerState(claims);
+    var breakdown = rollupEnum(claims);
+    var label = qLabel(q.question_index);                 // "Q1)" convention, mono
     var statusCls = 'q-status' + (q.status === 'withdrawn' ? ' withdrawn' : '');
-    var numeral = (q.question_index != null && q.question_index !== '') ? '<span class="q-num">' + esc(q.question_index) + '</span>' : '';
     // §6: question header is a SECTION header, not a card — its own organ, so it can no
     // longer read as a fifth claim.
     return '<div class="q-row" data-qid="' + esc(q.id != null ? q.id : '') + '">' +
       '<div class="q-head" data-q="1">' +
-        '<div class="q-head-top">' + numeral +
+        '<div class="q-head-top">' + (label ? '<span class="q-label">' + esc(label) + '</span>' : '') +
           '<span class="q-text">' + esc(q.question_text) + '</span>' +
           (q.status ? '<span class="' + statusCls + '">' + esc(q.status) + '</span>' : '') +
           '<span class="q-chevron">▾</span>' +
         '</div>' +
-        (rollup ? '<div class="q-rollup">' + esc(rollup) + '</div>' : '') +
+        ((state.word || breakdown) ? '<div class="q-rollup">' +
+          (state.word ? '<span class="q-state ' + state.cls + '">' + esc(state.word) + '</span>' : '') +
+          (breakdown ? '<span class="q-breakdown">' + esc(breakdown) + '</span>' : '') + '</div>' : '') +
       '</div>' +
       '<div class="q-claims">' + (claims.map(function (c) { return renderClaim(c, ctx); }).join('') || '<div class="claim"><span class="claim-text" style="color:var(--text-muted)">No claims recorded.</span></div>') + '</div>' +
     '</div>';
@@ -529,19 +575,28 @@
     var claimsByQ = groupBy(d.claims, 'question_id');
     html += '<div class="cover-block"><div class="cover-label">The questions</div><ol class="cover-questions">';
     (d.questions || []).forEach(function (q) {
-      var rollup = rollupEnum(claimsByQ[q.id] || []);
+      var cq = claimsByQ[q.id] || [];
+      var state = answerState(cq);                       // same grammar as the claims layer
+      var breakdown = rollupEnum(cq);
       // asked-of line from engine_dispatch.question_id — OMITTED (never dashed) until backfilled.
       var asked = (d.engines || []).filter(function (e) { return e.question_id && e.question_id === q.id; })
         .map(function (e) { return engineDisplayName(e.source_name); });
       html += '<li class="cover-q" data-jump="' + esc(q.id) + '">' +
-        '<span class="cover-q-text">' + esc(q.question_text) + '</span>' +
-        (rollup ? '<span class="cover-q-rollup">' + esc(rollup) + '</span>' : '') +
-        (asked.length ? '<span class="cover-q-asked">asked of ' + esc(asked.join(', ')) + '</span>' : '') +
+        '<div class="cover-q-line">' +
+          (qLabel(q.question_index) ? '<span class="q-label">' + esc(qLabel(q.question_index)) + '</span>' : '') +
+          '<span class="cover-q-text">' + esc(q.question_text) + '</span>' +
+        '</div>' +
+        '<div class="cover-q-meta">' +
+          (state.word ? '<span class="q-state ' + state.cls + '">' + esc(state.word) + '</span>' : '') +
+          (breakdown ? '<span class="q-breakdown">' + esc(breakdown) + '</span>' : '') +
+          (asked.length ? '<span class="cover-q-asked">asked of ' + esc(asked.join(', ')) + '</span>' : '') +
+        '</div>' +
         '</li>';
     });
     html += '</ol></div>';
     var summary = coverSummary(d);
     if (summary) html += '<div class="cover-block"><div class="cover-label">The answer</div><div class="cover-answer synth-body">' + summary + '</div></div>';
+    html += renderMaterialStatus(d);   // §"what can I use" — confidence_ratings_json, first-class
     html += '<div class="cover-doors">' +
       '<span class="cover-door" data-door="synthesis">Full synthesis</span>' +
       '<span class="cover-door" data-door="claims">Claims</span>' +

@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
   // Session row (full id now). Access control is the Cloudflare edge.
   const sess = await supabase
     .from("theo_session")
-    .select("id, state, original_brief, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
+    .select("id, state, display_title, original_brief, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
     .eq("id", sessionId)
     .maybeSingle();
   if (sess.error) return json({ error: `session lookup: ${sess.error.message}` }, 500);
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
   const [engines, questions, synthRow] = await Promise.all([
     supabase.from("render_source_v1").select("*").eq("session_id", sessionId),
     supabase.from("research_question").select("id, question_index, question_text, status").eq("theo_session_id", sessionId).order("question_index", { ascending: true }),
-    supabase.from("synthesis").select("id, layer_1_synthesis_md, created_at").eq("theo_session_id", sessionId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("synthesis").select("id, layer_1_synthesis_md, created_at, divergence_points_json, convergence_points_json, confidence_ratings_json").eq("theo_session_id", sessionId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (engines.error) return json({ error: `engines: ${engines.error.message}` }, 500);
   if (questions.error) return json({ error: `questions: ${questions.error.message}` }, 500);
