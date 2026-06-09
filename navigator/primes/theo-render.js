@@ -449,19 +449,22 @@
       var up = ev.target.closest('[data-unparsed]');
       if (up) { var pre = up.parentNode.querySelector('.stratum-raw'); if (pre) { pre.hidden = !pre.hidden; up.textContent = pre.hidden ? 'View unparsed' : 'Hide unparsed'; } return; }
       var door = ev.target.closest('[data-door]');
-      if (door) { var w = door.getAttribute('data-door'); nav(w === 'synthesis' ? showSynthesis : w === 'claims' ? showClaims : showEngines); return; }
-      var jump = ev.target.closest('[data-jump]');
-      if (jump) {
-        var qid = jump.getAttribute('data-jump');
-        nav(function () { showClaims(); var el = root.querySelector('.q-row[data-qid="' + qid + '"]'); if (el) { el.classList.add('active'); el.scrollIntoView(); } });
+      if (door) { nav(door.getAttribute('data-door') === 'synthesis' ? showSynthesis : showEngines); return; }
+      // Cover question expands IN PLACE to its claim cards — the cover is the claims surface now
+      // (Eames 6b6703e0). One open at a time, so the cover stays scannable.
+      var qx = ev.target.closest('[data-qexpand]');
+      if (qx) {
+        var qrow = qx.closest('.cover-q'); if (!qrow) return;
+        var wasOpen = qrow.classList.contains('open');
+        var open = root.querySelectorAll('.cover-q.open');
+        for (var s = 0; s < open.length; s++) open[s].classList.remove('open');
+        if (!wasOpen) qrow.classList.add('open');
         return;
       }
       var strat = ev.target.closest('[data-stratum]');
       if (strat) { ev.preventDefault(); var id = strat.getAttribute('data-stratum'); nav(function () { showStratum(id); }); return; }
       var cl = ev.target.closest('.claim-cite-link');
       if (cl) { var dr = cl.closest('.claim').querySelector('.citation-drawer'); if (dr) dr.classList.toggle('open'); return; }
-      var qh = ev.target.closest('.q-head');
-      if (qh) { qh.parentNode.classList.toggle('active'); return; }
     });
   }
 
@@ -546,7 +549,7 @@
   function backLink() { return '<a class="stratum-back" data-back="1">← Back</a>'; }
   function showCover()      { root.innerHTML = renderCover(lastData, lastCtx); }
   function showSynthesis()  { root.innerHTML = backLink() + '<div class="layer-screen">' + renderSynthesisDoc(lastData) + '</div>'; }
-  function showClaims()     { root.innerHTML = backLink() + '<div class="layer-screen">' + renderStrataNav(lastData, lastCtx) + '</div>'; }
+  // Claims page retired (Eames 6b6703e0): the cover questions expand in place to the claim cards.
   function showEngines()    { root.innerHTML = backLink() + '<div class="layer-screen">' + renderFooter(lastData) + '</div>'; }
   function showProduction() { root.innerHTML = renderHeader(lastData, false) + renderProduction(lastData); }
   function showStratum(id)  { var eng = lastCtx && lastCtx.enginesByDispatch[id]; if (eng) root.innerHTML = renderStratumPage(eng); }
@@ -567,41 +570,70 @@
     return "";
   }
 
-  // The cover (Eames WN 85926361): title · metadata · the questions · the answer · three doors.
-  // No claims, citations, raw, join notes, or prompts — one click per layer, no mixing.
+  function sortClaims(claims) {
+    return (claims || []).slice().sort(function (a, b) {
+      return (CLAIM_ORDER[a.claim_status] - CLAIM_ORDER[b.claim_status]) || (new Date(a.created_at) - new Date(b.created_at));
+    });
+  }
+  // Two doors (Eames 6b6703e0): Full synthesis + Engine returns. The standalone Claims page is
+  // retired — the cover IS the claims surface now. Rendered top AND bottom so nav survives an
+  // expanded question pushing content down.
+  function renderDoors() {
+    return '<div class="cover-doors">' +
+      '<span class="cover-door" data-door="synthesis">Full synthesis</span>' +
+      '<span class="cover-door" data-door="engines">Engine returns</span>' +
+      '</div>';
+  }
+
+  // The cover (Eames WN 85926361 + consolidation 6b6703e0): title · metadata · two doors ·
+  // THE QUESTIONS (which now expand IN PLACE to their claim cards) · THE ANSWER · MATERIAL STATUS
+  // · two doors. The cover is the claims surface; the deeper onion layers (synthesis sections,
+  // strata, sources) and the claim→stratum links are unchanged. Session view only — the report
+  // ring keeps its own prose+claims interleave.
   function renderCover(d, ctx) {
     var committed = d.synthesis && d.synthesis.layer_1_synthesis_md;
-    var html = '<div class="cover">' + renderHeader(d, committed);   // title + ratified metadata line
+    var doors = renderDoors();
+    var html = '<div class="cover">' + renderHeader(d, committed) + doors;   // doors at TOP, under the metadata
     var claimsByQ = groupBy(d.claims, 'question_id');
-    html += '<div class="cover-block"><div class="cover-label">The questions</div><ol class="cover-questions">';
-    (d.questions || []).forEach(function (q) {
-      var cq = claimsByQ[q.id] || [];
-      var state = answerState(cq);                       // same grammar as the claims layer
+
+    function questionBlock(q, claims, label) {
+      var cq = sortClaims(claims);
+      var state = answerState(cq);
       var breakdown = rollupEnum(cq);
-      // asked-of line from engine_dispatch.question_id — OMITTED (never dashed) until backfilled.
+      // asked-of from engine_dispatch.question_id — OMITTED (never dashed) until backfilled.
       var asked = (d.engines || []).filter(function (e) { return e.question_id && e.question_id === q.id; })
         .map(function (e) { return engineDisplayName(e.source_name); });
-      html += '<li class="cover-q" data-jump="' + esc(q.id) + '">' +
-        '<div class="cover-q-line">' +
-          (qLabel(q.question_index) ? '<span class="q-label">' + esc(qLabel(q.question_index)) + '</span>' : '') +
-          '<span class="cover-q-text">' + esc(q.question_text) + '</span>' +
+      return '<div class="cover-q" data-qid="' + esc(q.id != null ? q.id : '') + '">' +
+        '<div class="cover-q-head" data-qexpand="1">' +
+          '<div class="cover-q-line">' +
+            (label ? '<span class="q-label">' + esc(label) + '</span>' : '') +
+            '<span class="cover-q-text">' + esc(q.question_text) + '</span>' +
+            '<span class="q-chevron">▾</span>' +
+          '</div>' +
+          '<div class="cover-q-meta">' +
+            (state.word ? '<span class="q-state ' + state.cls + '">' + esc(state.word) + '</span>' : '') +
+            (breakdown ? '<span class="q-breakdown">' + esc(breakdown) + '</span>' : '') +
+            (asked.length ? '<span class="cover-q-asked">asked of ' + esc(asked.join(', ')) + '</span>' : '') +
+          '</div>' +
         '</div>' +
-        '<div class="cover-q-meta">' +
-          (state.word ? '<span class="q-state ' + state.cls + '">' + esc(state.word) + '</span>' : '') +
-          (breakdown ? '<span class="q-breakdown">' + esc(breakdown) + '</span>' : '') +
-          (asked.length ? '<span class="cover-q-asked">asked of ' + esc(asked.join(', ')) + '</span>' : '') +
+        '<div class="cover-q-claims">' +
+          (cq.map(function (c) { return renderClaim(c, ctx); }).join('') ||
+            '<div class="claim"><span class="claim-text" style="color:var(--text-muted)">No claims recorded.</span></div>') +
         '</div>' +
-        '</li>';
-    });
-    html += '</ol></div>';
+      '</div>';
+    }
+
+    html += '<div class="cover-block"><div class="cover-label">The questions</div><div class="cover-questions">';
+    var qi = 0;
+    (d.questions || []).forEach(function (q) { qi++; html += questionBlock(q, claimsByQ[q.id] || [], 'Q' + qi + ')'); }); // ordinal label fixes the off-by-one
+    var unlinked = (d.claims || []).filter(function (c) { return !c.question_id; });
+    if (unlinked.length) html += questionBlock({ question_text: 'Further claims' }, unlinked, '');
+    html += '</div></div>';
+
     var summary = coverSummary(d);
     if (summary) html += '<div class="cover-block"><div class="cover-label">The answer</div><div class="cover-answer synth-body">' + summary + '</div></div>';
     html += renderMaterialStatus(d);   // §"what can I use" — confidence_ratings_json, first-class
-    html += '<div class="cover-doors">' +
-      '<span class="cover-door" data-door="synthesis">Full synthesis</span>' +
-      '<span class="cover-door" data-door="claims">Claims</span>' +
-      '<span class="cover-door" data-door="engines">Engine returns</span>' +
-      '</div></div>';
+    html += doors + '</div>';          // doors at BOTTOM too
     return html;
   }
 

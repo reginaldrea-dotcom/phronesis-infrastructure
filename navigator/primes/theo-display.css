@@ -377,3 +377,27 @@ body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, 
 .mat-low-medium, .mat-low { color: var(--status-amber); border-color: var(--status-amber); }
 .mat-claim { color: var(--text); font-size: 14px; }
 .mat-basis { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 3px; }
+
+/* ════════════════════════════════════════════════════════════════
+   Cover/Claims consolidation (Eames 6b6703e0) + final fixes (e4869bac).
+   Last in the file — governs. The cover IS the claims surface now.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Two-door strip — neutral + symmetric so it works at the TOP (under the metadata) and BOTTOM;
+   not a footer. The doors keep their bordered look. */
+.cover-doors { margin: 16px 0; padding: 0; border: none; display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Cover questions expand IN PLACE to their claim cards (collapsed by default, one open at a time). */
+.cover-q { padding: 0; overflow: hidden; }
+.cover-q:hover { background: transparent; border-color: var(--border-lt); }   /* hover lives on the head */
+.cover-q-head { cursor: pointer; padding: 10px 12px; transition: background 0.12s; }
+.cover-q-head:hover { background: var(--surface); }
+.cover-q.open { background: var(--surface); }                                  /* cool/neutral expanded cue, never green */
+.cover-q .q-chevron { color: var(--text-light); font-size: 12px; transition: transform 0.15s; margin-left: auto; flex: none; }
+.cover-q.open .q-chevron { transform: rotate(180deg); }
+.cover-q-claims { display: none; padding: 2px 12px 12px; border-top: 1px solid var(--border-lt); }
+.cover-q.open .cover-q-claims { display: block; }
+.cover-q-claims .claim:first-child { border-top: none; }
+
+/* GAP CARD (e4869bac) — recede the text so an absence reads as an absence, not a peer claim. */
+.claim.gap .claim-text { color: var(--text-light); font-size: 14px; font-style: italic; }
