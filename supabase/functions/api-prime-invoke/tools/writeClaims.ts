@@ -27,6 +27,7 @@
 // deny-all, like the synthesis family).
 
 import type { Tool, ToolContext } from "./types.ts";
+import { captureSource } from "../lib/captureSource.ts";
 
 const ID_RE = /^[0-9a-f-]{4,36}$/i;
 const CLAIM_STATUS = new Set(["convergent", "divergent", "single_source", "synthesis_inference", "gap"]);
@@ -248,8 +249,38 @@ export const writeClaimsTool: Tool = {
       for (const r of (exist.data ?? []) as Array<{ id: string; question_index: number }>) questionByIndex.set(r.question_index, r.id);
     }
 
+    // Roadmap Phase 1 — CAPTURE AT RESEARCH TIME. Freeze every cited web source NOW into the
+    // evidence locker and build url -> source_document_id, so each citation lands version-pinned
+    // to an immutable snapshot rather than a URL that rots. Pre-captured in BOUNDED-PARALLEL batches
+    // (so total time is ~one fetch timeout per batch, not the sum — stays under the EF ceiling).
+    // Best-effort: a null id means cited-but-not-anchored (a loud gap), never a blocked write.
+    const captureCache = new Map<string, string | null>();
+    const urlMeta = new Map<string, { title: string | null; sourceDate: string | null }>();
+    for (const cl of claims) {
+      for (const ct of (Array.isArray(cl.citations) ? cl.citations as CitationIn[] : [])) {
+        const u = typeof ct?.url === "string" ? ct.url.trim() : "";
+        if (/^https?:\/\//i.test(u) && !urlMeta.has(u)) {
+          urlMeta.set(u, {
+            title: typeof ct.title === "string" ? ct.title : null,
+            sourceDate: typeof ct.source_date === "string" && ct.source_date.trim() ? ct.source_date.trim() : null,
+          });
+        }
+      }
+    }
+    const urlList = [...urlMeta.keys()];
+    const CAPTURE_CONCURRENCY = 8;
+    for (let k = 0; k < urlList.length; k += CAPTURE_CONCURRENCY) {
+      const batch = urlList.slice(k, k + CAPTURE_CONCURRENCY);
+      const ids = await Promise.all(batch.map((u) => {
+        const m = urlMeta.get(u)!;
+        return captureSource(ctx.supabase, { url: u, title: m.title, sourceDate: m.sourceDate, sessionId })
+          .catch(() => null);
+      }));
+      batch.forEach((u, idx) => captureCache.set(u, ids[idx]));
+    }
+
     // Claims (+ nested sources/citations).
-    let claimN = 0, sourceN = 0, citationN = 0;
+    let claimN = 0, sourceN = 0, citationN = 0, anchoredN = 0;
     for (const cl of claims) {
       const insC = await ctx.supabase.from("synthesis_claim").insert({
         synthesis_id: synthesisId,
@@ -279,15 +310,22 @@ export const writeClaimsTool: Tool = {
 
       const citations = Array.isArray(cl.citations) ? cl.citations as CitationIn[] : [];
       if (citations.length > 0) {
-        const rows = citations.map((ct) => ({
-          claim_id: claimId,
-          dispatch_id: resolveDispatch(ct.dispatch_id, ct.engine_name, "", false).id,
-          url: typeof ct.url === "string" ? ct.url : null,
-          title: typeof ct.title === "string" ? ct.title : null,
-          source_date: typeof ct.source_date === "string" && ct.source_date.trim() ? ct.source_date.trim() : null,
-          note: typeof ct.note === "string" ? ct.note : null,
-          // resolution defaults to 'unchecked' at the DB level — claimed-until-checked.
-        }));
+        const rows = citations.map((ct) => {
+          const url = typeof ct.url === "string" ? ct.url : null;
+          // Pin the captured snapshot (version-pinned anchor). null = cited-not-anchored (loud gap).
+          const sourceDocId = url ? (captureCache.get(url.trim()) ?? null) : null;
+          if (sourceDocId) anchoredN++;
+          return {
+            claim_id: claimId,
+            dispatch_id: resolveDispatch(ct.dispatch_id, ct.engine_name, "", false).id,
+            url,
+            title: typeof ct.title === "string" ? ct.title : null,
+            source_date: typeof ct.source_date === "string" && ct.source_date.trim() ? ct.source_date.trim() : null,
+            note: typeof ct.note === "string" ? ct.note : null,
+            source_document_id: sourceDocId,
+            // resolution defaults to 'unchecked' at the DB level — claimed-until-checked.
+          };
+        });
         const insCit = await ctx.supabase.from("claim_citation").insert(rows);
         if (insCit.error) return fail(`claim_citation insert failed: ${insCit.error.message}`);
         citationN += rows.length;
@@ -298,8 +336,8 @@ export const writeClaimsTool: Tool = {
       theo_session_id: sessionId,
       synthesis_id: synthesisId,
       replaced: replace,
-      written: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN },
-      "[SYSTEM]": `Claim layer written: ${claimN} claim(s), ${sourceN} source link(s), ${citationN} citation(s). Citations are 'unchecked' until the liveness pass resolves them. render_claim_v1 now returns these rows; verify with read_synthesis or a render-view read. Provenance is intact — every source/citation resolved to a real dispatch for this session.`,
+      written: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN, anchored: anchoredN },
+      "[SYSTEM]": `Claim layer written: ${claimN} claim(s), ${sourceN} source link(s), ${citationN} citation(s) — ${anchoredN} ANCHORED to a captured source_document (frozen + hashed at research time), ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot: dead/slow/binary/non-web — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass resolves them. Provenance is intact — every source/citation resolved to a real dispatch for this session. The anchored sources are now recoverable a year on, hash-verifiable; the drill-clock has started.`,
     });
   },
 };

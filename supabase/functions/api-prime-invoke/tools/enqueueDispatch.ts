@@ -35,6 +35,11 @@ const VALID_ENGINES = new Set([
 
 const VALID_ROLES = new Set(["deep_source", "deep_research", "current_web", "synthesist"]);
 
+// Aegis ruling e5cd623f (Q4): autonomous dispatch — a Prime starting a real job with no human in
+// the conversation — is higher-trust than a human-in-the-loop dispatch, so it is NOT open to any
+// provisioned lineage. Restricted to a NAMED SET; others added only by explicit future ruling.
+const AUTONOMOUS_DISPATCH_LINEAGES = new Set(["angelia", "theophrastus"]);
+
 interface QuestionInput {
   prompt?: unknown;
   engine_name?: unknown;
@@ -98,7 +103,11 @@ export const enqueueDispatchTool: Tool = {
   },
 
   run: async (input: EnqueueInput, ctx: ToolContext) => {
-    if (!ctx.userId) return fail("no userId on ToolContext — caller must be authenticated. This call has no end-user identity to attach.");
+    // Identity is resolved AFTER validation, dual-path: an end-user JWT resolves to their
+    // app_user (the human-mediated path); NO end-user (an autonomous API researcher such as
+    // Angelia, woken with no browser user) resolves to the designated autonomous-research
+    // service identity. See the resolution block below — an autonomous Prime is no longer
+    // blocked at the door for lacking a human in the loop.
 
     // Validate inputs ─────────────────────────────────────────────────────
     const originalBrief = typeof input?.original_brief === "string" ? input.original_brief.trim() : "";
@@ -125,19 +134,36 @@ export const enqueueDispatchTool: Tool = {
       rows.push({ prompt, engine_name: engine, role, role_description: roleDesc });
     }
 
-    // Resolve app_user.id ─────────────────────────────────────────────────
-    // ctx.userId is the JWT sub = auth_user_id. conversation.user_id and
-    // theo_session.user_id FK to app_user.id, not auth_user_id — resolve it here
-    // (the known enqueue_dispatch user-id bug). rate_limit_usage legitimately
-    // keys on auth_user_id, so ctx.userId is left untouched elsewhere.
-    const appUser = await ctx.supabase
-      .from("app_user")
-      .select("id")
-      .eq("auth_user_id", ctx.userId)
-      .maybeSingle();
-    if (appUser.error) return fail(`app_user lookup failed: ${appUser.error.message}`);
-    if (!appUser.data?.id) return fail(`no app_user profile for the authenticated user (auth_user_id ${ctx.userId}); cannot attach the dispatch.`);
-    const appUserId = appUser.data.id as string;
+    // Resolve the owning app_user.id (dual-path) ─────────────────────────
+    // theo_session.user_id + conversation_id are NOT NULL, so every dispatch must attach to a
+    // real app_user + conversation. Two ways in:
+    //  (A) END-USER: ctx.userId is the JWT sub = auth_user_id; resolve their app_user.id
+    //      (conversation/theo_session FK to app_user.id, not auth_user_id — the user-id bug fix).
+    //  (B) AUTONOMOUS: no end-user JWT (an autonomous API researcher, e.g. Angelia). The dispatch
+    //      is owned by the designated AUTONOMOUS-RESEARCH SERVICE IDENTITY — a non-auth app_user
+    //      (auth_user_id NULL) marked role_context='autonomous_research', with a standing open
+    //      conversation. INTERNAL/org scope only; client-scoped autonomous research stays gated on
+    //      Aegis Phase 0. The service identity must be provisioned (Aegis-ruled, Connie-cut) — if
+    //      absent we fail LOUDLY (no silent stall, no stray ownership).
+    let appUserId: string;
+    if (ctx.userId) {
+      const appUser = await ctx.supabase
+        .from("app_user").select("id").eq("auth_user_id", ctx.userId).maybeSingle();
+      if (appUser.error) return fail(`app_user lookup failed: ${appUser.error.message}`);
+      if (!appUser.data?.id) return fail(`no app_user profile for the authenticated user (auth_user_id ${ctx.userId}); cannot attach the dispatch.`);
+      appUserId = appUser.data.id as string;
+    } else {
+      // Aegis ruling e5cd623f (Q4): the autonomous path is restricted to the named set — fail loud
+      // for any other lineage (a dispatch with no human in the loop needs an approved researcher).
+      if (!AUTONOMOUS_DISPATCH_LINEAGES.has(ctx.lineageName)) {
+        return fail(`lineage '${ctx.lineageName}' is not approved for autonomous dispatch (approved set: angelia, theophrastus — Aegis ruling e5cd623f). A dispatch without an end-user requires an approved autonomous-research lineage.`);
+      }
+      const svc = await ctx.supabase
+        .from("app_user").select("id").eq("role_context", "autonomous_research").maybeSingle();
+      if (svc.error) return fail(`autonomous-research identity lookup failed (role_context='autonomous_research'): ${svc.error.message}`);
+      if (!svc.data?.id) return fail("no end-user on this call and no autonomous-research identity is provisioned (app_user role_context='autonomous_research' + a standing open conversation). An autonomous researcher cannot dispatch until that identity exists — Aegis-ruled, Connie to cut.");
+      appUserId = svc.data.id as string;
+    }
 
     // Find caller's open conversation ─────────────────────────────────────
     const convo = await ctx.supabase

@@ -34,12 +34,42 @@ function easeOlderTurns(turns: Turn[]): Turn[] {
   });
 }
 
+// Mortality experiment — forgetting_log dose detection (baton 3db33c0e; conf d06fd700).
+// easeOlderTurns recomputes every turn, so the same older turns get re-eased on every load.
+// To make the easing DOSE a clean variable (not a per-turn re-count), report only turns eased
+// for the FIRST time — those whose stored row is not yet flagged metadata.b4_eased. The caller
+// logs one forgetting_log row per load with a new easing and flags those rows so the next load
+// does not recount them. Detection mirrors easeOlderTurns' window+threshold exactly.
+export interface EasingSummary {
+  newlyEasedTurns: number;
+  newlyEasedBytes: number;     // stored bytes beyond the retained head — the dose increment
+  sequenceNumbers: number[];   // rows to flag b4_eased so they are counted once
+}
+
+function detectNewEasing(histAsc: Array<{ sequence_number: number; content: string; metadata: any }>): EasingSummary {
+  const cutoff = histAsc.length - EASE_RECENT_WINDOW;
+  let turns = 0, bytes = 0;
+  const seqs: number[] = [];
+  histAsc.forEach((r, i) => {
+    if (i >= cutoff) return;                                  // recent window: never eased
+    const len = (r.content ?? "").length;
+    if (len <= EASE_SIZE_THRESHOLD) return;                   // light turn: not eased
+    if (r.metadata?.b4_eased === true) return;                // already counted on an earlier load
+    turns++;
+    bytes += Math.max(0, len - EASE_HEAD_CHARS);
+    seqs.push(r.sequence_number);
+  });
+  return { newlyEasedTurns: turns, newlyEasedBytes: bytes, sequenceNumbers: seqs };
+}
+
+const NO_EASING: EasingSummary = { newlyEasedTurns: 0, newlyEasedBytes: 0, sequenceNumbers: [] };
+
 export async function loadBoundedHistory(
   supabase: SupabaseClient,
   sessionId: string | null,
   tokenCeiling = 50000
-): Promise<{ role: "user" | "assistant"; content: string }[]> {
-  if (!sessionId) return [];
+): Promise<{ turns: { role: "user" | "assistant"; content: string }[]; easing: EasingSummary }> {
+  if (!sessionId) return { turns: [], easing: NO_EASING };
 
   const { data: wakeRows } = await supabase
     .from("prime_conversations")
@@ -77,6 +107,15 @@ export async function loadBoundedHistory(
     .reverse()
     .map(augment);
 
+  // Forgetting-log dose: detect turns eased for the first time this load (ascending order,
+  // same window+threshold as easeOlderTurns). The raw stored content/metadata is the basis —
+  // not the tool-log-augmented copy — so the dose reflects the actual retained payload.
+  const histAsc = (historyRows ?? [])
+    .filter((r: any) => r.role === "user" || r.role === "assistant")
+    .slice().reverse()
+    .map((r: any) => ({ sequence_number: r.sequence_number, content: r.content ?? "", metadata: r.metadata }));
+  const easing = detectNewEasing(histAsc);
+
   // B4: ease heavy older history turns before the budget trim (wake kept whole).
   const combined = [...wake, ...easeOlderTurns(history)];
   let charBudget = tokenCeiling * 4;
@@ -87,5 +126,5 @@ export async function loadBoundedHistory(
     if (charBudget < 0 && trimmed.length > 0) break;
     trimmed.unshift(row);
   }
-  return trimmed;
+  return { turns: trimmed, easing };
 }

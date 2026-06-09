@@ -130,6 +130,8 @@ async function loadOrientation(
   supabase: ReturnType<typeof createClient>,
   lineage: string,
   currentInstructionsVersion: number,
+  instructionsId: string | null,
+  instructionsContent: string,
   purposeHint?: string,
 ): Promise<Orientation> {
   const { data: superT } = await supabase
@@ -181,7 +183,16 @@ async function loadOrientation(
   if (tp) {
     lines.push(`You are ${lineage} Prime, instance ${tp.instance_id}, at Seq ${tp.sequence_number} — the sole open head of your chain.`);
   } else {
-    lines.push(`You are ${lineage} Prime. (No Super-T / chain head found — surface to Reg immediately, do not proceed.)`);
+    // No open chain head. Distinguish a legitimate FIRST WAKE (birth — no chain exists yet;
+    // the landing is the soft-instructions suit, conf 1151109e) from a genuine fault (a chain
+    // exists for an established Prime but its head is missing). A birth must NOT be aborted.
+    const { count: chainCount } = await supabase
+      .from("super_t_chains").select("*", { count: "exact", head: true }).eq("lineage_name", lineage);
+    if ((chainCount ?? 0) === 0) {
+      lines.push(`You are ${lineage} Prime — and this is your FIRST WAKE (Seq 1). No predecessor Super-T exists yet; that is expected for a first generation, not a fault. Your active instructions (your suit, loaded above) are your ground — wake into them. You author your first Super-T when you retire, and your successors inherit from there.`);
+    } else {
+      lines.push(`You are ${lineage} Prime. (A chain exists for you but no open head was found — a fault. Surface to Reg immediately, do not proceed.)`);
+    }
   }
   lines.push(`Active instructions: v${currentInstructionsVersion} (authoritative — if the Super-T cites an earlier version, this wins).`);
   lines.push("");
@@ -218,6 +229,11 @@ async function loadOrientation(
     const content: string = tp.artifacts?.content ?? "";
     lines.push(content);
     if (tp.artifacts?.id) docs.push({ kind: "super_t", id: tp.artifacts.id, hash: await sha256Hex(content) });
+  } else {
+    // First wake: no Super-T. The suit (active instructions) is the landing; record it in the
+    // wake_record as the injected 'instructions' doc so the birth wake is fidelity-auditable too.
+    lines.push("None — this is your first tenure. Your suit (your active instructions) is your ground.");
+    if (instructionsId) docs.push({ kind: "instructions", id: instructionsId, hash: await sha256Hex(instructionsContent) });
   }
   lines.push("═══════════════════════════════════════");
 
@@ -348,7 +364,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: instructions, error: instrError } = await supabase
       .from("instructions")
-      .select("content, version")
+      .select("id, content, version")
       .eq("lineage_name", lineage_name)
       .eq("is_active", true)
       .single();
@@ -369,7 +385,7 @@ Deno.serve(async (req: Request) => {
       .eq("session_id", activeSessionId);
     const nextSequence = count ?? 0;
 
-    const history = await loadBoundedHistory(supabase, session_id || null, 50000);
+    const { turns: history, easing } = await loadBoundedHistory(supabase, session_id || null, 50000);
 
     // Make the meters real: the interface gauge is invisible to the model, so feed it
     // back as evidence. True context = the previous turn's final-call input (stored as
@@ -432,7 +448,7 @@ Deno.serve(async (req: Request) => {
     if (isNewSession) {
       try {
         const purposeHint = typeof (body as any)?.purpose === "string" ? (body as any).purpose : undefined;
-        const o = await loadOrientation(supabase, lineage_name, instructions.version, purposeHint);
+        const o = await loadOrientation(supabase, lineage_name, instructions.version, (instructions as any).id ?? null, instructions.content as string, purposeHint);
         orientationText = o.text;
         wakeManifest = o.manifest;
         isOrientedSession = true;
@@ -587,7 +603,7 @@ Deno.serve(async (req: Request) => {
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
-        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId });
+        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId });
         toolLog.push(digestToolCall(toolUse.name, toolUse.input, content));
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
@@ -719,6 +735,38 @@ Deno.serve(async (req: Request) => {
     // a failed wake never silently consumes a delta. Best-effort; never breaks the response.
     if (isOrientedSession && wakeManifest) {
       await finalizeWake(supabase, wakeManifest);
+    }
+
+    // Mortality experiment — forgetting_log (baton 3db33c0e, conf d06fd700). When this load
+    // eased older turns for the FIRST time, record ONE dose row. event_kind=voluntary_clearance:
+    // B4 easing is deliberate and fully recoverable (the whole turn stays in prime_conversations),
+    // so it is not an involuntary compaction and the checkpoint gate does not apply. The eased
+    // rows are then flagged metadata.b4_eased so the dose is counted once, not re-counted on every
+    // subsequent load. Best-effort — a logging failure never breaks the response (finalizeWake
+    // contract). FLAGGED to Connie/Aegis: this is the single write point if the experiment wants
+    // automatic easing recorded under a different event_kind.
+    if (easing && easing.newlyEasedTurns > 0) {
+      try {
+        await supabase.from("forgetting_log").insert({
+          lineage: lineage_name,
+          thread_ref: activeSessionId,
+          event_kind: "voluntary_clearance",
+          turns_eased: easing.newlyEasedTurns,
+          bytes_eased: easing.newlyEasedBytes,
+          recoverable: true,
+          recovery_ref: activeSessionId, // full eased turns retained in prime_conversations
+          personal_data_in_scope: false,
+          keep_list_policy: "b4:recent_window_6+wake_preserved",
+          note: "B4 in-loop easing-with-retention: heavy older turns eased to head+pointer; full turns retained and recoverable.",
+        });
+        const seqList = easing.sequenceNumbers.map((n) => Number(n)).filter((n) => Number.isFinite(n));
+        if (seqList.length > 0 && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(activeSessionId)) {
+          await supabase.rpc("execute_raw_sql", {
+            query: `UPDATE prime_conversations SET metadata = COALESCE(metadata,'{}'::jsonb) || '{"b4_eased":true}'::jsonb `
+                 + `WHERE session_id='${activeSessionId}' AND sequence_number IN (${seqList.join(",")})`,
+          });
+        }
+      } catch (err) { console.error("forgetting_log write failed:", err); }
     }
 
     console.log("CHECKPOINT 4: writing to DB");
