@@ -164,3 +164,162 @@ body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, 
 .footer-engines { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .footer-engine  { font-size: 13px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 7px; }
 .footer-meta    { font-size: 12px; color: var(--text-light); margin-top: 12px; }
+
+/* ── F11: entry-point affordances (strip rows, engine boxes, attributions) ──
+   Clickable into the evidence room — affordance only; content unchanged, hover in
+   the quiet accent (Eames WN 0f533d0b). */
+.footer-engine[data-stratum], .engine-box[data-stratum],
+.attribution[data-stratum], .attr-engine[data-stratum] { cursor: pointer; }
+.footer-engine[data-stratum] { border-radius: 4px; padding: 2px 6px; margin: -2px -6px;
+                               transition: background 0.12s; }
+.footer-engine[data-stratum]:hover { background: var(--accent-dim); }
+.engine-box[data-stratum]:hover { border-color: var(--accent-border); background: var(--accent-dim); }
+.attribution[data-stratum]:hover .attr-type,
+.attr-engine[data-stratum]:hover { color: var(--accent); }
+.attribution.multi { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 6px; }
+.attribution.multi .attr-engine { font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.attribution.multi .attr-sep { color: var(--text-light); }
+
+/* ── F11: stratum page (the evidence room) ───────────────────────
+   Three authors, three registers, one click per onion layer. */
+.stratum-page  { padding-top: 4px; }
+.stratum-back  { display: inline-block; font-size: 13px; color: var(--text-muted); cursor: pointer;
+                 text-decoration: none; margin-bottom: 18px; }
+.stratum-back:hover { color: var(--accent); }
+.stratum-engine { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 24px; font-weight: 600;
+                  color: var(--text); margin-bottom: 24px; }
+.stratum-block { margin-bottom: 28px; }
+.stratum-label { font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+                 text-transform: uppercase; color: var(--text-light); margin-bottom: 10px; }
+.stratum-empty { color: var(--text-muted); font-style: italic; font-size: 13px; }
+
+/* 1 — what was asked: quotation register, hairline accent rule */
+.stratum-asked { margin: 0; padding: 2px 0 2px 16px; border-left: 2px solid var(--accent-border);
+                 color: var(--text); }
+.stratum-asked p { margin: 0 0 0.5em; }
+
+/* 2 — what came back: prose holds the 65–75ch measure; tables earn their width */
+.stratum-body { color: var(--text); line-height: 1.7; }
+.stratum-body p, .stratum-body li, .stratum-body h1, .stratum-body h2,
+.stratum-body h3, .stratum-body h4 { max-width: 70ch; }
+.stratum-body p { color: var(--text); margin: 0 0 1em; }
+.stratum-body h1, .stratum-body h2, .stratum-body h3, .stratum-body h4 {
+  font-family: 'Cormorant Garamond', serif; color: var(--text); margin: 1.2em 0 0.4em; line-height: 1.3; }
+.stratum-body h1 { font-size: 21px; } .stratum-body h2 { font-size: 18px; } .stratum-body h3 { font-size: 16px; }
+.stratum-body a { color: var(--text); text-underline-offset: 2px; }
+.stratum-body code { font-family: ui-monospace, Menlo, monospace; font-size: 0.88em;
+                     background: var(--surface); padding: 1px 4px; border-radius: 3px; }
+.stratum-table-wrap { max-width: 100%; overflow-x: auto; margin: 0 0 1em; }
+.stratum-table-wrap table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+.stratum-table-wrap th, .stratum-table-wrap td { border: 1px solid var(--border-lt);
+  padding: 6px 10px; text-align: left; vertical-align: top; color: var(--text); }
+.stratum-table-wrap th { background: var(--surface); font-weight: 600; }
+
+/* raw-always-reachable: quiet toggle, monospaced literal, one click away */
+.stratum-unparsed { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.04em;
+  color: var(--text-muted); background: none; border: 1px solid var(--border-lt); border-radius: 3px;
+  padding: 4px 12px; margin-top: 12px; cursor: pointer; }
+.stratum-unparsed:hover { border-color: var(--accent-border); color: var(--accent); }
+.stratum-raw { font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.5;
+  background: var(--surface); border: 1px solid var(--border-lt); border-radius: 3px;
+  padding: 12px; margin-top: 10px; max-height: 480px; overflow: auto; white-space: pre-wrap;
+  word-break: break-word; color: var(--text-muted); }
+
+/* 3 — signals: the system's voice, monospaced and quiet */
+.stratum-signals { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.stratum-signals .sig-dot { opacity: 0.5; }
+.stratum-flag { font-size: 12px; color: var(--status-amber); margin-top: 8px; }     /* amber = information */
+.stratum-error-detail { font-size: 13px; color: var(--status-amber); margin-top: 8px;
+  white-space: pre-wrap; }
+
+/* the sources door — outbound, the last layer */
+.stratum-sources { margin: 0; padding-left: 22px; }
+.stratum-sources li { margin-bottom: 12px; color: var(--text); }
+.stratum-sources a { color: var(--text); text-underline-offset: 2px; }
+.stratum-sources .src-domain { display: inline-block; font-size: 11px; color: var(--text-light);
+  font-family: ui-monospace, Menlo, monospace; margin-left: 8px; }
+.stratum-sources .src-snippet { font-size: 12px; color: var(--text-muted); margin-top: 3px; max-width: 70ch; }
+.stratum-registry { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--text-light); margin-bottom: 6px; }
+
+/* ════════════════════════════════════════════════════════════════
+   F-calibration (Eames WN ba455434) — universal chip system, card
+   calibration, section-header questions, propagated measure. These
+   rules come last, so they govern over the earlier first-pass claim
+   styles where the two differ.
+   ════════════════════════════════════════════════════════════════ */
+
+/* §1 universal chip — every card wears its status, mechanically derived */
+.claim-head { margin-bottom: 5px; }
+.claim-chip { display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em;
+  padding: 2px 9px; border-radius: 11px; border: 1px solid var(--border); color: var(--text-muted);
+  background: var(--surface); white-space: nowrap; }
+.claim-chip.amber { background: var(--status-amber-dim); border-color: var(--status-amber); color: var(--status-amber); }
+.claim-chip.gap   { color: var(--text-light); border-style: dashed; }
+.claim-chip.infer { background: var(--claim-infer); border-color: var(--claim-infer); color: #6b4f8a; } /* violet-muted */
+
+/* §10 measure on card bodies + notes */
+.claim-text { color: var(--text); display: block; max-width: 70ch; }
+.claim .resolution { font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 6px; max-width: 70ch; }
+
+/* §8 attribution — friendly name only, each links to its stratum page */
+.attribution { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; cursor: default; }
+.attr-engine { font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.attr-engine[data-stratum]:hover { color: var(--accent); }
+.attr-sep { color: var(--text-light); }
+
+/* §3 citation line + lifecycle */
+.claim-cite-link { display: inline-block; font-size: 12px; color: var(--text-muted); cursor: pointer;
+  margin-top: 6px; text-decoration: underline; text-underline-offset: 2px; }
+.claim-cite-zero { display: inline-block; font-size: 12px; color: var(--status-amber); margin-top: 6px; }
+.cite-warn { color: var(--status-amber); }
+
+/* card accents: open = warning (amber rule); gap = muted held-open space (dashed, never amber);
+   inference = a claim, tint on the chip only, no warning border */
+.claim.open { border-left: 3px solid var(--status-amber); padding-left: 12px; }
+.claim.gap, .claim.gap.honest, .claim.gap.technical { border-left: 3px dashed var(--border); padding-left: 12px; }
+.claim.gap .claim-text { color: var(--text-muted); }
+
+/* §6 question headers become section headers (no card chrome) */
+.q-head { display: block; cursor: pointer; padding: 16px 0 10px; }
+.q-row.active { background: none; }                       /* not a card — no active fill */
+.q-head-top { display: flex; align-items: baseline; gap: 10px; }
+.q-num { font-family: 'Cormorant Garamond', serif; font-size: 12px; color: var(--text-light);
+  border: 1px solid var(--border-lt); border-radius: 50%; width: 22px; height: 22px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; }
+.q-text { flex: 1; font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; color: var(--text); }
+.q-rollup { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--text-muted);
+  margin-top: 6px; padding-left: 32px; }
+
+/* §10 measure propagated to synthesis prose */
+.synth-body p { max-width: 70ch; }
+
+/* ════════════════════════════════════════════════════════════════
+   Session cover (Eames WN 85926361) — outermost onion layer.
+   Orient in one screen, then offer doors. No claims/citations/raw here.
+   ════════════════════════════════════════════════════════════════ */
+.cover-block { margin: 28px 0; }
+.cover-label { font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text-light); margin-bottom: 12px; }
+.cover-questions { list-style: none; margin: 0; padding: 0; }
+.cover-q { padding: 12px 14px; border: 1px solid var(--border-lt); border-radius: 4px; margin-bottom: 8px;
+  cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+.cover-q:hover { background: var(--accent-dim); border-color: var(--accent-border); }
+.cover-q-text { display: block; font-size: 15px; color: var(--text); }
+.cover-q-rollup { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+  color: var(--text-muted); margin-top: 6px; }
+.cover-q-asked { display: block; font-size: 11px; color: var(--text-light); margin-top: 4px; }
+.cover-answer { color: var(--text); }
+.cover-answer p { color: var(--text); margin: 0 0 1em; max-width: 70ch; }
+
+/* three doors — equal weight, a quiet horizontal row (not buttons shouting) */
+.cover-doors { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 36px;
+  border-top: 1px solid var(--border); padding-top: 20px; }
+.cover-door { flex: 1 1 0; min-width: 140px; text-align: center; cursor: pointer;
+  font-family: 'Cormorant Garamond', serif; font-size: 15px; letter-spacing: 0.02em; color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; transition: background 0.12s, border-color 0.12s; }
+.cover-door:hover { background: var(--accent-dim); border-color: var(--accent-border); }
+
+/* door sub-screens (full synthesis / claims / engine returns) */
+.layer-screen { margin-top: 8px; }
+.stratum-back { display: inline-block; }
