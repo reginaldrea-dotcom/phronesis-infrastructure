@@ -12,7 +12,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { corsHeaders } from "./lib/http.ts";
-import { availableToolDefinitions, summarizeToolUse, runTool } from "./tools/index.ts";
+import { availableToolDefinitions, computeLoopGate, summarizeToolUse, runTool } from "./tools/index.ts";
 import { getAction } from "./actions/index.ts";
 import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
@@ -520,6 +520,25 @@ Deno.serve(async (req: Request) => {
         "The meter sharpens that call; it does not make it.";
     }
 
+    // ── Per-lineage loop-tool gate (least-privilege; Conf 295d610a, loop side) ──
+    // Load this lineage's tool_grants and compute the gate once. Governed lineages
+    // (those holding an EF-tool grant) are restricted to their granted tools;
+    // ungoverned/legacy lineages (no grant, or connector-only like drive/firecrawl)
+    // are unaffected. Fail OPEN on read error → ungoverned, so a transient
+    // grants-read failure never bricks a working Prime (logged loudly).
+    let loopGate: { governed: boolean; allowed: ReadonlySet<string> | null } = { governed: false, allowed: null };
+    try {
+      const { data: grantRows, error: grantErr } = await supabase
+        .from("tool_grants").select("tool_family, scopes").eq("lineage_name", lineage_name);
+      if (grantErr) throw grantErr;
+      loopGate = computeLoopGate((grantRows ?? []) as Array<{ tool_family: string; scopes: string[] | null }>);
+      if (loopGate.governed) {
+        console.log(`TOOL GATE: ${lineage_name} loop-governed → allowed: [${[...(loopGate.allowed ?? [])].join(", ")}]`);
+      }
+    } catch (e) {
+      console.error(`TOOL GATE: tool_grants read failed for ${lineage_name}; failing OPEN (ungoverned):`, e);
+    }
+
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
 
@@ -547,7 +566,7 @@ Deno.serve(async (req: Request) => {
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
-              tools: availableToolDefinitions({ isNewSession }),
+              tools: availableToolDefinitions({ isNewSession, allowed: loopGate.allowed }),
             }),
           }
         );
@@ -603,7 +622,13 @@ Deno.serve(async (req: Request) => {
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
-        const content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId });
+        let content: string;
+        if (loopGate.governed && !loopGate.allowed?.has(toolUse.name)) {
+          // Defense in depth: an ungranted tool was not offered, but never run one.
+          content = `[SYSTEM: '${toolUse.name}' is not granted to lineage '${lineage_name}'. It was not offered and will not run; it needs a tool_grant (Connie + Aegis).]`;
+        } else {
+          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId });
+        }
         toolLog.push(digestToolCall(toolUse.name, toolUse.input, content));
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
@@ -639,7 +664,7 @@ Deno.serve(async (req: Request) => {
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
-              tools: availableToolDefinitions({ isNewSession }),
+              tools: availableToolDefinitions({ isNewSession, allowed: loopGate.allowed }),
               tool_choice: { type: "none" },
             }),
           }
