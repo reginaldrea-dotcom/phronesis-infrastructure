@@ -4,8 +4,8 @@
  * this file is the only per-Prime surface. Served behind Cloudflare Access;
  * talks to api-prime-invoke with the publishable key only.
  *
- * INTERIM palette below — Eames owns Angelia's colour scheme (relay baton
- * fd33730a). Replace accent/accentDim/accentBorder with her values when they land.
+ * Palette: Eames-finalised deep steel blue (baton f012315c, MST 9fb8481e,
+ * Reg-confirmed 10 Jun). Distinct from Theo cobalt #1F3D6B — a sibling signal.
  */
 
 var PRIME_CONFIG = {
@@ -13,9 +13,9 @@ var PRIME_CONFIG = {
   name:         'Angelia',
   initial:      'A',
   role:         'Research Prime — Phronesis Project',   // provisional display role; confirm with Reg/Eames
-  accent:       '#5B6770',                               // INTERIM (Eames, baton fd33730a) — neutral slate, not Connie's blue
-  accentDim:    'rgba(91, 103, 112, 0.10)',
-  accentBorder: 'rgba(91, 103, 112, 0.35)',
+  accent:       '#2A4A5C',                               // Eames-finalised deep steel blue (baton f012315c, MST 9fb8481e; Reg-confirmed)
+  accentDim:    'rgba(42, 74, 92, 0.10)',
+  accentBorder: 'rgba(42, 74, 92, 0.35)',
   placeholder:  'Write to Angelia…',
   instanceId:   '12731944-fd25-4e83-a961-466f01785e51',
   navigatorUrl: 'https://phronesis-infrastructure.onrender.com/',
