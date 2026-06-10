@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Angelia — Phronesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="preload" href="prime-core.v1.css?v=20260610a" as="style">
+  <link rel="stylesheet" href="prime-core.v1.css?v=20260610a">
+  <style>
+    /* Load gauge — weighted session load (primary). Token bar retained as secondary 200K fallback indicator. */
+    .load-gauge-wrap   { margin-top: 14px; padding-bottom: 14px;
+                         border-bottom: 1px solid var(--border-lt); }
+    .load-gauge-row    { display: flex; align-items: center; gap: 10px; }
+    .load-gauge-track  { flex: 1; height: 8px; background: var(--border);
+                         border-radius: 4px; overflow: hidden; }
+    .load-gauge-fill   { height: 100%; width: 0%; background: var(--bar-green);
+                         transition: width 0.3s ease, background 0.3s ease; }
+    .load-gauge-score  { font-family: 'Cormorant Garamond', Georgia, serif;
+                         font-size: 13px; font-weight: 500; color: var(--text-muted);
+                         min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+    .load-gauge-label        { margin-top: 6px; font-family: 'Cormorant Garamond', Georgia, serif;
+                               font-size: 12px; color: var(--text-muted); letter-spacing: 0.02em;
+                               font-style: italic; min-height: 16px; }
+    .load-gauge-label.amber  { color: var(--bar-amber); font-style: normal; font-weight: 500; }
+    .load-gauge-label.red    { color: var(--bar-red);   font-style: normal; font-weight: 600; }
+    .load-gauge-label.terminal { color: var(--bar-red); font-style: normal; font-weight: 600; }
+    /* Secondary token readout */
+    .load-gauge-wrap .token-bar-wrap   { margin-top: 8px; padding-bottom: 0; border-bottom: none; }
+    .load-gauge-wrap .token-bar-label  { font-size: 11px; opacity: 0.75; }
+
+    /* Drive confirmation gate notice — stub. Surfaces post-hoc until the EF supports
+       two-phase confirmation; see angelia-session.js noteDriveDestructive() header. */
+    .drive-gate-notice { margin: 14px 0; padding: 12px 14px;
+                         background: rgba(168, 120, 32, 0.06);
+                         border-left: 2.5px solid var(--bar-amber);
+                         border-radius: 2px;
+                         font-family: 'Lora', Georgia, serif; font-size: 13px;
+                         color: var(--text); line-height: 1.55; }
+    .drive-gate-label  { font-family: 'Cormorant Garamond', Georgia, serif;
+                         font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+                         color: var(--bar-amber); margin-bottom: 6px; font-weight: 500; }
+    .drive-gate-body   { font-size: 12px; color: var(--text-muted); }
+    .drive-gate-body code { font-family: 'SF Mono', Consolas, monospace;
+                            font-size: 11px; background: rgba(0,0,0,0.04);
+                            padding: 1px 4px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="nav-strip">
+      <a id="nav-link" href="#" class="nav-link"
+         onclick="var u=document.getElementById('nav-link').href; if(u&&u!==location.href+'#'&&u!=='#')window.open(u,'_blank','noopener'); return false;">
+        <span class="nav-icon"></span><span>Navigator</span>
+      </a>
+      <a href="https://claude.ai/projects" class="nav-link"
+         onclick="window.open('https://claude.ai/projects','_blank','noopener'); return false;">
+        Claude Projects
+      </a>
+    </div>
+    <div class="main">
+      <div class="left-col">
+        <div class="header">
+          <div class="header-row">
+            <div class="prime-identity">
+              <div class="prime-icon" id="prime-icon"></div>
+              <div><div class="prime-name" id="prime-name"></div><div class="prime-role" id="prime-role"></div></div>
+            </div>
+            <div class="session-meta">
+              <div id="session-display">Starting…</div>
+              <div id="instance-display" style="color:var(--text-light)">—</div>
+              <div id="date-display"></div>
+            </div>
+          </div>
+          <!-- Load gauge: weighted session load (primary indicator). Thresholds at 8 pts or 200K tokens. -->
+          <!-- DDL routing: Constantinople IS the substrate. When other Primes route DDL here, they include their current load score in the request body. -->
+          <div class="load-gauge-wrap">
+            <div class="load-gauge-row">
+              <div class="load-gauge-track"><div class="load-gauge-fill" id="load-gauge-fill"></div></div>
+              <div class="load-gauge-score" id="load-gauge-score">0 / 40</div>
+            </div>
+            <div class="load-gauge-label" id="load-gauge-label">Waking…</div>
+            <div class="token-bar-wrap">
+              <div class="token-bar-track"><div class="token-bar-fill" id="token-bar-fill"></div></div>
+              <div class="token-bar-label" id="token-bar-label">Waking…</div>
+            </div>
+          </div>
+        </div>
+        <div class="conversation" id="conversation"><div class="thinking visible" id="thinking"></div></div>
+        <div class="input-area">
+          <div class="image-preview" id="image-preview">
+            <img id="preview-img" src="" alt="">
+            <span class="image-preview-name" id="preview-name"></span>
+            <button class="btn-remove-image" id="btn-remove-image">×</button>
+          </div>
+          <div class="input-row">
+            <button class="btn-attach" id="btn-attach" title="Attach image">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13.5 7.5L7 14a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.535 3.536L5.5 11.5a1 1 0 01-1.414-1.414L10 4"/>
+              </svg>
+            </button>
+            <input type="file" id="file-input" accept="image/*,application/pdf">
+            <textarea id="input" rows="3"></textarea>
+          </div>
+          <div class="input-controls">
+            <button class="btn btn-new-session" id="btn-new-session">New Session</button>
+            <button class="btn btn-new-session" id="btn-continue">Continue</button>
+            <button class="btn btn-new-session" id="btn-retire">Retire</button>
+            <button class="btn btn-send" id="btn-stop" style="display:none">Stop</button>
+            <button class="btn btn-send" id="btn-send" disabled>Send</button>
+          </div>
+          <div class="error-state" id="error-state"></div>
+        </div>
+        <div class="panel-toggle" id="panel-toggle">Artefacts<span class="panel-badge" id="panel-badge"></span></div>
+      </div>
+      <div class="artefact-panel closed" id="artefact-panel">
+        <div class="panel-header">
+          <span class="panel-label">Artefacts</span>
+          <button class="panel-close" id="panel-close">×</button>
+        </div>
+        <div class="panel-scroll">
+          <div id="panel-pinned-section" style="display:none">
+            <div class="panel-section-label">Held in context</div>
+            <div id="panel-pinned-list"></div>
+          </div>
+          <div id="panel-artefacts-section" style="display:none">
+            <div class="panel-section-label">This session</div>
+            <div id="panel-artefacts-list"></div>
+          </div>
+          <div class="panel-empty" id="panel-empty">Nothing here yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modular JS — load order: config → state → mst → gauge → render → hold → panel → retire → guard (shared) → session → init -->
+  <script src="angelia-config.js?v=20260610a"></script>
+  <script src="angelia-state.js?v=20260610a"></script>
+  <script src="angelia-mst.js?v=20260610a"></script>
+  <script src="angelia-gauge.js?v=20260610a"></script>
+  <script src="angelia-render.js?v=20260610a"></script>
+  <script src="angelia-hold.js?v=20260610a"></script>
+  <script src="angelia-panel.js?v=20260610a"></script>
+  <script src="prime-retire.js?v=20260610a"></script>
+  <script src="prime-guard.js?v=20260610a"></script>
+  <script src="angelia-session.js?v=20260610a"></script>
+  <script src="angelia-init.js?v=20260610a"></script>
+</body>
+</html>
