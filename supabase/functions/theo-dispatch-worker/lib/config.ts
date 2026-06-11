@@ -19,6 +19,34 @@ import type { EngineConfig, EngineName, Role } from "./types.ts";
 export const DEFAULT_POLL_STALENESS_MS = 45 * 60 * 1000;  // 45 min
 
 // ──────────────────────────────────────────────────────────────────────────
+// Lock lease (baton 143072ab #4). A session's claim is leased for this long;
+// claim_theo_session reclaims a lock older than the lease (dead holder). MUST
+// exceed the EF ~150s hard tick ceiling so an overlapping cron fire never steals
+// a live lock; 5 min gives ~2x margin while bounding any hard-kill strand.
+// Passed to claim_theo_session(p_lease_seconds) so the lease lives in one place.
+export const LOCK_LEASE_SECONDS = 300;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Bounded submit retry (baton 143072ab #2). A retryable submit failure (e.g. a
+// 429 from a throttled engine) leaves the row 'pending' for a later tick — but
+// only up to MAX_SUBMIT_ATTEMPTS, after which the row is failed TERMINALLY so a
+// persistently-throttled engine can no longer hang the session. Between retries
+// the worker backs off exponentially (base * 2^(n-1), capped) so it neither
+// hammers the provider nor burns rate budget on a row it can't yet submit.
+export const MAX_SUBMIT_ATTEMPTS = 6;
+const SUBMIT_BACKOFF_BASE_MS = 30 * 1000;   // first retry waits ~30s
+const SUBMIT_BACKOFF_CAP_MS = 8 * 60 * 1000; // never wait more than 8 min between retries
+
+// Backoff before the next submit of a row that has already failed `attempts`
+// times. attempts=0 => no wait (first ever submit). With base 30s/cap 8m the
+// six spaced retries span ~tens of minutes before the terminal ceiling, leaving
+// ample room for a transient throttle to clear without an unbounded hang.
+export function submitBackoffMs(attempts: number): number {
+  if (attempts <= 0) return 0;
+  return Math.min(SUBMIT_BACKOFF_BASE_MS * 2 ** (attempts - 1), SUBMIT_BACKOFF_CAP_MS);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Engines: canonical name -> provider+model+defaults
 // Naming convention: <provider>-<model-family>[-<variant>]
 // engine_dispatch.engine_name stores this canonical string.
@@ -74,7 +102,13 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
     provider: "gemini",
     model: "gemini-2.5-pro",
     async: false,
-    rate_limit: { rpm: 150, rpd: 1000 },
+    // rpm CONSERVATIVE BY DESIGN (baton 143072ab #2). A freshly-funded key sits on
+    // a low rate tier; the prior 150 rpm over-submitted and drew a 429 storm (~78
+    // on the dashboard) during Angelia arc 1. Set low so pacing fails toward
+    // under-use, never a throttle storm. CONFIRM against the key's real tier and
+    // raise once known — the bounded-retry ceiling (MAX_SUBMIT_ATTEMPTS) is the
+    // structural backstop regardless of this number.
+    rate_limit: { rpm: 10, rpd: 1000 },
     defaults: { timeout_ms: 240_000 },
   },
 

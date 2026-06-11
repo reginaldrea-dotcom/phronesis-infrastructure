@@ -29,16 +29,17 @@ import {
   markDispatched,
   markFailed,
   markPartial,
+  recordSubmitAttempt,
   releaseSession,
   sessionStatusCounts,
   updateSessionState,
 } from "./queue.ts";
 import type { AdapterResponse, Role } from "./types.ts";
-import { engineConfig, pollStalenessMs } from "./config.ts";
+import { engineConfig, pollStalenessMs, MAX_SUBMIT_ATTEMPTS, submitBackoffMs } from "./config.ts";
 import { canSubmit, recordUsage } from "./pacing.ts";
 import { getBudgetStatus, computeCostUsd, type BudgetStatus } from "./budget.ts";
 import { submitAdapter, pollAdapter } from "./adapters/index.ts";
-import { fileSessionWakeDelta } from "./wake.ts";
+import { fileSessionWakeDelta, resolveOwnerLineage } from "./wake.ts";
 import { resolveWorkerInstanceId } from "./instance.ts";
 
 export interface TickSummary {
@@ -51,8 +52,9 @@ export interface TickSummary {
   rows_completed: number;
   rows_partial: number;
   rows_failed: number;
-  rows_paced_off: number;       // rate-budget exhausted, deferred to next tick
+  rows_paced_off: number;       // rate-budget exhausted / backing off, deferred to next tick
   rows_stale_failed: number;    // poll-staleness ceiling hit
+  rows_retry_exhausted: number; // submit retry ceiling hit -> failed terminally (was: hung forever)
   rows_budget_blocked: number;  // spend ceiling / pause flag — submit deferred this tick
   submits_blocked: boolean;     // tick-level: were submits gated by the spend guard?
   spend_today_usd: number;      // observability: today's recorded spend at tick start
@@ -78,6 +80,7 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
     rows_failed: 0,
     rows_paced_off: 0,
     rows_stale_failed: 0,
+    rows_retry_exhausted: 0,
     rows_budget_blocked: 0,
     submits_blocked: false,
     spend_today_usd: 0,
@@ -122,8 +125,12 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
         const anySuccess = counts.completed + counts.partial > 0;
         const newState = anySuccess ? "comparing" : "failed";
         await updateSessionState(supabase, session.id, newState);
+        // Route the completion delta to the session OWNER (the Prime that enqueued
+        // it), not always Theo (baton 143072ab #5) — else an autonomous researcher
+        // like Angelia never learns her own run finished.
+        const ownerLineage = await resolveOwnerLineage(supabase, session.id);
         await fileSessionWakeDelta(supabase, {
-          to_lineage: THEO_LINEAGE,
+          to_lineage: ownerLineage,
           theo_session_id: session.id,
           note: anySuccess
             ? `dispatch complete: ${counts.completed} completed, ${counts.partial} partial, ${counts.failed} failed`
@@ -167,6 +174,18 @@ async function handlePending(
     return;
   }
 
+  // Retry backoff (baton 143072ab #2) — if this row has already failed retryably,
+  // wait out the exponential backoff window before touching the provider again.
+  // Prevents hammering a throttled engine every tick (and burning rate budget on
+  // a row we can't yet submit). attempts=0 => no wait, normal first submit.
+  if (row.submit_attempts > 0 && row.last_attempt_at) {
+    const sinceLastMs = Date.now() - new Date(row.last_attempt_at).getTime();
+    if (sinceLastMs < submitBackoffMs(row.submit_attempts)) {
+      summary.rows_paced_off++;
+      return;  // still backing off; a later tick will retry.
+    }
+  }
+
   // Pacing — only PACE SUBMITS, polls are free.
   const decision = await canSubmit(supabase, row.engine_name);
   if (!decision.ok) {
@@ -198,13 +217,29 @@ async function handlePending(
   }
   // ok:false
   if (result.error.retryable) {
-    // Provider rejected (e.g. 429); leave row 'pending' for the next tick. Don't
-    // count as "submitted progressed" — it's effectively paced off by the provider.
+    // Provider rejected retryably (e.g. 429). Bound the retries (baton 143072ab #2):
+    // bump the attempt counter, and once the ceiling is hit, fail the row TERMINALLY
+    // so a persistently-throttled engine can no longer hang the session forever.
+    const attempts = row.submit_attempts + 1;
+    if (attempts >= MAX_SUBMIT_ATTEMPTS) {
+      await markFailed(
+        supabase,
+        row.id,
+        `submit retry ceiling: ${attempts} retryable failures; last ${result.error.kind}: ${result.error.message}`,
+        "pending",
+        result.error.raw,
+      );
+      summary.rows_retry_exhausted++;
+      summary.rows_failed++;
+      return;
+    }
+    // Under the ceiling: record the attempt (drives backoff) and leave 'pending'.
+    await recordSubmitAttempt(supabase, row.id, attempts).catch(e => console.error("recordSubmitAttempt", e));
     summary.rows_paced_off++;
     return;
   }
   summary.rows_submitted++;
-  await markFailed(supabase, row.id, `${result.error.kind}: ${result.error.message}`, "pending");
+  await markFailed(supabase, row.id, `${result.error.kind}: ${result.error.message}`, "pending", result.error.raw);
   summary.rows_failed++;
 }
 
@@ -250,7 +285,7 @@ async function handleDispatched(
       summary.rows_partial++;
       return;
     case "failed":
-      await markFailed(supabase, row.id, `${result.error.kind}: ${result.error.message}`, "dispatched");
+      await markFailed(supabase, row.id, `${result.error.kind}: ${result.error.message}`, "dispatched", result.error.raw);
       summary.rows_failed++;
       return;
   }

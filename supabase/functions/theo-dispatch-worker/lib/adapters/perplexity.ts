@@ -71,20 +71,27 @@ export const perplexityAdapter: Adapter = {
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     const url = isDeepResearch(req.model) ? ASYNC_ENDPOINT : SYNC_ENDPOINT;
 
+    // Chat-completion params. The SYNC surface takes these at the body root; the
+    // ASYNC surface (/async/chat/completions) requires them WRAPPED under a
+    // top-level `request` key. Posting the flat body to the async endpoint returns
+    // HTTP 400 — the deep-research dispatch failure Theo flagged (baton 143072ab #1).
+    const chatParams = {
+      model: req.model,
+      messages: [{ role: "user", content: req.prompt }],
+      return_citations: true,
+      return_images: false,
+      ...(req.opts?.max_tokens !== undefined ? { max_tokens: req.opts.max_tokens } : {}),
+      ...(req.opts?.temperature !== undefined ? { temperature: req.opts.temperature } : {}),
+    };
+    const payload = isDeepResearch(req.model) ? { request: chatParams } : chatParams;
+
     let res: Response;
     try {
       res = await fetch(url, {
         method: "POST",
         signal: ctl.signal,
         headers: authHeaders(),
-        body: JSON.stringify({
-          model: req.model,
-          messages: [{ role: "user", content: req.prompt }],
-          return_citations: true,
-          return_images: false,
-          ...(req.opts?.max_tokens !== undefined ? { max_tokens: req.opts.max_tokens } : {}),
-          ...(req.opts?.temperature !== undefined ? { temperature: req.opts.temperature } : {}),
-        }),
+        body: JSON.stringify(payload),
       });
     } catch (e) {
       clearTimeout(timer);
@@ -142,7 +149,8 @@ export const perplexityAdapter: Adapter = {
     // Async response includes status field plus (when COMPLETED) the chat completion payload.
     const statusStr = String((raw as { status?: string } | null)?.status ?? "").toUpperCase();
 
-    if (statusStr === "QUEUED" || statusStr === "IN_PROGRESS" || statusStr === "STARTED") {
+    // Async lifecycle (observed + documented): CREATED -> STARTED/PROCESSING/IN_PROGRESS -> COMPLETED|FAILED.
+    if (["CREATED", "QUEUED", "IN_PROGRESS", "PROCESSING", "STARTED"].includes(statusStr)) {
       return { status: "in_progress" };
     }
     if (statusStr === "FAILED" || statusStr === "CANCELLED" || statusStr === "EXPIRED") {

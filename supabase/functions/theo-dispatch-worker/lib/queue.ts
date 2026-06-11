@@ -13,6 +13,7 @@
 // a stale write can't trample a fresher one.
 
 import type { SupabaseClient } from "./supabase.ts";
+import { LOCK_LEASE_SECONDS } from "./config.ts";
 
 export interface DispatchableSession {
   id: string;
@@ -29,6 +30,8 @@ export interface EngineDispatchRow {
   status: string;
   provider_job_ref: string | null;
   dispatched_at: string | null;
+  submit_attempts: number;
+  last_attempt_at: string | null;
 }
 
 export async function findDispatchableSessions(
@@ -36,9 +39,15 @@ export async function findDispatchableSessions(
   myInstanceId: string,
   limit = 20,
 ): Promise<DispatchableSession[]> {
-  // Sessions in 'dispatched' state that are unlocked OR locked by us.
-  // Two filters because PostgREST doesn't combine OR with an .eq() cleanly here;
-  // we union via two separate selects then dedupe by id.
+  // Sessions in 'dispatched' state that are claimable: UNLOCKED, or RECLAIMABLE
+  // (lock lease expired / a legacy lock with no timestamp). We don't filter by
+  // holder — a hard-killed tick leaves the lock set under the worker's own stable
+  // instance_id, and a future second worker could leave a stale lock too; both are
+  // surfaced here and the actual reclaim decision is enforced atomically by
+  // claim_theo_session's lease check. Two selects unioned because PostgREST can't
+  // express the (unlocked OR stale) OR cleanly in one filter. myInstanceId is no
+  // longer needed for filtering but is kept in the signature for callers.
+  void myInstanceId;
   const unlocked = await supabase
     .from("theo_session")
     .select("id, state, locked_by_instance_id")
@@ -47,17 +56,20 @@ export async function findDispatchableSessions(
     .limit(limit);
   if (unlocked.error) throw new Error(`session list (unlocked) failed: ${unlocked.error.message}`);
 
-  const owned = await supabase
+  // Reclaimable: locked, but the lease has lapsed (or predates the lease column).
+  const leaseCutoff = new Date(Date.now() - LOCK_LEASE_SECONDS * 1000).toISOString();
+  const reclaimable = await supabase
     .from("theo_session")
     .select("id, state, locked_by_instance_id")
     .eq("state", "dispatched")
-    .eq("locked_by_instance_id", myInstanceId)
+    .not("locked_by_instance_id", "is", null)
+    .or(`locked_at.is.null,locked_at.lt.${leaseCutoff}`)
     .limit(limit);
-  if (owned.error) throw new Error(`session list (owned) failed: ${owned.error.message}`);
+  if (reclaimable.error) throw new Error(`session list (reclaimable) failed: ${reclaimable.error.message}`);
 
   const byId = new Map<string, DispatchableSession>();
   for (const r of unlocked.data ?? []) byId.set(r.id as string, r as DispatchableSession);
-  for (const r of owned.data ?? []) byId.set(r.id as string, r as DispatchableSession);
+  for (const r of reclaimable.data ?? []) byId.set(r.id as string, r as DispatchableSession);
   return [...byId.values()];
 }
 
@@ -66,9 +78,12 @@ export async function claimSession(
   sessionId: string,
   myInstanceId: string,
 ): Promise<boolean> {
+  // The lease lives in config (LOCK_LEASE_SECONDS) and is passed explicitly so the
+  // worker and the RPC agree; the RPC also carries a matching default as a fallback.
   const { data, error } = await supabase.rpc("claim_theo_session", {
     p_session_id: sessionId,
     p_instance_id: myInstanceId,
+    p_lease_seconds: LOCK_LEASE_SECONDS,
   });
   if (error) throw new Error(`claim_theo_session failed: ${error.message}`);
   return data === true;
@@ -77,7 +92,7 @@ export async function claimSession(
 export async function releaseSession(supabase: SupabaseClient, sessionId: string): Promise<void> {
   const { error } = await supabase
     .from("theo_session")
-    .update({ locked_by_instance_id: null })
+    .update({ locked_by_instance_id: null, locked_at: null })
     .eq("id", sessionId);
   if (error) throw new Error(`release session failed: ${error.message}`);
 }
@@ -88,11 +103,27 @@ export async function findRowsForSession(
 ): Promise<EngineDispatchRow[]> {
   const { data, error } = await supabase
     .from("engine_dispatch")
-    .select("id, theo_session_id, engine_name, role_in_dispatch, prompt_sent, status, provider_job_ref, dispatched_at")
+    .select("id, theo_session_id, engine_name, role_in_dispatch, prompt_sent, status, provider_job_ref, dispatched_at, submit_attempts, last_attempt_at")
     .eq("theo_session_id", sessionId)
     .in("status", ["pending", "dispatched"]);
   if (error) throw new Error(`row list failed: ${error.message}`);
   return (data ?? []) as EngineDispatchRow[];
+}
+
+// Record a retryable submit failure on a pending row: bump the attempt counter
+// and stamp the attempt time (drives backoff + the terminal-fail ceiling). CAS
+// guard on status='pending' so it can't trample a row another path just finalised.
+export async function recordSubmitAttempt(
+  supabase: SupabaseClient,
+  rowId: string,
+  newAttemptCount: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from("engine_dispatch")
+    .update({ submit_attempts: newAttemptCount, last_attempt_at: new Date().toISOString() })
+    .eq("id", rowId)
+    .eq("status", "pending");
+  if (error) throw new Error(`recordSubmitAttempt failed: ${error.message}`);
 }
 
 export async function markDispatched(
@@ -170,19 +201,29 @@ export async function markPartial(
   if (error) throw new Error(`markPartial failed: ${error.message}`);
 }
 
+// rawBody (baton 143072ab #3): the provider's raw error response, persisted
+// (truncated) into response_raw so a failure is diagnosable after the fact —
+// previously only "api_error: http N" survived, blinding diagnosis of the 400s.
+const RAW_ERROR_MAX = 8_000;
 export async function markFailed(
   supabase: SupabaseClient,
   rowId: string,
   errorDetail: string,
   expectedStatus: "pending" | "dispatched",
+  rawBody?: unknown,
 ): Promise<void> {
+  const patch: Record<string, unknown> = {
+    status: "failed",
+    error_detail: errorDetail,
+    response_received_at: new Date().toISOString(),
+  };
+  if (rawBody !== undefined && rawBody !== null) {
+    const s = typeof rawBody === "string" ? rawBody : JSON.stringify(rawBody);
+    if (s) patch.response_raw = s.length > RAW_ERROR_MAX ? s.slice(0, RAW_ERROR_MAX) + "…[truncated]" : s;
+  }
   const { error } = await supabase
     .from("engine_dispatch")
-    .update({
-      status: "failed",
-      error_detail: errorDetail,
-      response_received_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq("id", rowId)
     .eq("status", expectedStatus);
   if (error) throw new Error(`markFailed failed: ${error.message}`);
