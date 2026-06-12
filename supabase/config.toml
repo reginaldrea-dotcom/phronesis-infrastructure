@@ -19,3 +19,9 @@ verify_jwt = false
 # verify_jwt is disabled. MUST deploy with --no-verify-jwt.
 [functions.live-report]
 verify_jwt = false
+
+# research-feed is the multi-research awareness poll endpoint (the knocker-upper seed).
+# Cloudflare-gated, called from the surface with the publishable key and no JWT; reads
+# theo_session/engine_dispatch with the service-role credential. MUST deploy with --no-verify-jwt.
+[functions.research-feed]
+verify_jwt = false
