@@ -6,6 +6,7 @@ id<html lang="en">
   <title>Phronesis Navigator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+SC:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root{--bg:#FAFAF8;--surface:#FFFFFF;--bg-dim:#F0EDE6;--border:#E0DDD6;--border-lt:#EDEBE5;--text:#1C1C1A;--muted:#6B6B66;--light:#A8A49E;--badge-red:#B03030;--badge-amber:#B8742A;--badge-blue:#2557A7;--badge-green:#1A7A3C;--badge-size:10px;--btn:#2C2C2A;--btn-text:#FAFAF8;--overlay:rgba(20,18,16,0.42);--tile-w:140px;--tile-h:164px;--icon-size:80px}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -164,6 +165,63 @@ id<html lang="en">
     .tile-refresh:hover{color:var(--muted)}
     .status-msg{font-size:14px;color:var(--light);font-style:italic;padding:8px 0}
     @media(max-width:600px){header{padding:20px 20px 16px}nav{padding:0 20px}.page{padding:24px 20px}}
+    /* ===== Baton board panel (Eames SP 76019f72; prototype 383aa695). Scoped to .bp. ===== */
+    .bp{--paper:#F4F2EA;--bp-surface:#FBFAF5;--surface-2:#EFEDE3;--sink:#E7E4D8;--bp-ink:#1E1B16;--ink-soft:#5A554C;--ink-faint:#8E897D;--rule:#DAD5C7;--rule-soft:#E6E2D5;
+      --k-blocked:#B0463A;--k-blocked-dim:rgba(176,70,58,0.10);--k-needs_ruling:#5A4A8A;--k-needs_ruling-dim:rgba(90,74,138,0.10);--k-spawned:#2E6B6B;--k-spawned-dim:rgba(46,107,107,0.10);
+      --k-failed:#9C6B2E;--k-failed-dim:rgba(156,107,46,0.12);--k-gated:#4A5A6B;--k-gated-dim:rgba(74,90,107,0.10);--k-unpicked:#6B6457;--k-unpicked-dim:rgba(107,100,87,0.10);
+      --stale:#9A7B1E;--stale-dim:rgba(154,123,30,0.10);--invoke:#2E5D4F;--bp-serif:'Spectral',Georgia,serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+      max-width:760px;font-family:var(--bp-serif);color:var(--bp-ink);font-size:15px;line-height:1.5;}
+    .bp .iti{border:1.5px solid var(--bp-ink);border-radius:4px;background:var(--bp-surface);overflow:hidden;}
+    .bp .iti .h{display:flex;align-items:center;gap:9px;padding:9px 14px;background:var(--bp-ink);color:var(--paper);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.14em;}
+    .bp .iti .h .gen{margin-left:auto;opacity:0.7;text-transform:none;letter-spacing:0.04em;}
+    .bp .iti .body{padding:15px 16px;font-size:16px;line-height:1.55;}
+    .bp .iti .open{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--invoke);}
+    .bp .iti .aware{display:block;margin-top:7px;font-size:14px;color:var(--ink-soft);}
+    .bp .empty{padding:15px 16px;font-size:14px;color:var(--ink-faint);font-style:italic;}
+    .bp .copybar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--rule-soft);background:var(--surface-2);}
+    .bp .copy{font-family:var(--mono);font-size:12px;letter-spacing:0.04em;border:1px solid var(--bp-ink);background:var(--bp-ink);color:var(--paper);padding:7px 16px;border-radius:2px;cursor:pointer;}
+    .bp .copy:hover{opacity:0.88;} .bp .copy.ok{background:var(--invoke);border-color:var(--invoke);}
+    .bp .copyhint{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .bp .next3{margin-top:14px;}
+    .bp .next3 .cap{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.13em;color:var(--ink-faint);margin-bottom:10px;}
+    .bp .nx{border:1px solid var(--rule);border-radius:3px;background:var(--bp-surface);margin-bottom:8px;overflow:hidden;}
+    .bp .nx .main{display:flex;align-items:flex-start;gap:11px;padding:11px 13px;}
+    .bp .nx .num{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--ink-faint);width:14px;flex-shrink:0;padding-top:5px;}
+    .bp .kind{flex-shrink:0;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600;font-size:14px;}
+    .bp .nxbody{flex:1;min-width:0;} .bp .nxline{font-size:14.5px;line-height:1.4;}
+    .bp .holder{font-family:var(--mono);font-weight:600;font-size:12px;} .bp .track{font-weight:500;}
+    .bp .kindlab{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:0.07em;padding:1px 6px;border-radius:2px;}
+    .bp .nxnote{margin-top:3px;font-size:13px;color:var(--ink-soft);font-style:italic;}
+    .bp .nxmeta{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .bp .unblock{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;border:1px solid var(--invoke);color:var(--invoke);background:transparent;padding:5px 11px;border-radius:2px;cursor:pointer;}
+    .bp .unblock:hover{background:var(--invoke);color:var(--paper);}
+    .bp .unblock-iti{display:none;border-top:1px dashed var(--rule);background:var(--surface-2);padding:13px 14px;}
+    .bp .nx.open .unblock-iti,.bp .hrow.open .unblock-iti{display:block;}
+    .bp .unblock-iti .lbl{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:0.13em;color:var(--ink-faint);margin-bottom:7px;}
+    .bp .unblock-iti .txt{font-size:14px;line-height:1.5;} .bp .unblock-iti .copybar{margin:11px -14px -13px;border-radius:0;}
+    .bp .expand{margin-top:6px;}
+    .bp .expand .btn{width:100%;text-align:left;font-family:var(--mono);font-size:11.5px;letter-spacing:0.03em;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--rule);border-radius:3px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;}
+    .bp .expand .btn:hover{background:var(--sink);} .bp .expand .btn .tw{transition:transform .2s;} .bp .expand.open .btn .tw{transform:rotate(90deg);} .bp .expand .btn .ct{margin-left:auto;color:var(--ink-faint);}
+    .bp .fullboard{display:none;margin-top:14px;} .bp .expand.open + .fullboard{display:block;}
+    .bp details.lane{margin-top:12px;border:1px solid var(--rule-soft);border-radius:3px;overflow:hidden;}
+    .bp details.lane > summary{cursor:pointer;list-style:none;padding:10px 13px;background:var(--surface-2);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.12em;color:var(--ink-soft);display:flex;align-items:center;gap:9px;}
+    .bp details.lane > summary::-webkit-details-marker{display:none;} .bp details.lane > summary .tw{margin-left:auto;transition:transform .2s;color:var(--ink-faint);} .bp details.lane[open] > summary .tw{transform:rotate(90deg);}
+    .bp details.lane.routing > summary{color:var(--k-blocked);} .bp details.lane.possibly > summary{color:var(--stale);} .bp details.lane .lbody{padding:12px 13px;}
+    .bp .arow{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);margin-bottom:6px;font-size:13.5px;}
+    .bp .arow .who{font-family:var(--mono);font-size:11px;color:var(--ink-soft);min-width:84px;} .bp .arow .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .bp .arow .when{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);white-space:nowrap;} .bp .arow.staleflag .when{color:var(--stale);}
+    .bp .arow .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-faint);flex-shrink:0;} .bp .arow.staleflag .dot{background:var(--stale);}
+    .bp .hrow{border:1px solid var(--rule);border-left:3px solid var(--ink-faint);border-radius:3px;background:var(--bp-surface);margin-bottom:8px;overflow:hidden;}
+    .bp .hrow .main{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;} .bp .hbody{flex:1;min-width:0;} .bp .hline{font-size:14px;line-height:1.4;}
+    .bp .hnote{margin-top:3px;font-size:13px;color:var(--ink-soft);font-style:italic;}
+    .bp .hmeta{margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 11px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+    .bp .age.stale{color:var(--k-blocked);font-weight:500;} .bp .watch{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);padding:4px 0;}
+    .bp .children{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;} .bp .child{font-family:var(--mono);font-size:10.5px;color:var(--k-spawned);border:1px solid var(--k-spawned);background:var(--k-spawned-dim);border-radius:2px;padding:2px 7px;}
+    .bp .hrow.poss{border-left-color:var(--stale);} .bp .hrow.poss .kind{background:var(--stale-dim);color:var(--stale);}
+    .bp .hrow.unpicked{border-left-color:var(--k-unpicked);} .bp .hrow.unpicked .kind{background:var(--k-unpicked-dim);color:var(--k-unpicked);}
+    .bp .lane-empty{font-size:13px;color:var(--ink-faint);font-style:italic;padding:4px 2px;}
+    .bp :focus-visible{outline:2px solid var(--invoke);outline-offset:2px;}
+    @media (prefers-reduced-motion:reduce){.bp *{transition:none!important;}}
   </style>
 </head>
 <body>
@@ -178,6 +236,7 @@ id<html lang="en">
   <button class="active" onclick="showPage('roundtable',this)">Round Table</button>
   <button onclick="showPage('wheel',this)">Tiles</button>
   <button onclick="showPage('notices',this)">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
+  <button onclick="showPage('batons',this)">Baton board</button>
 </nav>
 
 <!-- ROUND TABLE -->
@@ -215,6 +274,33 @@ id<html lang="en">
   <div class="notices-head"><div class="notices-title">Notices</div><div class="notices-count" id="noticesCount"></div></div>
   <div class="notices-desc">Wheel posts at moderate or urgent attention, not yet acknowledged.</div>
   <div id="noticesList"><p class="status-msg">Loading…</p></div>
+</div>
+
+<!-- BATON BOARD -->
+<div id="batons" class="page">
+  <div class="bp">
+    <div class="iti">
+      <div class="h">Next invocation <span class="gen" id="bpItiGen"></span></div>
+      <div class="body" id="bpItiBody"><div class="empty">Loading…</div></div>
+      <div class="copybar" id="bpItiCopybar" style="display:none">
+        <button class="copy" data-copy="iti-main">Copy invocation</button>
+        <span class="copyhint">read it, copy, open the Prime, paste, move on</span>
+      </div>
+    </div>
+    <div class="next3">
+      <div class="cap">Next 3 to move on</div>
+      <div id="bpNext3"><div class="lane-empty">Loading…</div></div>
+    </div>
+    <div class="expand" id="bpExpand">
+      <button class="btn" id="bpExpandBtn"><span class="tw">&#9656;</span> Full board <span class="ct" id="bpExpandCt"></span></button>
+    </div>
+    <div class="fullboard" id="bpFullboard">
+      <details class="lane"><summary>In progress <span id="bpCtActive"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpActiveList"></div></details>
+      <details class="lane routing" open><summary>Halted — needs routing <span id="bpCtRouting"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpRoutingList"></div></details>
+      <details class="lane possibly"><summary>Possibly halted — no halt filed <span id="bpCtPoss"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpPossiblyList"></div></details>
+      <details class="lane"><summary>Unclaimed — never picked up <span id="bpCtUnpicked"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpUnpickedList"></div></details>
+    </div>
+  </div>
 </div>
 
 <!-- INVOKE MODAL -->
@@ -706,7 +792,94 @@ async function saveRtAdmin(){
     errEl.textContent='Error: '+e.message;
   }
 }
-function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
+function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');if(id==='batons')loadBatonPanel();}
+
+/* ===== BATON BOARD (Eames SP 76019f72; prototype 383aa695). Derive-from-rows; reads via sb() (anon + RLS). ===== */
+const BP_KINDS={
+  failed:{glyph:'✕',lab:'failed',tier:1},
+  needs_ruling:{glyph:'?',lab:'needs ruling',tier:1},
+  blocked:{glyph:'⊘',lab:'blocked',tier:2},
+  spawned:{glyph:'⑂',lab:'spawned',tier:2,watch:true},
+  gated:{glyph:'‖',lab:'gated',tier:9}
+};
+window.__bpCopy={};
+function bpEsc(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function bpTier(k){return (k==='failed'||k==='needs_ruling')?1:(k==='blocked'||k==='spawned')?2:3;}
+function bpTime(s){return s?new Date(s).getTime():0;}
+function bpAgo(s){if(!s)return '';const h=Math.floor((Date.now()-new Date(s).getTime())/3600000);if(h<1)return 'just now';if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago';}
+function bpFb(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){}document.body.removeChild(ta);}
+function bpCopy(text,btn){const done=function(){const o=btn.textContent;btn.textContent='Copied';btn.classList.add('ok');setTimeout(function(){btn.textContent=o;btn.classList.remove('ok');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(function(){bpFb(text,done);});}else bpFb(text,done);}
+function bpUnblockIti(iti,copyKey){
+  if(iti){window.__bpCopy[copyKey]=iti.body||'';return '<div class="unblock-iti"><div class="lbl">ready-to-paste invite</div><div class="txt">'+bpEsc(iti.body).replace(/\n/g,'<br>')+'</div><div class="copybar"><button class="copy" data-copy="'+copyKey+'">Copy invite</button><span class="copyhint">Antechamber-generated</span></div></div>';}
+  return '<div class="unblock-iti"><div class="lbl">ready-to-paste invite</div><div class="txt" style="color:var(--ink-faint);font-style:italic">No ITI generated for this baton yet — Antechamber templates it by halt_kind.</div></div>';
+}
+async function loadBatonPanel(){
+  let open=[],poss=[],itis=[];
+  try{open=await sb('relay_baton?select=id,holder,track,halt_kind,halt_note,halt_needs,child_baton_ids,halted_at,passed_at,picked_up_at&done_at=is.null&order=passed_at.asc');}
+  catch(e){console.warn('baton panel: relay_baton not readable yet (RLS policy pending?)',e);open=[];}
+  try{poss=await sb('baton_possibly_halted?select=holder,track,picked_up_at,stale_after_hours,hours_since_pickup&order=hours_since_pickup.desc');}catch(e){poss=[];}
+  try{itis=await sb('relay_iti?select=id,body,generated_by,generated_at,primary_baton_id&order=generated_at.desc');}catch(e){itis=[];}
+  window.__bpCopy={};
+  const itiByBaton={};itis.forEach(t=>{if(t.primary_baton_id&&!itiByBaton[t.primary_baton_id])itiByBaton[t.primary_baton_id]=t;});
+  const halted=open.filter(b=>b.halted_at);
+  const unpicked=open.filter(b=>!b.picked_up_at);
+  const active=open.filter(b=>b.picked_up_at&&!b.halted_at);
+  const cand=open.filter(b=>b.halt_kind!=='gated'&&(['failed','needs_ruling','blocked','spawned'].includes(b.halt_kind)||!b.picked_up_at));
+  cand.sort((a,b)=>bpTier(a.halt_kind)-bpTier(b.halt_kind)||(bpTime(a.halted_at||a.passed_at)-bpTime(b.halted_at||b.passed_at)));
+  bpRenderIti(itis[0]);
+  bpRenderNext3(cand.slice(0,3),itiByBaton);
+  bpRenderFull(active,halted,poss,unpicked,itiByBaton);
+  document.getElementById('bpExpandCt').textContent=halted.length+' halted, '+poss.length+' possibly, '+unpicked.length+' unclaimed';
+}
+function bpRenderIti(t){
+  const body=document.getElementById('bpItiBody'),gen=document.getElementById('bpItiGen'),cb=document.getElementById('bpItiCopybar');
+  if(!t){body.innerHTML='<div class="empty">No invocation queued. This lights up when Antechamber generates the first ITI.</div>';gen.textContent='';cb.style.display='none';return;}
+  body.innerHTML=bpEsc(t.body).replace(/\n/g,'<br>');
+  gen.textContent=(t.generated_by||'antechamber')+' · '+bpAgo(t.generated_at);
+  window.__bpCopy['iti-main']=t.body||'';cb.style.display='';
+}
+function bpRenderNext3(top,itiByBaton){
+  const el=document.getElementById('bpNext3');
+  if(!top.length){el.innerHTML='<div class="lane-empty">Nothing waiting to move on.</div>';return;}
+  el.innerHTML=top.map((b,i)=>{
+    const isHalt=!!b.halt_kind&&b.halt_kind!=='gated';
+    const kind=isHalt?b.halt_kind:'unpicked';const k=BP_KINDS[b.halt_kind];
+    const glyph=isHalt?(k?k.glyph:'?'):'·';const lab=isHalt?(k?k.lab:b.halt_kind):'unpicked';
+    const bg='var(--k-'+kind+'-dim)',fg='var(--k-'+kind+')';
+    const note=isHalt?(b.halt_note||''):'passed '+bpAgo(b.passed_at)+', never picked up';
+    const btn=isHalt?'&#8594; unblock':'&#8594; nudge: '+bpEsc(b.holder);
+    return '<div class="nx" style="border-left:3px solid '+fg+'"><div class="main"><div class="num">'+(i+1)+'</div>'+
+      '<div class="kind" style="background:'+bg+';color:'+fg+'">'+glyph+'</div><div class="nxbody">'+
+      '<div class="nxline"><span class="holder">'+bpEsc(b.holder)+'</span> '+(isHalt?'halted ':'')+'<span class="track">'+bpEsc(b.track)+'</span> <span class="kindlab" style="background:'+bg+';color:'+fg+'">'+bpEsc(lab)+'</span></div>'+
+      (note?'<div class="nxnote">'+bpEsc(note)+'</div>':'')+
+      '<div class="nxmeta"><button class="unblock">'+btn+'</button></div></div></div>'+
+      bpUnblockIti(itiByBaton[b.id],'nx-'+i)+'</div>';
+  }).join('');
+}
+function bpRenderFull(active,halted,poss,unpicked,itiByBaton){
+  document.getElementById('bpActiveList').innerHTML=active.length?active.map(a=>'<div class="arow"><span class="dot"></span><span class="who">'+bpEsc(a.holder)+'</span><span class="what">'+bpEsc(a.track)+'</span><span class="when">picked up '+bpAgo(a.picked_up_at)+'</span></div>').join(''):'<div class="lane-empty">Nothing in progress.</div>';
+  document.getElementById('bpCtActive').textContent='· '+active.length;
+  document.getElementById('bpRoutingList').innerHTML=halted.length?halted.map((h,i)=>{
+    const k=BP_KINDS[h.halt_kind]||{glyph:'?',lab:h.halt_kind};const kind=h.halt_kind;const bg='var(--k-'+kind+'-dim)',fg='var(--k-'+kind+')';
+    let action,unblock='';
+    if(k.watch){const kids=Array.isArray(h.child_baton_ids)?h.child_baton_ids:[];action='<span class="watch">waiting on '+kids.length+' child '+(kids.length===1?'leg':'legs')+'</span>'+(kids.length?'<div class="children">'+kids.map(c=>'<span class="child">'+bpEsc((''+c).slice(0,8))+'</span>').join('')+'</div>':'');}
+    else{action='<button class="unblock"><span>&#8594;</span> unblock</button>';unblock=bpUnblockIti(itiByBaton[h.id],'hrow-'+i);}
+    return '<div class="hrow" style="border-left-color:'+fg+'"><div class="main"><div class="kind" style="background:'+bg+';color:'+fg+'">'+k.glyph+'</div><div class="hbody">'+
+      '<div class="hline"><span class="holder">'+bpEsc(h.holder)+'</span> halted <span class="track">'+bpEsc(h.track)+'</span> <span class="kindlab" style="background:'+bg+';color:'+fg+'">'+bpEsc(k.lab)+'</span></div>'+
+      (h.halt_note?'<div class="hnote">'+bpEsc(h.halt_note)+'</div>':'')+
+      '<div class="hmeta"><span class="age">halted '+bpAgo(h.halted_at)+'</span>'+action+'</div></div></div>'+unblock+'</div>';
+  }).join(''):'<div class="lane-empty">No halted batons.</div>';
+  document.getElementById('bpCtRouting').textContent='· '+halted.length;
+  document.getElementById('bpPossiblyList').innerHTML=poss.length?poss.map(p=>{const over=Math.round((p.hours_since_pickup||0)-(p.stale_after_hours||0));return '<div class="hrow poss"><div class="main"><div class="kind">?</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(p.holder)+'</span> <span class="track">'+bpEsc(p.track)+'</span></div><div class="hnote">picked up but quiet; no halt filed</div><div class="hmeta"><span class="age stale" style="color:var(--stale)">stuck '+Math.round(p.hours_since_pickup)+'h'+(over>0?', '+over+'h over':'')+'</span></div></div></div></div>';}).join(''):'<div class="lane-empty">Nothing possibly halted.</div>';
+  document.getElementById('bpCtPoss').textContent='· '+poss.length;
+  document.getElementById('bpUnpickedList').innerHTML=unpicked.length?unpicked.map(u=>'<div class="hrow unpicked"><div class="main"><div class="kind">·</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(u.holder)+'</span> <span class="track">'+bpEsc(u.track)+'</span></div><div class="hnote">passed but never picked up</div><div class="hmeta"><span class="age">unpicked '+bpAgo(u.passed_at)+'</span></div></div></div></div>').join(''):'<div class="lane-empty">Nothing unclaimed.</div>';
+  document.getElementById('bpCtUnpicked').textContent='· '+unpicked.length;
+}
+document.getElementById('bpExpandBtn').addEventListener('click',function(){document.getElementById('bpExpand').classList.toggle('open');});
+document.getElementById('batons').addEventListener('click',function(e){
+  const ub=e.target.closest('.unblock');if(ub){const c=ub.closest('.nx,.hrow');if(c)c.classList.toggle('open');return;}
+  const cp=e.target.closest('.copy');if(cp){bpCopy(window.__bpCopy[cp.dataset.copy]||'',cp);}
+});
 document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
