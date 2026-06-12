@@ -1,28 +1,32 @@
-// House keying. Reweighting is over HOUSES, not citations (Decision 1, fence 3): a
-// citation's URL identifies its research house, and several citations across engines
-// can resolve to one house — they must collapse to a single weight/data point.
+// House resolution. Reweighting is over HOUSES (Decision 1, fence 3). The authoritative
+// registry is source_house (id, canonical_name, aliases[]); claim_figure rows already
+// carry house_id directly. The work here is resolving a status-only CITATION (no figure)
+// to its source_house, so excluding a house also drops its status-only support.
 //
-// claim_figure.house_key is authoritative once figures are populated research-side.
-// For citations without a structured figure (status-only claims), we derive the
-// house_key from the citation host so reweighting still groups them correctly.
+// Resolution: match the citation's registrable host or its title against a house's
+// canonical_name + aliases. ASSUMPTION (flagged to Connie): source_house.aliases includes
+// the registrable domain (e.g. "mordorintelligence.com") and/or name variants.
+//
+// Fallback: when source_house is empty (pre-population) or a citation matches nothing, a
+// deterministic URL-derived synthetic id keeps status-only recompute working. Once the
+// registry is populated with aliases, citations resolve to the real source_house.id and
+// the engine + surface key on the same house_id.
 
-interface HouseDef { house_key: string; display_name: string; }
+export interface SourceHouseRow {
+  id: string;
+  canonical_name: string;
+  aliases: string[] | null;
+}
 
-// The named houses on the AESSEAL spine (session 353faa7d). Keyed by registrable host.
-const HOST_TO_HOUSE: Record<string, HouseDef> = {
-  "mordorintelligence.com":        { house_key: "mordor_intelligence",        display_name: "Mordor Intelligence" },
-  "grandviewresearch.com":         { house_key: "grand_view_research",        display_name: "Grand View Research" },
-  "marketsandmarkets.com":         { house_key: "marketsandmarkets",          display_name: "MarketsandMarkets" },
-  "persistencemarketresearch.com": { house_key: "persistence_market_research", display_name: "Persistence Market Research" },
-  "fortunebusinessinsights.com":   { house_key: "fortune_business_insights",  display_name: "Fortune Business Insights" },
-  "technavio.com":                 { house_key: "technavio",                  display_name: "Technavio" },
-};
+export interface ResolvedHouse {
+  house_id: string;
+  display_name: string;
+}
 
 function registrableHost(url: string | null): string | null {
   if (!url) return null;
   try {
     const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    // collapse a sub.domain.tld to the registrable domain.tld (good enough for these hosts)
     const parts = host.split(".");
     return parts.length > 2 ? parts.slice(-2).join(".") : host;
   } catch {
@@ -30,13 +34,28 @@ function registrableHost(url: string | null): string | null {
   }
 }
 
-// Resolve a citation (url + title) to a house. Falls back to the registrable host as the
-// key and the title (or host) as the display name when the house is not in the known map.
-export function houseForCitation(url: string | null, title: string | null): HouseDef {
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Resolve a citation to a registered house, or synthesise a stable fallback identity.
+export function resolveHouse(registry: SourceHouseRow[], url: string | null, title: string | null): ResolvedHouse {
   const host = registrableHost(url);
-  if (host && HOST_TO_HOUSE[host]) return HOST_TO_HOUSE[host];
-  if (host) return { house_key: host.replace(/[^a-z0-9]+/g, "_"), display_name: title ?? host };
-  // No URL at all: key off a slug of the title so it still groups deterministically.
-  const slug = (title ?? "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-  return { house_key: slug || "unknown", display_name: title ?? "Unknown house" };
+  const titleNorm = title ? norm(title) : "";
+
+  for (const h of registry) {
+    const aliases = (h.aliases ?? []).map((a) => a.toLowerCase());
+    // host match: an alias equals or is contained by the registrable host
+    if (host && aliases.some((a) => a === host || host.includes(a) || a.includes(host))) {
+      return { house_id: h.id, display_name: h.canonical_name };
+    }
+    // name match: canonical_name or an alias appears in the citation title
+    const nameNeedles = [norm(h.canonical_name), ...aliases.map(norm)].filter(Boolean);
+    if (titleNorm && nameNeedles.some((n) => n.length >= 3 && titleNorm.includes(n))) {
+      return { house_id: h.id, display_name: h.canonical_name };
+    }
+  }
+
+  // Fallback (pre-population / unmatched): deterministic synthetic id from the host, else title.
+  if (host) return { house_id: `host:${host}`, display_name: title ?? host };
+  const slug = norm(title ?? "unknown").replace(/\s+/g, "_") || "unknown";
+  return { house_id: `name:${slug}`, display_name: title ?? "Unknown house" };
 }

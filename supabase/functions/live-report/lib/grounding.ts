@@ -1,29 +1,24 @@
 // Read the LOCKED cells (the anchored claim spine + structured figures) for a report
-// into the immutable Grounding object. This live read runs ONCE, to mint the baseline
-// snapshot; thereafter recompute derives from the frozen grounding pinned in that
-// snapshot (SP 2e97d74e — recompute never re-reads live tables, so v2+ is reproducible).
+// into the immutable Grounding object. Reconciled to Connie's live schema: figures live
+// in claim_figure (keyed by house_id -> source_house, linked to claim_id directly),
+// houses in source_house. Recompute derives from this grounding; the snapshot pins the
+// frozen source-set for provenance (SP 2e97d74e).
 //
-// Built against the PROPOSED schema (claim_figure pending Connie). The figure read is
-// wrapped so the engine degrades to STATUS-ONLY cleanly before the table exists, and
-// lights up numeric the moment it lands and Theo populates it — no redeploy needed.
+// Degrades cleanly: before claim_figure / source_house are populated the read returns a
+// status-only grounding (figures [], citations resolved via the houses.ts fallback), and
+// lights up numeric the moment they fill — no redeploy.
 
 import type { Grounding, ClaimGrounding, ClaimStatus, House, SourceCell, StructuredFigure } from "./types.ts";
-import { houseForCitation } from "./houses.ts";
+import { resolveHouse, type SourceHouseRow } from "./houses.ts";
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
 
 // PROVISIONAL dependency edges for the AESSEAL spine, by question_index — pending Theo's
-// A2 confirmation (msg 8479ef1c). Market size (index 0) is the denominator; the share /
-// breakdown findings derive from it. Swap this for Theo's confirmed edge set before freeze.
+// A2 confirmation (msg 8479ef1c). Market size (index 0) is the denominator; share /
+// breakdown findings derive from it. Swap for Theo's confirmed edge set before freeze.
 const DEPENDS_ON_BY_QINDEX: Record<number, number[]> = {
-  0: [],     // global market size — the denominator
-  1: [],     // how houses size the market — sibling to 0, not downstream
-  2: [0],    // regional breakdown — share of market size
-  3: [0],    // end-use breakdown — share of market size
-  4: [0],    // product-line split — share of market size
-  5: [],     // named research houses
-  6: [],     // engine-failure meta-claim
+  0: [], 1: [], 2: [0], 3: [0], 4: [0], 5: [], 6: [],
 };
 
 export async function readGrounding(supabase: Db, sessionId: string): Promise<Grounding> {
@@ -55,60 +50,64 @@ export async function readGrounding(supabase: Db, sessionId: string): Promise<Gr
     for (const d of (docRes.data ?? []) as Array<{ id: string; content_hash: string | null }>) hashByDoc.set(d.id, d.content_hash);
   }
 
-  // Structured figures (PROPOSED claim_figure). Degrade to [] if the table is absent.
-  let figRows: Array<{ claim_citation_id: string; house_key: string; value: number; unit: string | null; as_of_year: string | null; scope: string | null; source_document_id?: string | null }> = [];
-  try {
-    const figRes = await supabase
-      .from("claim_figure")
-      .select("claim_citation_id, house_key, value, unit, as_of_year, scope");
-    if (!figRes.error && figRes.data) figRows = figRes.data;
-  } catch {
-    // table not yet created — status-only until it lands + is populated
+  // House registry (source_house). Empty pre-population — houses.ts then falls back.
+  let registry: SourceHouseRow[] = [];
+  {
+    const hRes = await supabase.from("source_house").select("id, canonical_name, aliases");
+    if (!hRes.error && hRes.data) registry = hRes.data as SourceHouseRow[];
   }
 
-  // Build house registry + source cells, keyed by house (dedup across citations/engines).
+  // Structured figures (claim_figure), linked to claim_id directly, keyed by house_id.
+  let figRows: Array<{ claim_id: string; claim_citation_id: string | null; source_document_id: string | null; house_id: string; value: number; unit: string; as_of_year: number | null; scope: string | null; figure_kind: string; divergence_note: string | null }> = [];
+  {
+    const figRes = await supabase
+      .from("claim_figure")
+      .select("claim_id, claim_citation_id, source_document_id, house_id, value, unit, as_of_year, scope, figure_kind, divergence_note")
+      .in("claim_id", claimIds);
+    if (!figRes.error && figRes.data) figRows = figRes.data;
+    // figRes.error (e.g. table absent in an old env) -> status-only, no throw
+  }
+
+  // Build the house registry the surface renders + a citation -> house_id resolution.
   const houseById = new Map<string, House>();
-  const houseByCitation = new Map<string, string>();
   const sources: SourceCell[] = [];
+  const housesByClaim = new Map<string, Set<string>>();
   for (const c of citRows) {
-    const h = houseForCitation(c.url, c.title);
-    houseById.set(h.house_key, h);
-    houseByCitation.set(c.id, h.house_key);
+    const h = resolveHouse(registry, c.url, c.title);
+    houseById.set(h.house_id, { house_id: h.house_id, display_name: h.display_name });
     sources.push({
       source_id: c.id,
-      house_key: h.house_key,
+      house_id: h.house_id,
       title: c.title,
       url: c.url,
       source_document_id: c.source_document_id,
       content_hash: c.source_document_id ? (hashByDoc.get(c.source_document_id) ?? null) : null,
       resolution: c.resolution,
     });
+    (housesByClaim.get(c.claim_id) ?? housesByClaim.set(c.claim_id, new Set()).get(c.claim_id)!).add(h.house_id);
   }
 
-  // Figures grouped to their claim (via citation), carrying the house_key authored research-side.
-  const claimByCitation = new Map(citRows.map((c) => [c.id, c.claim_id]));
+  // Figures grouped to their claim; their house_id is authoritative (registered).
   const figuresByClaim = new Map<string, StructuredFigure[]>();
   for (const f of figRows) {
-    const claimId = claimByCitation.get(f.claim_citation_id);
-    if (!claimId) continue;
-    const docForCit = citRows.find((c) => c.id === f.claim_citation_id)?.source_document_id ?? null;
     const fig: StructuredFigure = {
-      house_key: f.house_key,
+      house_id: f.house_id,
       value: Number(f.value),
       unit: f.unit,
       as_of_year: f.as_of_year,
       scope: f.scope,
+      figure_kind: f.figure_kind === "derived" ? "derived" : "anchored",
+      divergence_note: f.divergence_note,
       claim_citation_id: f.claim_citation_id,
-      source_document_id: docForCit,
+      source_document_id: f.source_document_id,
     };
-    (figuresByClaim.get(claimId) ?? figuresByClaim.set(claimId, []).get(claimId)!).push(fig);
-  }
-
-  // Supporting houses per claim (deduped) from its citations.
-  const housesByClaim = new Map<string, Set<string>>();
-  for (const c of citRows) {
-    const hk = houseByCitation.get(c.id)!;
-    (housesByClaim.get(c.claim_id) ?? housesByClaim.set(c.claim_id, new Set()).get(c.claim_id)!).add(hk);
+    (figuresByClaim.get(f.claim_id) ?? figuresByClaim.set(f.claim_id, []).get(f.claim_id)!).push(fig);
+    // a figure's house counts toward its claim's support even if no separate citation row resolved to it
+    if (!houseById.has(f.house_id)) {
+      const reg = registry.find((r) => r.id === f.house_id);
+      houseById.set(f.house_id, { house_id: f.house_id, display_name: reg?.canonical_name ?? f.house_id });
+    }
+    (housesByClaim.get(f.claim_id) ?? housesByClaim.set(f.claim_id, new Set()).get(f.claim_id)!).add(f.house_id);
   }
 
   const claims: ClaimGrounding[] = claimRows.map((c) => {
@@ -128,14 +127,7 @@ export async function readGrounding(supabase: Db, sessionId: string): Promise<Gr
 
   const houses = [...houseById.values()];
   const as_delivered_weights: Record<string, number> = {};
-  for (const h of houses) as_delivered_weights[h.house_key] = 1;
+  for (const h of houses) as_delivered_weights[h.house_id] = 1;
 
-  return {
-    report_id: sessionId,
-    base_snapshot_id: "",   // filled by the snapshot layer when the baseline is minted
-    claims,
-    houses,
-    sources,
-    as_delivered_weights,
-  };
+  return { report_id: sessionId, base_snapshot_id: "", claims, houses, sources, as_delivered_weights };
 }

@@ -17,7 +17,7 @@
 //             baseline_snapshot_id, persisted }
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { loadBaseline, nextVersion, persistVersion } from "./lib/snapshot.ts";
+import { loadBaseline, nextVersion, persistReweight } from "./lib/snapshot.ts";
 import { recompute } from "./lib/recompute.ts";
 import type { RecomputeInputs } from "./lib/types.ts";
 
@@ -102,7 +102,7 @@ Deno.serve(async (req: Request) => {
   // Recalibrate: derive a new version from the frozen baseline grounding, record it.
   const version = await nextVersion(supabase, sessionId);
   const result = recompute(grounding, inputs, version);
-  const persisted = await persistVersion(supabase, sessionId, baselineId, grounding, inputs, result);
+  const persisted = await persistReweight(supabase, sessionId, grounding, inputs, result);
 
   return json({
     ...result,

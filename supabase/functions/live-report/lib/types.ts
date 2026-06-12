@@ -1,23 +1,22 @@
 // Live-report recompute engine — wire + internal types.
 //
-// The report is the evaluation of f(grounding, weights) over the anchored claim
-// spine (SP 2e97d74e; contract MR d7b75a76 v1.1). This file is the single source
-// of the shapes that cross the surface<->engine seam and the shapes f computes over.
+// The report is the evaluation of f(grounding, weights) over the anchored claim spine
+// (SP 2e97d74e; contract MR d7b75a76 v1.1). Reconciled to Connie's live schema
+// (migration live_report_phase1_figures_and_snapshots): houses key via source_house
+// (house_id, a uuid), figures carry provenance_tier/figure_kind, snapshots use the
+// computed_output/grounding/weighting_vector/is_baseline shape.
 //
 // Three kinds of cell (Eames's model, confirmed):
 //   LOCKED  — ground truth: anchored sources + their structured figures. Read-only.
-//             The engine NEVER alters a locked cell on recompute.
 //   INPUT   — client-adjustable: per-HOUSE weights + exclusions. Surface owns/sends.
 //   FORMULA — derived: the recomputed findings. Engine owns; surface only displays.
 //
-// Reweighting is keyed by HOUSE, not by citation (Decision 1, fence 3): a house may
-// have several citations across engines but is ONE data point; excluding a house
-// drops all its figures; two engines citing one house remain one weight. This is what
-// keeps the recompute un-gameable by a house appearing twice.
+// Reweighting is keyed by HOUSE (house_id), not by citation (Decision 1, fence 3): a
+// house may have several citations across engines but is ONE data point; excluding a
+// house drops all its figures; two engines citing one house remain one weight. The
+// source_house table makes this structural — both the surface (Eames) and this engine
+// key INPUT cells on house_id.
 
-// ── Provenance / status vocab (matches the live spine, session 353faa7d) ──────
-// claim_status as authored. Phase-1 recompute can downgrade along this ladder as
-// houses are excluded (>=2 -> 1 -> 0 retained), never invent a stronger status.
 export type ClaimStatus =
   | "convergent"
   | "single_source"
@@ -25,59 +24,59 @@ export type ClaimStatus =
   | "synthesis_inference"
   | "gap";
 
-// Provenance tier (the contamination guard, SP component 2). Phase 1 is ALWAYS
-// "sourced"; client tiers attach later without retrofit. NOT the statutory/estimate
-// distinction — that reads off is_derived + claim_status (contract amendment A1).
-export type ProvenanceTier = "sourced" | "client-data" | "client-estimate";
+// Provenance tier (the contamination guard). Phase 1 is ALWAYS "sourced"; client tiers
+// attach later. Underscored to match claim_figure.provenance_tier {sourced|client_data|client_estimate}.
+export type ProvenanceTier = "sourced" | "client_data" | "client_estimate";
 
 export type GapReason =
-  | "no_retained_support"   // every supporting house excluded/zero-weighted
+  | "no_retained_support"   // a claim that HAD support is emptied by exclusion
   | "cited_not_anchored"    // citation exists but never froze to a source_document
-  | "no_public_data";       // structural gap in the public record
+  | "no_public_data";       // structural gap in the public record (authored gap)
 
 // ── LOCKED cells ──────────────────────────────────────────────────────────────
 
-// A structured figure: a typed projection of a figure already anchored in prose,
-// pinned to its citation so it stays click-through to the frozen source (fence 1).
-// Populated RESEARCH-SIDE and verified — never parsed here (fence 2). Many-per-
-// citation: Mordor carries 7.62@FY2025 AND 7.97@2026 as two distinct figures.
+// A structured figure: a typed projection of a figure already anchored in prose, pinned
+// to its citation/source (fence 1). Populated RESEARCH-SIDE and verified (fence 2).
+// Many-per-claim: Mordor carries 7.62@2025 AND 7.97@2026 as two distinct figures.
 export interface StructuredFigure {
-  house_key: string;
+  house_id: string;             // -> source_house.id (the reweighting key)
   value: number;
-  unit: string | null;        // e.g. "USD bn", "%"
-  as_of_year: string | null;  // e.g. "FY2025", "2026" — kept distinct, never flattened
-  scope: string | null;       // what the figure measures
-  claim_citation_id: string;
-  source_document_id: string | null;  // the frozen anchor (null = cited-not-anchored)
+  unit: string;                 // e.g. "USD bn", "%"
+  as_of_year: number | null;    // int; distinct years never min/max'd together
+  scope: string | null;
+  figure_kind: "anchored" | "derived";
+  divergence_note: string | null;  // preserves the year-binding distinction etc.
+  claim_citation_id: string | null;
+  source_document_id: string | null;
 }
 
-// One named research house — the unit of reweighting. Deduped across engines/citations.
+// One named research house — the unit of reweighting (source_house row).
 export interface House {
-  house_key: string;          // normalised id, e.g. "mordor_intelligence"
-  display_name: string;       // e.g. "Mordor Intelligence"
+  house_id: string;             // source_house.id
+  display_name: string;         // source_house.canonical_name
 }
 
 // A locked source cell as the surface renders it (one per citation, grouped by house).
 export interface SourceCell {
-  source_id: string;          // claim_citation id
-  house_key: string;
+  source_id: string;            // claim_citation id
+  house_id: string | null;      // resolved source_house.id (null if unmapped)
   title: string | null;
   url: string | null;
   source_document_id: string | null;
   content_hash: string | null;
-  resolution: string;         // claim_citation.resolution (unchecked/resolved/dead/...)
+  resolution: string;
 }
 
 // ── The grounding object the read layer produces and f computes over ────────────
 
 export interface ClaimGrounding {
-  finding_id: string;         // claim_id
-  label: string;              // question_text (the human-facing heading)
-  base_status: ClaimStatus;   // claim_status as delivered (v1 baseline)
-  is_derived: boolean;        // FORMULA cell (true) vs directly-cited figure (false)
-  supporting_houses: string[];// distinct house_keys backing this claim (deduped)
-  figures: StructuredFigure[];// structured figures for this claim ([] => status-only)
-  depends_on: string[];       // finding_ids this claim derives from (the spine edges)
+  finding_id: string;           // claim_id
+  label: string;                // question_text
+  base_status: ClaimStatus;
+  is_derived: boolean;          // FORMULA cell vs directly-cited figure
+  supporting_houses: string[];  // distinct house_ids backing this claim (deduped)
+  figures: StructuredFigure[];  // [] => status-only
+  depends_on: string[];         // finding_ids this claim derives from (the spine edges)
 }
 
 export interface Grounding {
@@ -86,25 +85,25 @@ export interface Grounding {
   claims: ClaimGrounding[];
   houses: House[];
   sources: SourceCell[];
-  as_delivered_weights: Record<string, number>;  // house_key -> baseline weight (default 1)
+  as_delivered_weights: Record<string, number>;  // house_id -> baseline weight (default 1)
 }
 
 // ── INPUT cells (recompute request from the surface) ────────────────────────────
 
 export interface RecomputeInputs {
-  weights: Record<string, number>;  // house_key -> weight (0 == excluded)
-  exclusions: string[];             // house_keys toggled off (== weight 0, but re-includable)
-  reset: boolean;                   // restore as-delivered v1 for the scope
+  weights: Record<string, number>;  // house_id -> weight (0 == excluded)
+  exclusions: string[];             // house_ids toggled off
+  reset: boolean;
   scope: { finding_id?: string; chapter_id?: string; whole_report?: boolean };
-  client_context?: { actor?: string; reason?: string };  // surface supplies who/why (audit)
+  client_context?: { actor?: string; reason?: string };
 }
 
 // ── FORMULA cells (recompute response to the surface) ───────────────────────────
 
 export interface DerivationEntry {
-  house_key: string;
+  house_id: string;
   effective_weight: number;
-  contributed_value: number | null;  // the house's figure that fed the envelope (null = status-only)
+  contributed_value: number | null;  // null => status-only
 }
 
 export interface RecomputedFinding {
@@ -112,21 +111,19 @@ export interface RecomputedFinding {
   label: string;
   tier: ProvenanceTier;       // phase 1: always "sourced"
   is_derived: boolean;
-  claim_status: ClaimStatus;  // recomputed
-  // Numeric envelope — populated only where structured figures exist (the market-size
-  // spine this phase). null central + null range => status-only finding.
-  central: number | null;
+  claim_status: ClaimStatus;
+  central: number | null;     // null => status-only finding
   range: { low: number; high: number } | null;
   gap_reason: GapReason | null;
   derivation: DerivationEntry[];
   depends_on: string[];
-  changed: boolean;           // did this finding change vs the base snapshot? (the ripple)
+  changed: boolean;
 }
 
 export interface RecomputeResult {
   report_id: string;
   base_snapshot_id: string;
-  version: number;            // v1 = as-delivered; v2+ = recalibrated
+  version: number;            // informational: 1 = baseline, 2+ = reweight
   findings: RecomputedFinding[];
   inputs: {
     weights: Record<string, number>;
