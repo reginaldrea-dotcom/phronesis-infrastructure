@@ -778,6 +778,24 @@ Deno.serve(async (req: Request) => {
       await finalizeWake(supabase, wakeManifest);
     }
 
+    // Auto-record baton pickup (baton 68b40ebd; MST e856ac35 sec 9). An ITI fired into an actual
+    // invocation IS this lineage being woken — so claim its unclaimed, ITI-bearing baton(s) now,
+    // closing the manual-pickup gap. The board then clears NEXT INVOCATION (Fix 1) and shows the
+    // baton in-process (Fix 2) with no hand-set. Keyed to relay_iti.primary_baton_id (an ITI = an
+    // invite was authored/fired); idempotent (picked_up_at IS NULL guard fires once); best-effort,
+    // never breaks the response.
+    try {
+      const itiR = await supabase.from("relay_iti").select("primary_baton_id").not("primary_baton_id", "is", null);
+      const batonIds = [...new Set(((itiR.data ?? []) as Array<{ primary_baton_id: string }>).map((r) => r.primary_baton_id))];
+      if (batonIds.length > 0) {
+        await supabase.from("relay_baton")
+          .update({ picked_up_at: new Date().toISOString() })
+          .eq("holder", lineage_name)
+          .is("picked_up_at", null).is("done_at", null).is("halted_at", null)
+          .in("id", batonIds);
+      }
+    } catch (e) { console.error("auto-pickup (68b40ebd) failed:", e); }
+
     // Mortality experiment — forgetting_log (baton 3db33c0e, conf d06fd700). When this load
     // eased older turns for the FIRST time, record ONE dose row. event_kind=voluntary_clearance:
     // B4 easing is deliberate and fully recoverable (the whole turn stays in prime_conversations),

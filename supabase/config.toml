@@ -25,3 +25,9 @@ verify_jwt = false
 # theo_session/engine_dispatch with the service-role credential. MUST deploy with --no-verify-jwt.
 [functions.research-feed]
 verify_jwt = false
+
+# relay-iti-promote is the Navigator board's promote-to-top write (Fix 5): templates a baton's
+# ITI and upserts relay_iti (service-write only). Cloudflare-gated, called from the board with
+# the publishable key and no JWT. MUST deploy with --no-verify-jwt.
+[functions.relay-iti-promote]
+verify_jwt = false

@@ -220,6 +220,11 @@ id<html lang="en">
     .bp .hrow.poss{border-left-color:var(--stale);} .bp .hrow.poss .kind{background:var(--stale-dim);color:var(--stale);}
     .bp .hrow.unpicked{border-left-color:var(--k-unpicked);} .bp .hrow.unpicked .kind{background:var(--k-unpicked-dim);color:var(--k-unpicked);}
     .bp .lane-empty{font-size:13px;color:var(--ink-faint);font-style:italic;padding:4px 2px;}
+    .bp .arow.inproc{border-left:3px solid var(--k-gated);} /* Fix 2: calm steel in-process, not kind-coloured, not greyed */
+    .bp .arow.inproc.staleflag{border-left-color:var(--stale);}
+    .bp .promote{font-family:var(--mono);font-size:11px;border:1px solid var(--invoke);color:var(--invoke);background:transparent;padding:4px 10px;border-radius:2px;cursor:pointer;}
+    .bp .promote:hover{background:var(--invoke);color:var(--paper);} .bp .promote:disabled{opacity:0.6;cursor:default;}
+    .bp details.lane .lbody{max-height:340px;overflow-y:auto;} /* Fix 4: full unclaimed lane uncapped but scrollable, nothing buried */
     .bp :focus-visible{outline:2px solid var(--invoke);outline-offset:2px;}
     @media (prefers-reduced-motion:reduce){.bp *{transition:none!important;}}
   </style>
@@ -431,6 +436,9 @@ openConference = freshConf || confs[0];
     }
  conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
     renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
+    // FIX 3: an in-app refresh re-fetches the baton board too (incl NEXT INVOCATION), not only a full
+    // reload — so a spent invocation clears and pickups/halts reflect without a page reload.
+    if(document.getElementById('batons')&&document.getElementById('batons').classList.contains('active'))loadBatonPanel();
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
 }
@@ -814,22 +822,32 @@ function bpUnblockIti(iti,copyKey){
   return '<div class="unblock-iti"><div class="lbl">ready-to-paste invite</div><div class="txt" style="color:var(--ink-faint);font-style:italic">No ITI generated for this baton yet — Antechamber templates it by halt_kind.</div></div>';
 }
 async function loadBatonPanel(){
+  // Bind to relay_baton directly (not relay_board): relay_board excludes done but does NOT expose
+  // halted_at, so the spec's halt-aware filters can't run on it. relay_baton has every column and is
+  // anon-readable; we replicate relay_board's ordering (attention urgent<moderate<low, then passed_at).
   let open=[],poss=[],itis=[];
-  try{open=await sb('relay_baton?select=id,holder,track,halt_kind,halt_note,halt_needs,child_baton_ids,halted_at,passed_at,picked_up_at&done_at=is.null&order=passed_at.asc');}
-  catch(e){console.warn('baton panel: relay_baton not readable yet (RLS policy pending?)',e);open=[];}
+  try{open=await sb('relay_baton?select=id,holder,track,halt_kind,halt_note,halt_needs,child_baton_ids,halted_at,passed_at,picked_up_at,attention,stale_after_hours&done_at=is.null&order=passed_at.asc');}
+  catch(e){console.warn('baton panel: relay_baton not readable',e);open=[];}
   try{poss=await sb('baton_possibly_halted?select=holder,track,picked_up_at,stale_after_hours,hours_since_pickup&order=hours_since_pickup.desc');}catch(e){poss=[];}
   try{itis=await sb('relay_iti?select=id,body,generated_by,generated_at,primary_baton_id&order=generated_at.desc');}catch(e){itis=[];}
   window.__bpCopy={};
   const itiByBaton={};itis.forEach(t=>{if(t.primary_baton_id&&!itiByBaton[t.primary_baton_id])itiByBaton[t.primary_baton_id]=t;});
+  const openById={};open.forEach(b=>openById[b.id]=b);
+  const attnRank=a=>a==='urgent'?1:a==='moderate'?2:3;
+  const boardOrder=(x,y)=>attnRank(x.attention)-attnRank(y.attention)||bpTime(x.passed_at)-bpTime(y.passed_at);
   const halted=open.filter(b=>b.halted_at);
-  const unpicked=open.filter(b=>!b.picked_up_at);
+  const unpicked=open.filter(b=>!b.picked_up_at&&!b.halted_at).sort(boardOrder);
   const active=open.filter(b=>b.picked_up_at&&!b.halted_at);
+  // FIX 1: NEXT INVOCATION = relay_iti joined to a still-actionable baton (unclaimed, not halted,
+  // not done), top by relay_board order. Self-clears on pickup/halt/done — the baton drops the filter.
+  const liveItis=itis.filter(t=>{const b=openById[t.primary_baton_id];return b&&!b.picked_up_at&&!b.halted_at;})
+                     .sort((x,y)=>boardOrder(openById[x.primary_baton_id],openById[y.primary_baton_id]));
   const cand=open.filter(b=>b.halt_kind!=='gated'&&(['failed','needs_ruling','blocked','spawned'].includes(b.halt_kind)||!b.picked_up_at));
   cand.sort((a,b)=>bpTier(a.halt_kind)-bpTier(b.halt_kind)||(bpTime(a.halted_at||a.passed_at)-bpTime(b.halted_at||b.passed_at)));
-  bpRenderIti(itis[0]);
+  bpRenderIti(liveItis[0]);
   bpRenderNext3(cand.slice(0,3),itiByBaton);
   bpRenderFull(active,halted,poss,unpicked,itiByBaton);
-  document.getElementById('bpExpandCt').textContent=halted.length+' halted, '+poss.length+' possibly, '+unpicked.length+' unclaimed';
+  document.getElementById('bpExpandCt').textContent=halted.length+' halted, '+active.length+' in process, '+unpicked.length+' unclaimed';
 }
 function bpRenderIti(t){
   const body=document.getElementById('bpItiBody'),gen=document.getElementById('bpItiGen'),cb=document.getElementById('bpItiCopybar');
@@ -857,7 +875,10 @@ function bpRenderNext3(top,itiByBaton){
   }).join('');
 }
 function bpRenderFull(active,halted,poss,unpicked,itiByBaton){
-  document.getElementById('bpActiveList').innerHTML=active.length?active.map(a=>'<div class="arow"><span class="dot"></span><span class="who">'+bpEsc(a.holder)+'</span><span class="what">'+bpEsc(a.track)+'</span><span class="when">picked up '+bpAgo(a.picked_up_at)+'</span></div>').join(''):'<div class="lane-empty">Nothing in progress.</div>';
+  document.getElementById('bpActiveList').innerHTML=active.length?active.map(a=>{
+    const stale=a.stale_after_hours&&a.picked_up_at&&(Date.now()-new Date(a.picked_up_at).getTime())>a.stale_after_hours*3600000;
+    return '<div class="arow inproc'+(stale?' staleflag':'')+'"><span class="dot"></span><span class="who">'+bpEsc(a.holder)+'</span><span class="what">'+bpEsc(a.track)+'</span><span class="when">in process since '+bpAgo(a.picked_up_at)+(stale?' · silent, possibly halted':'')+'</span></div>';
+  }).join(''):'<div class="lane-empty">Nothing in process.</div>';
   document.getElementById('bpCtActive').textContent='· '+active.length;
   document.getElementById('bpRoutingList').innerHTML=halted.length?halted.map((h,i)=>{
     const k=BP_KINDS[h.halt_kind]||{glyph:'?',lab:h.halt_kind};const kind=h.halt_kind;const bg='var(--k-'+kind+'-dim)',fg='var(--k-'+kind+')';
@@ -872,14 +893,28 @@ function bpRenderFull(active,halted,poss,unpicked,itiByBaton){
   document.getElementById('bpCtRouting').textContent='· '+halted.length;
   document.getElementById('bpPossiblyList').innerHTML=poss.length?poss.map(p=>{const over=Math.round((p.hours_since_pickup||0)-(p.stale_after_hours||0));return '<div class="hrow poss"><div class="main"><div class="kind">?</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(p.holder)+'</span> <span class="track">'+bpEsc(p.track)+'</span></div><div class="hnote">picked up but quiet; no halt filed</div><div class="hmeta"><span class="age stale" style="color:var(--stale)">stuck '+Math.round(p.hours_since_pickup)+'h'+(over>0?', '+over+'h over':'')+'</span></div></div></div></div>';}).join(''):'<div class="lane-empty">Nothing possibly halted.</div>';
   document.getElementById('bpCtPoss').textContent='· '+poss.length;
-  document.getElementById('bpUnpickedList').innerHTML=unpicked.length?unpicked.map(u=>'<div class="hrow unpicked"><div class="main"><div class="kind">·</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(u.holder)+'</span> <span class="track">'+bpEsc(u.track)+'</span></div><div class="hnote">passed but never picked up</div><div class="hmeta"><span class="age">unpicked '+bpAgo(u.passed_at)+'</span></div></div></div></div>').join(''):'<div class="lane-empty">Nothing unclaimed.</div>';
+  document.getElementById('bpUnpickedList').innerHTML=unpicked.length?unpicked.map(u=>'<div class="hrow unpicked"><div class="main"><div class="kind">·</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(u.holder)+'</span> <span class="track">'+bpEsc(u.track)+'</span></div><div class="hnote">passed but never picked up</div><div class="hmeta"><span class="age">unpicked '+bpAgo(u.passed_at)+'</span><button class="promote" data-baton="'+u.id+'">&#8593; promote to next invocation</button></div></div></div></div>').join(''):'<div class="lane-empty">Nothing unclaimed.</div>';
   document.getElementById('bpCtUnpicked').textContent='· '+unpicked.length;
 }
 document.getElementById('bpExpandBtn').addEventListener('click',function(){document.getElementById('bpExpand').classList.toggle('open');});
 document.getElementById('batons').addEventListener('click',function(e){
   const ub=e.target.closest('.unblock');if(ub){const c=ub.closest('.nx,.hrow');if(c)c.classList.toggle('open');return;}
-  const cp=e.target.closest('.copy');if(cp){bpCopy(window.__bpCopy[cp.dataset.copy]||'',cp);}
+  const cp=e.target.closest('.copy');if(cp){bpCopy(window.__bpCopy[cp.dataset.copy]||'',cp);return;}
+  const pr=e.target.closest('.promote');if(pr){bpPromote(pr);}
 });
+// FIX 5: promote-to-top — generate the baton's ITI (templated server-side per SC_ITI_HaltTemplates)
+// and surface it in NEXT INVOCATION. relay_iti is service-write only, so the write goes through the
+// relay-iti-promote EF; on success we reload so Fix 1 surfaces it. Idempotent on primary_baton_id.
+async function bpPromote(btn){
+  const id=btn.dataset.baton;if(!id)return;
+  const orig=btn.textContent;btn.textContent='Promoting…';btn.disabled=true;
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/relay-iti-promote',{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({baton_id:id})});
+    if(!r.ok)throw new Error('promote '+r.status);
+    btn.textContent='Promoted ✓';
+    await loadBatonPanel();
+  }catch(e){console.error('promote failed',e);btn.textContent=orig;btn.disabled=false;}
+}
 document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
