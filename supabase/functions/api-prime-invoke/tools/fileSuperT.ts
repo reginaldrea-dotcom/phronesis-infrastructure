@@ -49,11 +49,26 @@ export const fileSuperTTool: Tool = {
     if (!title) return fail("title is required.");
     if (!content) return fail("content is required (the full Super-T your successor inherits).");
 
-    // Same RPC the action calls; files for the CALLER's lineage. p_instance_id is optional
-    // (the RPC and the action both accept null) — bind it when the wake carries it.
+    // Resolve the instance_id. The RPC writes it into artifacts.instance_id AND
+    // super_t_chains.instance_id, both NOT NULL — so it cannot be null. Prefer the wake's own
+    // instance (ctx.instanceId) when the invocation carried it; otherwise fall back to this
+    // lineage's canonical prime instance (instances.id WHERE name = lineage), which is the same
+    // identity loadOrientation uses. Without one we cannot file — fail clearly rather than hit a
+    // raw constraint violation.
+    let instanceId: string | null = ctx.instanceId ?? null;
+    if (!instanceId) {
+      const { data: inst } = await ctx.supabase
+        .from("instances").select("id").eq("name", ctx.lineageName).limit(1).maybeSingle();
+      instanceId = (inst as { id?: string } | null)?.id ?? null;
+    }
+    if (!instanceId) {
+      return fail(`could not resolve an instance_id for lineage '${ctx.lineageName}' (no instances row found); a Super-T must be attributed to an instance, so filing is blocked until one exists.`);
+    }
+
+    // Same RPC the action calls; files for the CALLER's lineage.
     const { data, error } = await ctx.supabase.rpc("file_super_t", {
       p_lineage: ctx.lineageName,
-      p_instance_id: ctx.instanceId ?? null,
+      p_instance_id: instanceId,
       p_title: title,
       p_content: content,
       p_session_id: ctx.sessionId ?? null,
