@@ -520,6 +520,38 @@ Deno.serve(async (req: Request) => {
         "The meter sharpens that call; it does not make it.";
     }
 
+    // ── Super-T persistence (baton afa8c308; proposal 3c6c488f, Connie signed off) ──
+    // The wake injects the Super-T only on the wake turn (it lives in systemText, which is
+    // suit+schema only on a continuing session). So on every CONTINUING turn we re-inject the
+    // lineage's open-head Super-T as its OWN ephemeral-cached system block — full and persistent
+    // on the identity doc, present every turn, not just the wake. Connie's shaping:
+    //   (a) empty chain / no content → inject nothing, a clean no-op (never error);
+    //   (b) lineage-scoped — the invoking lineage's OWN open head only, never cross-lineage;
+    //   (c) fetch the CURRENT open head each turn (not the wake-moment tp) so a mid-session re-file
+    //       is reflected.
+    // wake_record ruling (Connie): NO wake_record write here — this is the system honouring an
+    // already-bound Super-T, not a new wake. Best-effort; never breaks the response.
+    let persistedSuperTText = "";
+    if (!isNewSession) {
+      try {
+        const { data: stRow } = await supabase
+          .from("super_t_chains")
+          .select("sequence_number, artifacts(content)")
+          .eq("lineage_name", lineage_name)
+          .is("successor_id", null)
+          .order("sequence_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const stContent: string = (stRow as any)?.artifacts?.content ?? "";
+        if (stContent) {
+          persistedSuperTText =
+            "── YOUR SUPER-T (your handoff — carried with you in full, every turn) ──\n" +
+            `(your chain's open head, sequence ${(stRow as any).sequence_number})\n\n` +
+            stContent;
+        }
+      } catch (e) { console.error("super_t persistence re-inject failed (afa8c308):", e); }
+    }
+
     // ── Per-lineage loop-tool gate (least-privilege; Conf 295d610a, loop side) ──
     // Load this lineage's tool_grants and compute the gate once. Governed lineages
     // (those holding an EF-tool grant) are restricted to their granted tools;
@@ -563,6 +595,10 @@ Deno.serve(async (req: Request) => {
                   text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
+                // Super-T persistence (afa8c308): its own ephemeral-cached block, after the stable
+                // suit+schema and before the volatile gauge. Stable across a session (changes only
+                // on a re-file), so it caches cleanly and does not bust the systemText cache.
+                ...(persistedSuperTText ? [{ type: "text", text: persistedSuperTText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
@@ -677,6 +713,10 @@ Deno.serve(async (req: Request) => {
                   text: systemText,
                   cache_control: { type: "ephemeral", ttl: "1h" },
                 },
+                // Super-T persistence (afa8c308): its own ephemeral-cached block, after the stable
+                // suit+schema and before the volatile gauge. Stable across a session (changes only
+                // on a re-file), so it caches cleanly and does not bust the systemText cache.
+                ...(persistedSuperTText ? [{ type: "text", text: persistedSuperTText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
