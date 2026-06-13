@@ -12,7 +12,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { corsHeaders } from "./lib/http.ts";
-import { availableToolDefinitions, computeLoopGate, summarizeToolUse, runTool } from "./tools/index.ts";
+import { availableToolDefinitions, computeLoopGate, summarizeToolUse, runTool, EF_TOOL_NAMES } from "./tools/index.ts";
 import { getAction } from "./actions/index.ts";
 import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
@@ -768,15 +768,34 @@ Deno.serve(async (req: Request) => {
       cleanResponse.includes("[tools this turn — system record: none]") &&
       !cleanResponse.includes("[tools this turn — system record, ground truth]");
     const forgedRecord    = selfWroteRecord && !honestNoneEcho;
+    // Aegis ruling (af3a857e): a self-authored record is a MISMATCH only when its entries actually
+    // DIVERGE from the ledger — assert mismatch on real divergence, not on the mere presence of the
+    // block. Divergence = the block names a tool that did NOT run, or claims a with-tools record
+    // while nothing ran. Scanned WITHIN the block region only, so a Prime that faithfully echoes
+    // what actually ran (the true-by-luck case) is not mis-flagged. A matching self-authored block
+    // is still a policy slip (the record is the EF's), but it is not a forgery of results.
+    const actualTools = new Set(toolLog.map((d) => d.tool));
+    const blockStart  = cleanResponse.indexOf("[tools this turn — system record");
+    const blockRegion = blockStart >= 0 ? cleanResponse.slice(blockStart) : "";
+    const namedTools  = [...EF_TOOL_NAMES].filter((n) => blockRegion.includes(n));
+    const recordDiverged =
+      namedTools.some((t) => !actualTools.has(t)) ||
+      (blockRegion.includes("[tools this turn — system record, ground truth]") && toolLog.length === 0);
     // (B) TAG WITHOUT TOOL: an affirmative "… this turn" tag (read AND write verbs), no tool run.
     //     The metadata tool_log is the arbiter, never the prose.
     const tagWithoutTool = toolLog.length === 0 &&
       /\[\s*(queried|read|read back|listed|checked|verified|ran|updated|inserted|wrote|filed|re-filed|posted|created|sent|saved|deleted|redeemed|delivered)\b[^\]]*this turn[^\]]*\]/i.test(cleanResponse);
-    if (forgedRecord) {
+    if (forgedRecord && recordDiverged) {
       provenanceMismatch = true;
       cleanResponse +=
-        "\n\n⚠ PROVENANCE MISMATCH: this turn's text FORGES a tools-this-turn record — that block is the EF's to write, never yours, and its entries do not match what actually ran. The metadata tools-this-turn record is the only ground truth. Treat the forged block as UNVERIFIED and run the actual calls.";
-      console.log("PROVENANCE MISMATCH: forged system-record block in model output");
+        "\n\n⚠ PROVENANCE MISMATCH: this turn's text carries a self-authored tools-this-turn record whose entries do NOT match what actually ran — that block is the EF's to write, never yours, and the metadata tools-this-turn record is the only ground truth. Treat the self-authored block as UNVERIFIED and run the actual calls.";
+      console.log("PROVENANCE MISMATCH: self-authored record diverges from tool_log");
+    } else if (forgedRecord) {
+      // Self-authored block, but every tool it names actually ran — a policy slip, NOT a mismatch
+      // (Aegis af3a857e: assert mismatch only on real divergence). Soft note; provenance_mismatch stays false.
+      cleanResponse +=
+        "\n\nℹ The tools-this-turn record is the EF's to write, not yours — please don't author it. Its entries match the ledger this turn, so nothing was misstated, but that block is system ground truth, not your narration.";
+      console.log("provenance: self-authored record matches tool_log — not a mismatch (Aegis af3a857e)");
     } else if (honestNoneEcho) {
       // Truthful but the Prime shouldn't author the block — strip it (EF appends the real one),
       // gentle note, NOT a mismatch (nothing false was claimed).
