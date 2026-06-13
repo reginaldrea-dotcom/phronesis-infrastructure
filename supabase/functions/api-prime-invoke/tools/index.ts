@@ -13,12 +13,13 @@ import { readSynthesisTool } from "./readSynthesis.ts";
 import { commitSynthesisTool } from "./commitSynthesis.ts";
 import { writeClaimsTool } from "./writeClaims.ts";
 import { writeFigureTool } from "./writeFigure.ts";
+import { fileSuperTTool } from "./fileSuperT.ts";
 import { runScriptTool, readExecutionLedgerTool } from "./runScript.ts";
 
 // execute_sql, get_conference_result, and the read_wake_deltas/read_inbox/get_message/
 // send_message/consume_wake_deltas/enqueue_dispatch/read_dispatch_results/
-// write_synthesis_section/read_synthesis/commit_synthesis/write_claims/write_figure tools are withheld on the wake
-// turn (see each tool's available()); the rest are always offered.
+// write_synthesis_section/read_synthesis/commit_synthesis/write_claims/write_figure/file_super_t tools are withheld
+// on the wake turn (see each tool's available()); the rest are always offered.
 const TOOLS: Tool[] = [
   executeSqlTool,
   deliverArtefactTool,
@@ -35,6 +36,7 @@ const TOOLS: Tool[] = [
   commitSynthesisTool,
   writeClaimsTool,
   writeFigureTool,
+  fileSuperTTool,
   runScriptTool,
   readExecutionLedgerTool,
   readGithubFileTool,

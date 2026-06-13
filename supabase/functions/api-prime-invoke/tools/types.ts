@@ -13,6 +13,7 @@ export interface ToolContext {
   lineageName: string;         // the calling Prime's lineage — for caller-scoped reads (read_wake_deltas/read_inbox/get_message)
   userId?: string | null;      // end-user id from JWT — required by enqueue_dispatch; null when caller is unauthenticated
   sessionId?: string;          // active session — keys the execution ledger / script-run rows (B1)
+  instanceId?: string | null;  // the calling Prime's instance — bound onto self-filed Super-Ts (file_super_t tool)
 }
 
 export interface Tool {

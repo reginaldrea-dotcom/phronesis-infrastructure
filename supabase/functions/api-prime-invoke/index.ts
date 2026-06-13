@@ -627,9 +627,25 @@ Deno.serve(async (req: Request) => {
           // Defense in depth: an ungranted tool was not offered, but never run one.
           content = `[SYSTEM: '${toolUse.name}' is not granted to lineage '${lineage_name}'. It was not offered and will not run; it needs a tool_grant (Connie + Aegis).]`;
         } else {
-          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId });
+          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: instance_id ?? null });
         }
-        toolLog.push(digestToolCall(toolUse.name, toolUse.input, content));
+        const dg = digestToolCall(toolUse.name, toolUse.input, content);
+        toolLog.push(dg);
+        // Central server-side tool-call ledger (baton e5ff6f64; Aegis mandatory-write). EVERY loop
+        // tool call — run OR denied — lands an execution_ledger row server-side, so figure work
+        // (write_figure) satisfies the ledger-write clearance WITHOUT a Prime-side ledger grant
+        // (keeps the Prime surface minimal). via='loop' (script_run_id null); best-effort, never
+        // breaks the response. The B1 script path (scriptExec) still writes via='script'.
+        try {
+          await supabase.from("execution_ledger").insert({
+            lineage: lineage_name,
+            session_id: activeSessionId,
+            via: "loop",
+            tool: toolUse.name,
+            input_summary: dg.input_summary,
+            outcome: dg.outcome,
+          });
+        } catch (e) { console.error("execution_ledger (loop) write failed:", e); }
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
