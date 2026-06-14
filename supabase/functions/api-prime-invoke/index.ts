@@ -328,20 +328,6 @@ Deno.serve(async (req: Request) => {
       if (claim === "duplicate") return await awaitDuplicateResponse(supabase, requestId);
     }
 
-    // Resolve the Prime's instance_id ONCE for this request (FLAG 42c13e4c). The wake/invocation
-    // does not reliably carry instance_id in the body; when it is absent, fall back to this
-    // lineage's canonical prime instance (instances.id WHERE name = lineage — the same identity
-    // loadOrientation uses as scoped_identity). Used for the tool context, the prime_conversations
-    // write, AND file_super_t — so the per-turn conversation log and instance-attributed writes
-    // populate instead of writing null. Best-effort; falls back to null if nothing resolves.
-    let resolvedInstanceId: string | null = instance_id ?? null;
-    if (!resolvedInstanceId && lineage_name) {
-      try {
-        const { data: inst } = await supabase
-          .from("instances").select("id").eq("name", lineage_name).limit(1).maybeSingle();
-        resolvedInstanceId = (inst as { id?: string } | null)?.id ?? null;
-      } catch (e) { console.error("instance_id resolve failed:", e); }
-    }
 
     // Every terminal exit goes through finalize so the idempotency key is resolved
     // (Defect 1: errors must store their result, not strand the key 'in_progress').
@@ -389,6 +375,39 @@ Deno.serve(async (req: Request) => {
         error: true, error_type: "api_error",
         message: `No active instructions found for lineage: ${lineage_name}`,
       }, 404);
+    }
+
+    // Resolve the Prime's instance_id ONCE for this request (FLAG 42c13e4c) — now that the lineage
+    // is validated (it holds active instructions). Prefer the body's instance_id; else this
+    // lineage's canonical prime instance (instances.id WHERE name = lineage — the identity
+    // loadOrientation uses as scoped_identity). Feeds the tool context, the prime_conversations
+    // write, and file_super_t.
+    // ENSURE-ON-FIRST-WAKE (baton 7c462c58): if no instances row exists yet, provision a minimal one
+    // (name only; id / status='active' / instance_type='prime' take their column defaults) so the
+    // resolve never returns null. prime_conversations.instance_id is NOT NULL, so without this a new
+    // lineage's first turn would hard-fail. Done AFTER instruction validation, so a bogus/typo
+    // lineage is never provisioned. Idempotent on the unique name; a concurrent first-wake that loses
+    // the insert race re-selects the winning row. Best-effort.
+    let resolvedInstanceId: string | null = instance_id ?? null;
+    if (!resolvedInstanceId) {
+      try {
+        const { data: inst } = await supabase
+          .from("instances").select("id").eq("name", lineage_name).limit(1).maybeSingle();
+        resolvedInstanceId = (inst as { id?: string } | null)?.id ?? null;
+        if (!resolvedInstanceId) {
+          const ins = await supabase
+            .from("instances")
+            .insert({ name: lineage_name, metadata: { provisioned_by: "api-prime-invoke:ensure-instance-on-first-wake" } })
+            .select("id").maybeSingle();
+          resolvedInstanceId = (ins.data as { id?: string } | null)?.id ?? null;
+          if (!resolvedInstanceId) {
+            // lost the unique-name race to a concurrent first-wake → re-select the winner
+            const { data: inst2 } = await supabase
+              .from("instances").select("id").eq("name", lineage_name).limit(1).maybeSingle();
+            resolvedInstanceId = (inst2 as { id?: string } | null)?.id ?? null;
+          }
+        }
+      } catch (e) { console.error("instance_id resolve/ensure failed (7c462c58):", e); }
     }
 
     const activeSessionId: string = session_id || crypto.randomUUID();
