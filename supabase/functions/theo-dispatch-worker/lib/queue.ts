@@ -149,7 +149,7 @@ export async function markDispatched(
 // count is a coverage signal, not a verdict (gaps render with dignity). Citation
 // liveness/resolution is a separate later pass; this is only "how many cited".
 const URL_RE = /https?:\/\/[^\s"'<>)\]}]+/gi;
-function countSources(responseRaw: string | null | undefined): number {
+export function countSources(responseRaw: string | null | undefined): number {
   if (!responseRaw) return 0;
   const urls = responseRaw.match(URL_RE) ?? [];
   const distinct = new Set(urls.map((u) => u.replace(/[.,;:'")\]}>]+$/, "").toLowerCase()));

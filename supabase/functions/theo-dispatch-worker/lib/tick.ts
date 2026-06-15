@@ -23,6 +23,7 @@ import type { SupabaseClient } from "./supabase.ts";
 import type { EngineDispatchRow } from "./queue.ts";
 import {
   claimSession,
+  countSources,
   findDispatchableSessions,
   findRowsForSession,
   markCompleted,
@@ -207,7 +208,7 @@ async function handlePending(
 
   if (result.ok && result.done) {
     summary.rows_submitted++;
-    await finalizeResponse(supabase, row.id, row.engine_name, result.response, "pending", summary);
+    await finalizeResponse(supabase, row.id, row.engine_name, result.response, "pending", summary, row.role_in_dispatch);
     return;
   }
   if (result.ok && !result.done) {
@@ -272,7 +273,7 @@ async function handleDispatched(
     case "in_progress":
       return;
     case "completed":
-      await finalizeResponse(supabase, row.id, row.engine_name, result.response, "dispatched", summary);
+      await finalizeResponse(supabase, row.id, row.engine_name, result.response, "dispatched", summary, row.role_in_dispatch);
       return;
     case "partial":
       await markPartial(supabase, row.id, {
@@ -298,14 +299,16 @@ async function finalizeResponse(
   response: AdapterResponse,
   expectedStatus: "pending" | "dispatched",
   summary: TickSummary,
+  role: string,
 ): Promise<void> {
   // Persist estimated cost for BOTH sync and async finalisations — this is the
   // only place engine_dispatch.cost_usd gets written, and the spend guard sums it.
   const costUsd = computeCostUsd(engineName, response.usage) ?? undefined;
+  const responseRaw = JSON.stringify(response);
   const partial = response.labels.some(l => l.key === "partial" && l.value === "true");
   if (partial) {
     await markPartial(supabase, rowId, {
-      response_raw: JSON.stringify(response),
+      response_raw: responseRaw,
       reason: response.labels.find(l => l.key === "stop_reason")?.value ?? "max_tokens",
       tokens_in: response.usage.input_tokens,
       tokens_out: response.usage.output_tokens,
@@ -314,8 +317,24 @@ async function finalizeResponse(
     summary.rows_partial++;
     return;
   }
+  // Honesty floor (A1a aeea932d): a deep_research completion with ZERO captured sources is
+  // ungrounded/unverifiable — the failure mode that let an ungrounded deep-research run pass as a
+  // clean success. It must NOT pass as success. Hold it as 'partial' (non-success, response
+  // PRESERVED for review — source_count 0 may be inline-and-unparsed sources, else training-data
+  // only) with a loud reason. Grounded completions (>=1 captured source) are unaffected.
+  if (role === "deep_research" && countSources(responseRaw) === 0) {
+    await markPartial(supabase, rowId, {
+      response_raw: responseRaw,
+      reason: "ungrounded — deep_research completed with 0 captured sources; withheld from success (honesty floor A1a). Review response_raw: sources may be inline-and-unparsed, else the answer is training-data-only.",
+      tokens_in: response.usage.input_tokens,
+      tokens_out: response.usage.output_tokens,
+      cost_usd: costUsd,
+    }, expectedStatus);
+    summary.rows_partial++;
+    return;
+  }
   await markCompleted(supabase, rowId, {
-    response_raw: JSON.stringify(response),
+    response_raw: responseRaw,
     tokens_in: response.usage.input_tokens,
     tokens_out: response.usage.output_tokens,
     cost_usd: costUsd,
