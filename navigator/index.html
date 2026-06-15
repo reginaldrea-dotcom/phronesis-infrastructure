@@ -377,10 +377,11 @@ const CONF_POST_FN_URL=`${SUPABASE_URL}/functions/v1/navigator-conf-post`;
 const ICONS = {
   argos:'images/primes/argos.png',napoleon:'images/primes/napoleon.png',theophrastus:'images/primes/theophrastus.png',
   ghostwheel:'images/primes/ghostwheel.png',constantinople:'images/primes/constantinople.png',antechamber:'images/primes/antechamber.png',
-  aegis:'images/primes/aegis.png',homer:'images/primes/homer.png',ricardo:'images/primes/ricardo.png',eames:'images/primes/eames.png',
+  aegis:'images/primes/aegis.png',homer:'images/primes/homer.png',ricardo:'images/primes/ricardo.png',eames:'images/primes/eames.png',angelia:'images/primes/angelia.png',
   khaos:'images/consultants/khaos.png',redshirt:'images/consultants/redshirt.png',
 };
 const WHEEL_PRIMES=['napoleon','argos','theophrastus','ghostwheel','constantinople','antechamber','aegis','homer','ricardo','eames'];
+const TILES_PRIMES=[...WHEEL_PRIMES,'angelia'];
 const STALE_HOURS=168;
 
 
@@ -450,7 +451,7 @@ function makeTile(n){const i=instances[n]||{};const url=i.chat_url;const s=isSta
 function makeProjectTile(t){const src=t.icon_ref?`images/consultants/${t.icon_ref}`:'';const inner=src?`<img class="tile-icon" src="${src}" alt="${t.name}" onerror="this.style.visibility='hidden'"><span class="tile-name">${t.name}</span>`:`<span class="tile-name" style="font-size:13px;text-align:center;padding:0 8px">${t.name}</span>`;if(t.url)return`<a class="tile" href="${t.url}" target="_blank" rel="noopener">${inner}</a>`;return`<div class="tile stale">${inner}</div>`;}
 
 function renderWheel(){
-  document.getElementById('primeTiles').innerHTML=WHEEL_PRIMES.map(makeTile).join('');
+  document.getElementById('primeTiles').innerHTML=TILES_PRIMES.map(makeTile).join('');
   const cons=projectTiles.filter(t=>t.category==='consultant');
   document.getElementById('consultantTiles').innerHTML=cons.length?cons.map(makeProjectTile).join(''):'<p class="status-msg">No consultants configured.</p>';
   const oth=projectTiles.filter(t=>t.category==='other');
