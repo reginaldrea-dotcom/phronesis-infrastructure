@@ -103,6 +103,10 @@ export const openaiAdapter: Adapter = {
           model: req.model,
           input: req.prompt,
           background: true,
+          // Deep research models require at least one of web_search_preview / mcp /
+          // file_search tools, else a 400 ("Deep research models require at least one
+          // of 'web_search_preview', 'mcp', or 'file_search' tools.").
+          tools: [{ type: "web_search_preview" }],
           ...(req.opts?.max_tokens !== undefined ? { max_output_tokens: req.opts.max_tokens } : {}),
         }
       : {

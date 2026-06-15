@@ -76,17 +76,17 @@ export const geminiAdapter: Adapter = {
         ...(req.opts?.max_tokens !== undefined ? { maxOutputTokens: req.opts.max_tokens } : {}),
         ...(req.opts?.temperature !== undefined ? { temperature: req.opts.temperature } : {}),
       },
-      // googleSearchRetrieval grounding for both sync grounded answers and the
-      // Deep Research surface (the model decides whether to use it; harmless if
-      // ignored).
-      tools: [{ googleSearchRetrieval: {} }],
+      // google_search grounding for both sync grounded answers and the Deep
+      // Research surface (the model decides whether to use it; harmless if ignored).
+      // The legacy googleSearchRetrieval tool config is rejected by current models
+      // ("google_search_retrieval is not supported. Please use google_search tool
+      // instead.") — use googleSearch.
+      tools: [{ googleSearch: {} }],
     };
-    if (isDeepResearch(req.model)) {
-      // Best-guess async hint; if the live endpoint ignores this and returns
-      // synchronously, parseCandidates() still produces a valid response and the
-      // submit returns {done:true} below via the inline-response branch.
-      body.background = true;
-    }
+    // Do NOT send a `background` field — Gemini rejects it outright ("Invalid JSON
+    // payload received. Unknown name 'background': Cannot find field."). The deep-
+    // research models run synchronously via generateContent; parseCandidates()
+    // handles the inline response and submit returns {done:true} below.
 
     let res: Response;
     try {
