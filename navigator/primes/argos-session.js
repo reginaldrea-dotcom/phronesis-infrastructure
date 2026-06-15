@@ -275,6 +275,11 @@ function replayTurn(t) {
   let c = t.content;
   if (c && typeof c === 'object') c = c.text || c.content || JSON.stringify(c);
   if (!c) return;
-  if (t.role === 'user') renderUser(c);
-  else renderAssistant(c, 0, [], []);
+  if (t.role === 'user') { renderUser(c); return; }
+  // Footer from the authoritative server record (metadata.tool_log / output_tokens), not a transient
+  // payload. This previously passed 0/[] so every reopened turn read "0 tokens · tools: none" even
+  // when tools ran — a silent, inverted false-negative on the verification signal.
+  const md = t.metadata || {};
+  const toolUses = Array.isArray(md.tool_log) ? md.tool_log.map(e => ({ name: e && e.tool })) : [];
+  renderAssistant(c, Number(md.output_tokens) || 0, [], toolUses);
 }
