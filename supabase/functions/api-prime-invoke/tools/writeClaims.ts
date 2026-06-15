@@ -279,8 +279,11 @@ export const writeClaimsTool: Tool = {
       batch.forEach((u, idx) => captureCache.set(u, ids[idx]));
     }
 
-    // Claims (+ nested sources/citations).
+    // Claims (+ nested sources/citations). Collect the persisted ids so the author can read the
+    // write back (A2 5acd06d0) and chain citation_ids into write_figure (folds Connie's 6e3dbeb6).
     let claimN = 0, sourceN = 0, citationN = 0, anchoredN = 0;
+    const claimIds: string[] = [];
+    const citationIds: string[] = [];
     for (const cl of claims) {
       const insC = await ctx.supabase.from("synthesis_claim").insert({
         synthesis_id: synthesisId,
@@ -294,6 +297,7 @@ export const writeClaimsTool: Tool = {
       }).select("id").single();
       if (insC.error) return fail(`synthesis_claim insert failed: ${insC.error.message}`);
       const claimId = insC.data.id as string;
+      claimIds.push(claimId);
       claimN++;
 
       const sources = Array.isArray(cl.sources) ? cl.sources as SourceIn[] : [];
@@ -326,8 +330,9 @@ export const writeClaimsTool: Tool = {
             // resolution defaults to 'unchecked' at the DB level — claimed-until-checked.
           };
         });
-        const insCit = await ctx.supabase.from("claim_citation").insert(rows);
+        const insCit = await ctx.supabase.from("claim_citation").insert(rows).select("id");
         if (insCit.error) return fail(`claim_citation insert failed: ${insCit.error.message}`);
+        for (const r of (insCit.data ?? []) as Array<{ id: string }>) citationIds.push(r.id);
         citationN += rows.length;
       }
     }
@@ -336,8 +341,13 @@ export const writeClaimsTool: Tool = {
       theo_session_id: sessionId,
       synthesis_id: synthesisId,
       replaced: replace,
-      written: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN, anchored: anchoredN },
-      "[SYSTEM]": `Claim layer written: ${claimN} claim(s), ${sourceN} source link(s), ${citationN} citation(s) — ${anchoredN} ANCHORED to a captured source_document (frozen + hashed at research time), ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot: dead/slow/binary/non-web — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass resolves them. Provenance is intact — every source/citation resolved to a real dispatch for this session. The anchored sources are now recoverable a year on, hash-verifiable; the drill-clock has started.`,
+      // Confirmed-persisted counts: every count here is a row that COMMITTED. Each insert is
+      // error-checked (and claims use .select().single()), so a failed persist returns a loud
+      // error and stops this call — it never returns a count. So a count IS the confirmation.
+      persisted: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN, anchored: anchoredN },
+      claim_ids: claimIds,        // A2 5acd06d0 — the write landed iff these come back
+      citation_ids: citationIds,  // folds 6e3dbeb6 — feed straight into write_figure
+      "[SYSTEM]": `PERSISTED + CONFIRMED. ${claimN} claim(s) [ids: ${claimIds.join(", ") || "none"}], ${citationN} citation(s) [ids: ${citationIds.join(", ") || "none"}], ${sourceN} source link(s). These ids ARE the confirmation the write landed — read them back, and pass citation_ids into write_figure. Every count above is a committed row: a failed persist would have surfaced as an error and stopped this call, not returned a count, so silence-on-failure is not possible here. ${anchoredN} citation(s) ANCHORED to a captured source_document (frozen + hashed); ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass. Provenance intact — every source/citation resolved to a real dispatch for this session.`,
     });
   },
 };
