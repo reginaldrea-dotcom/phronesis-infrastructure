@@ -701,15 +701,17 @@ Deno.serve(async (req: Request) => {
         }
         const dg = digestToolCall(toolUse.name, toolUse.input, content);
         toolLog.push(dg);
-        // Capture theo_session_id so dispatch audits key on it directly (FLAG 42c13e4c: the ledger
-        // was keyed only on the chat session, so theo_session audits read false-empty — what made
-        // e0e30218 look "fictional"). Session-referencing tools carry it in their input;
-        // enqueue_dispatch CREATES it and returns it in the result.
+        // Capture theo_session_id so dispatch audits key on it directly (FLAG 42c13e4c / A4
+        // cc070ba0: the ledger was keyed only on the chat session, so theo_session audits read
+        // false-empty — what made e0e30218 look "fictional"). Prefer a FULL uuid in the tool input;
+        // else pull one from the tool RESULT (enqueue_dispatch returns the session it creates;
+        // read/write tools echo the resolved session). The result-fallback covers the case where a
+        // Prime passes only an 8-char prefix in the input (observed) — the full id still lands here.
         const tiSess = (toolUse.input as Record<string, unknown> | null | undefined)?.theo_session_id;
         let theoSessionId: string | null =
-          typeof tiSess === "string" && /^[0-9a-f-]{36}$/i.test(tiSess) ? tiSess : null;
-        if (!theoSessionId && toolUse.name === "enqueue_dispatch") {
-          const m = /"theo_session_id"\s*:\s*"([0-9a-fA-F-]{36})"/.exec(content);
+          typeof tiSess === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(tiSess) ? tiSess : null;
+        if (!theoSessionId) {
+          const m = /"theo_session_id"\s*:\s*"([0-9a-f]{8}-[0-9a-f-]{27})"/i.exec(content);
           if (m) theoSessionId = m[1];
         }
         // Central server-side tool-call ledger (baton e5ff6f64; Aegis mandatory-write). EVERY loop
