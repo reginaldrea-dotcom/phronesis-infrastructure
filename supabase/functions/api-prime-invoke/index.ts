@@ -701,6 +701,17 @@ Deno.serve(async (req: Request) => {
         }
         const dg = digestToolCall(toolUse.name, toolUse.input, content);
         toolLog.push(dg);
+        // Capture theo_session_id so dispatch audits key on it directly (FLAG 42c13e4c: the ledger
+        // was keyed only on the chat session, so theo_session audits read false-empty — what made
+        // e0e30218 look "fictional"). Session-referencing tools carry it in their input;
+        // enqueue_dispatch CREATES it and returns it in the result.
+        const tiSess = (toolUse.input as Record<string, unknown> | null | undefined)?.theo_session_id;
+        let theoSessionId: string | null =
+          typeof tiSess === "string" && /^[0-9a-f-]{36}$/i.test(tiSess) ? tiSess : null;
+        if (!theoSessionId && toolUse.name === "enqueue_dispatch") {
+          const m = /"theo_session_id"\s*:\s*"([0-9a-fA-F-]{36})"/.exec(content);
+          if (m) theoSessionId = m[1];
+        }
         // Central server-side tool-call ledger (baton e5ff6f64; Aegis mandatory-write). EVERY loop
         // tool call — run OR denied — lands an execution_ledger row server-side, so figure work
         // (write_figure) satisfies the ledger-write clearance WITHOUT a Prime-side ledger grant
@@ -714,6 +725,7 @@ Deno.serve(async (req: Request) => {
             tool: toolUse.name,
             input_summary: dg.input_summary,
             outcome: dg.outcome,
+            theo_session_id: theoSessionId,
           });
         } catch (e) { console.error("execution_ledger (loop) write failed:", e); }
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
