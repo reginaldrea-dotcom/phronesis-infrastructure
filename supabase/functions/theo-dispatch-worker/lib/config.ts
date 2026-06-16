@@ -122,47 +122,33 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
   },
 
   // ── OpenAI ──────────────────────────────────────────────────────────────
-  // ROUTED BY ROLE in the adapter (B1-oai 9c0b18ed), all via the Responses API + web_search:
-  // deep_research engines ASYNC (background submit/poll, safe against the ~150s EF 504);
-  // search/current_web engines SYNC. Models repointed OFF the SKUs that shut down 2026-07-23
-  // (o3/o4-mini-deep-research, gpt-4o-search-preview), per Theo's roster. NOTE: engine KEYS kept
-  // as-is for now (renaming touches ROLE_TO_ENGINE + enqueue refs; deferred to Theo) — so the keys
-  // no longer name their model; the model field below is authoritative.
+  // ROUTED BY ROLE in the adapter (B1-oai 9c0b18ed) via the Responses API + web_search: deep_research
+  // ASYNC (background submit/poll, safe vs the ~150s EF 504); search/current_web SYNC.
+  //
+  // DEEP role on OpenAI = gpt-5.5 @ 1M TPM (openai-o3-deep-research). History (16 Jun 2026): the deep
+  // engine first ran gpt-5.5-pro, which 429s on deep research because a single job burns ~183k+ tokens
+  // in its peak minute and gpt-5.5-pro is only 200k TPM. Reg added gpt-5.5 (1M TPM / 5000 RPM) to the
+  // project and chose it for the deep engine — 1M TPM is ample headroom over the per-job burst, so the
+  // throttle is gone without dropping OpenAI from deep. (openai-o4-mini-deep-research stays RETIRED:
+  // its gpt-5.4 base is not on the project; gpt-5.4-pro @ 1M TPM is available if a pro-tier OpenAI deep
+  // ALTERNATE is later wanted — Theo's roster call.)
   //
   // SEARCH-ROLE TIERING (B1-search 098a2e46 / DEC e2955403). gpt-5-search-api is hard-capped at
   // 45k TPM / 500 RPM — real search load is ~32k tok/call in 2-3 call bursts, so 45k throttles to
   // ~1 call/min and a throttled search returns degraded/empty. So the search role does NOT use
-  // gpt-5-search-api at all: it runs a CHAT model + Responses-API web_search tool, same mechanism as
-  // the deep path. Tiers reflect this OpenAI project's ACTUAL model access + TPM (Reg's account page,
-  // 16 Jun 2026): gpt-5.4-mini 2M TPM, gpt-5.5-pro 200k TPM; gpt-5.4 and gpt-5.5 are NOT on the project
-  // (403 model_not_found, smoke-verified). So:
-  //   DEFAULT search tier  = gpt-5.4-mini (2M TPM, openai-gpt-5-search) — SYNC, fast, smoke-green/grounded.
-  //   HEAVY analytical work = the ASYNC deep_research path (openai-o3-deep-research -> gpt-5.5-pro). A
-  //     SYNC heavy-search engine on gpt-5.5-pro was built, smoke-tested and REVERTED: gpt-5.5-pro +
-  //     web_search runs past the worker's ~150s EF tick ceiling (the sync call hung >150s and 504'd,
-  //     also starving rows queued behind it). gpt-5.5-pro is async-by-nature, so heavy analytical
-  //     questions route through deep_research (already async gpt-5.5-pro), NOT a sync search tier.
-  //     gpt-5.4-mini is the only accessible sync model, hence the sole search tier.
+  // gpt-5-search-api at all: it runs a CHAT model + Responses-API web_search tool. SEARCH tier =
+  // gpt-5.4-mini (2M TPM, openai-gpt-5-search) — SYNC, fast, smoke-green/grounded; the sole search
+  // tier (only accessible sync search model). A sync heavy-search engine on gpt-5.5-pro was built and
+  // REVERTED — it ran past the worker's ~150s EF tick ceiling and 504'd. Heavy analytical work that
+  // needs a stronger model belongs on the deep_research role, not a sync OpenAI search tier.
   "openai-o3-deep-research": {
     provider: "openai",
-    model: "gpt-5.5-pro",               // repointed from o3-deep-research (deprecated 2026-07-23); deep_research
+    model: "gpt-5.5",                   // OpenAI deep_research (Reg 16 Jun): gpt-5.5 @ 1M TPM. SMOKE-VERIFIED completed + grounded
+                                        // (3 sources, no 429) once Reg granted gpt-5.5 PROJECT access — note that grant is separate from the org
+                                        // rate-limit page (both gpt-5.5 and gpt-5.4-pro 403'd "no access" while only rate-limited, not yet granted).
     async: true,
     poll_staleness_ms: 40 * 60 * 1000,  // 40 min ceiling
-    rate_limit: { rpm: 500, tpm: 200_000 }, // gpt-5.5-pro: 200k TPM / 500 RPM (Reg's account). NB OBSERVED: a single deep_research job
-                                             // burns ~183k+ tok in its peak minute and STILL 429s at 200k (smoke 16 Jun). This tpm only PACES
-                                             // SUBMITS; the throttle is the background job's own server-side consumption, which pacing can't cap.
-                                             // OpenAI deep_research needs a higher TPM tier to be reliable; meanwhile prefer perplexity/gemini deep.
-    defaults: { timeout_ms: 60_000 },
-  },
-  "openai-o4-mini-deep-research": {
-    provider: "openai",
-    // ⚠ gpt-5.4 is NOT accessible on this project (403 model_not_found, smoke-verified B1-search) —
-    // this engine WILL fail if assigned until repointed. Repoint pending Theo (roster/cost lane):
-    // gpt-5.5-pro for a true deep cost-cap-with-access, or gpt-5.4-mini for a cheap shallow option.
-    model: "gpt-5.4",                   // INACCESSIBLE placeholder — see warning above
-    async: true,
-    poll_staleness_ms: 30 * 60 * 1000,  // 30 min ceiling
-    rate_limit: { rpm: 500 },
+    rate_limit: { rpm: 5_000, tpm: 1_000_000 }, // gpt-5.5: 1M TPM / 5000 RPM (Reg's account)
     defaults: { timeout_ms: 60_000 },
   },
   "openai-gpt-5-search": {
@@ -286,10 +272,10 @@ export const PRICE_PER_MTOK: Record<EngineName, { input: number; output: number 
   "gemini-3-1-pro":                  { input: 2,    output: 12 },  // CONFIRM
   "gemini-2-5-pro":                  { input: 1.25, output: 10 },  // CONFIRM
   "gemini-deep-research":            { input: 1.25, output: 10 },  // now gemini-2.5-pro (DEC e2955403) — mirrors gemini-2-5-pro; CONFIRM
-  "openai-gpt-5-search":             { input: 2,    output: 8 },   // now gpt-5.4-mini (default search) — placeholder, price CONFIRM
-  "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // now gpt-5.4-mini (current_web alt) — placeholder, price CONFIRM
-  "openai-o3-deep-research":         { input: 10,   output: 40 },  // now gpt-5.5-pro (deep_research) — placeholder, price CONFIRM
-  "openai-o4-mini-deep-research":    { input: 1.1,  output: 4.4 }, // now gpt-5.4 (deep cost-cap) — placeholder, price CONFIRM
+  "openai-gpt-5-search":             { input: 2,    output: 8 },   // gpt-5.4-mini (search) — placeholder, price CONFIRM
+  "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // gpt-5.4-mini (current_web alt) — placeholder, price CONFIRM
+  "openai-o3-deep-research":         { input: 5,    output: 20 },  // now gpt-5.5 (deep_research, Reg 16 Jun) — placeholder, price CONFIRM
+  // openai-o4-mini-deep-research RETIRED (gpt-5.4 base not on the project).
 };
 
 export function priceForEngine(engine: EngineName): { input: number; output: number } {

@@ -18,8 +18,10 @@ They are not MCP/connector tools. They live inside `api-prime-invoke`'s own serv
 
 ## Valid engines (`engine_dispatch.engine_name`)
 
-`perplexity-sonar-deep-research`, `perplexity-sonar-pro`, `perplexity-sonar-reasoning-pro`, `gemini-deep-research`, `gemini-3-1-pro`, `gemini-2-5-pro`, `openai-o3-deep-research`, `openai-o4-mini-deep-research`, `openai-gpt-5-search`, `openai-gpt-4o-search`, `anthropic-claude-opus-4-8`, `anthropic-claude-sonnet-4-6`.
+`perplexity-sonar-deep-research`, `perplexity-sonar-pro`, `perplexity-sonar-reasoning-pro`, `gemini-deep-research`, `gemini-3-1-pro`, `gemini-2-5-pro`, `openai-o3-deep-research`, `openai-gpt-5-search`, `openai-gpt-4o-search`, `anthropic-claude-opus-4-8`, `anthropic-claude-sonnet-4-6`.
 Valid roles: `deep_source`, `deep_research`, `current_web`, `synthesist`.
+
+> OpenAI deep_research runs **`gpt-5.5` @ 1M TPM** (`openai-o3-deep-research`, Reg 16 Jun 2026). It first ran `gpt-5.5-pro`, which 429s on deep research (a single job burns ~183k+ tok/min vs 200k TPM); Reg added `gpt-5.5` at 1M TPM and chose it. `openai-o4-mini-deep-research` is **retired** (its `gpt-5.4` base is not on the project). The `deep_research` role is served by Perplexity, Gemini, and OpenAI (gpt-5.5).
 
 **For the first smoke test use the two Anthropic engines** — they are sync (one worker tick completes them) and their key is set. Optionally add `perplexity-sonar-pro` (sync, role `current_web`) for cross-provider divergence; that key is also set. **Avoid the deep-research SKUs for the first run** — they are async (first tick only marks them `dispatched`; you must fire the worker again after a few minutes to poll them to completion).
 
