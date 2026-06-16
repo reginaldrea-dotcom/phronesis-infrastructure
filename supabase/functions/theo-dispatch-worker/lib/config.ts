@@ -113,13 +113,15 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
   },
 
   // ── OpenAI ──────────────────────────────────────────────────────────────
-  // Deep-research SKUs (o3-deep-research, o4-mini-deep-research) go via the
-  // Responses API with background=true (ASYNC submit-poll, per Argos d56e3525).
-  // Search-grounded chat models (gpt-5-search-api, gpt-4o-search-preview) are
-  // SYNC via chat/completions and serve the current_web role.
+  // ROUTED BY ROLE in the adapter (B1-oai 9c0b18ed), all via the Responses API + web_search:
+  // deep_research engines ASYNC (background submit/poll, safe against the ~150s EF 504);
+  // current_web engines SYNC. Models repointed OFF the SKUs that shut down 2026-07-23
+  // (o3/o4-mini-deep-research, gpt-4o-search-preview; gpt-5-search-api never existed), per Theo's
+  // roster. NOTE: engine KEYS kept as-is for now (renaming touches ROLE_TO_ENGINE + enqueue refs;
+  // deferred to Theo) — so the keys no longer name their model; the model field below is authoritative.
   "openai-o3-deep-research": {
     provider: "openai",
-    model: "o3-deep-research",
+    model: "gpt-5.5-pro",               // repointed from o3-deep-research (deprecated 2026-07-23); deep_research
     async: true,
     poll_staleness_ms: 40 * 60 * 1000,  // 40 min ceiling
     rate_limit: { rpm: 500 },           // Tier-1 baseline; confirm post-deploy
@@ -127,22 +129,22 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
   },
   "openai-o4-mini-deep-research": {
     provider: "openai",
-    model: "o4-mini-deep-research",
+    model: "gpt-5.4",                   // repointed from o4-mini-deep-research (deprecated); Theo's deep cost-cap option
     async: true,
-    poll_staleness_ms: 30 * 60 * 1000,  // 30 min ceiling — smaller model, faster
+    poll_staleness_ms: 30 * 60 * 1000,  // 30 min ceiling
     rate_limit: { rpm: 500 },
     defaults: { timeout_ms: 60_000 },
   },
   "openai-gpt-5-search": {
     provider: "openai",
-    model: "gpt-5-search-api",
+    model: "gpt-5.4-mini",              // repointed from gpt-5-search-api (never existed); current_web primary
     async: false,
     rate_limit: { rpm: 500 },
     defaults: { timeout_ms: 240_000 },
   },
   "openai-gpt-4o-search": {
     provider: "openai",
-    model: "gpt-4o-search-preview",
+    model: "gpt-5.4-mini",              // repointed from gpt-4o-search-preview (deprecated 2026-07-23); current_web alt
     async: false,
     rate_limit: { rpm: 500 },
     defaults: { timeout_ms: 240_000 },
@@ -252,10 +254,10 @@ export const PRICE_PER_MTOK: Record<EngineName, { input: number; output: number 
   "gemini-3-1-pro":                  { input: 2,    output: 12 },  // CONFIRM
   "gemini-2-5-pro":                  { input: 1.25, output: 10 },  // CONFIRM
   "gemini-deep-research":            { input: 2,    output: 12 },  // CONFIRM (+ research surcharge not modelled)
-  "openai-gpt-5-search":             { input: 2,    output: 8 },   // CONFIRM (+ search tool fees not modelled)
-  "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // CONFIRM
-  "openai-o3-deep-research":         { input: 10,   output: 40 },  // CONFIRM
-  "openai-o4-mini-deep-research":    { input: 1.1,  output: 4.4 }, // CONFIRM
+  "openai-gpt-5-search":             { input: 2,    output: 8 },   // now gpt-5.4-mini (current_web) — placeholder, price CONFIRM
+  "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // now gpt-5.4-mini (current_web alt) — placeholder, price CONFIRM
+  "openai-o3-deep-research":         { input: 10,   output: 40 },  // now gpt-5.5-pro (deep_research) — placeholder, price CONFIRM
+  "openai-o4-mini-deep-research":    { input: 1.1,  output: 4.4 }, // now gpt-5.4 (deep cost-cap) — placeholder, price CONFIRM
 };
 
 export function priceForEngine(engine: EngineName): { input: number; output: number } {

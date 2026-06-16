@@ -1,23 +1,20 @@
-// OpenAI adapter.
+// OpenAI adapter — Responses API only, ROUTED BY ROLE (B1-oai 9c0b18ed).
 //
-// SYNC chat models (search-grounded): gpt-5-search-api, gpt-4o-search-preview
-//   POST https://api.openai.com/v1/chat/completions
+//   deep_research -> POST /v1/responses  background:true + tools:[web_search_preview]  (ASYNC submit/poll)
+//   current_web   -> POST /v1/responses              + tools:[web_search_preview]       (SYNC)
+//   poll:            GET  /v1/responses/{id}
 //
-// ASYNC deep-research: o3-deep-research, o4-mini-deep-research
-//   POST https://api.openai.com/v1/responses  (with background:true)
-//   GET  https://api.openai.com/v1/responses/{id}
+// Models come from config (gpt-5.5-pro for deep_research, gpt-5.4-mini for current_web); the adapter
+// never branches on the model name. No stream:true (gpt-5.5-pro rejects streaming; background mode is
+// non-streaming). The old chat/completions path (gpt-4o-search-preview etc.) is retired — those SKUs
+// shut down 2026-07-23.
 //
 // Auth: Authorization: Bearer $OPENAI_API_KEY
 
 import type { Adapter, AdapterPollResult, AdapterRequest, AdapterResponse, AdapterSubmitResult, Source } from "../types.ts";
 import { env } from "../env.ts";
 
-const CHAT_ENDPOINT      = "https://api.openai.com/v1/chat/completions";
 const RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
-
-function isDeepResearch(model: string): boolean {
-  return model.includes("deep-research");
-}
 
 function authHeaders(): Record<string, string> {
   return {
@@ -26,35 +23,7 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-// ── Sync (chat/completions) parsing ────────────────────────────────────────
-function parseChatCompletion(raw: Record<string, unknown>, model: string): AdapterResponse {
-  const choices = Array.isArray(raw?.choices) ? raw.choices as Array<{message?: {content?: string; annotations?: unknown[]}; finish_reason?: string}> : [];
-  const msg = choices[0]?.message;
-  const text = msg?.content ?? "";
-  const finish = choices[0]?.finish_reason ?? "stop";
-
-  const sources: Source[] = [];
-  for (const ann of (msg?.annotations ?? []) as Array<{type?: string; url_citation?: {url?: string; title?: string}}>) {
-    if (ann?.type === "url_citation" && ann.url_citation?.url) {
-      sources.push({ url: ann.url_citation.url, title: ann.url_citation.title });
-    }
-  }
-  const usage = (raw?.usage ?? {}) as { prompt_tokens?: number; completion_tokens?: number };
-
-  return {
-    text,
-    sources,
-    labels: [
-      { key: "engine", value: `openai-${model}` },
-      { key: "search_grounded", value: model.includes("search") ? "true" : "false" },
-      { key: "finish_reason", value: String(finish) },
-    ],
-    usage: { input_tokens: usage.prompt_tokens, output_tokens: usage.completion_tokens },
-    raw,
-  };
-}
-
-// ── Async (Responses API) parsing ──────────────────────────────────────────
+// ── Responses API parsing (both roles) ─────────────────────────────────────
 // Response object shape: { id, status, output: [...], usage: {input_tokens, output_tokens}, ... }
 // Text is concatenated from output[].content[].text where output[].type === "message".
 // Citations may appear as output[].content[].annotations[] with type="url_citation".
@@ -96,29 +65,26 @@ export const openaiAdapter: Adapter = {
     const timeoutMs = req.opts?.timeout_ms ?? 60_000;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
-    const url = isDeepResearch(req.model) ? RESPONSES_ENDPOINT : CHAT_ENDPOINT;
 
-    const body = isDeepResearch(req.model)
-      ? {
-          model: req.model,
-          input: req.prompt,
-          background: true,
-          // Deep research models require at least one of web_search_preview / mcp /
-          // file_search tools, else a 400 ("Deep research models require at least one
-          // of 'web_search_preview', 'mcp', or 'file_search' tools.").
-          tools: [{ type: "web_search_preview" }],
-          ...(req.opts?.max_tokens !== undefined ? { max_output_tokens: req.opts.max_tokens } : {}),
-        }
-      : {
-          model: req.model,
-          messages: [{ role: "user", content: req.prompt }],
-          ...(req.opts?.max_tokens !== undefined ? { max_completion_tokens: req.opts.max_tokens } : {}),
-          ...(req.opts?.temperature !== undefined ? { temperature: req.opts.temperature } : {}),
-        };
+    // ROUTE BY ROLE, not model name (B1-oai 9c0b18ed). The retired deep-research SKUs were the
+    // only models whose NAME implied the endpoint+tool (isDeepResearch = name.includes("deep-research")).
+    // Their replacements carry no such hint — gpt-5.5-pro (deep_research) and gpt-5.4-mini (current_web) —
+    // so a name-based router would misroute them to /chat UNGROUNDED, which A1a would then flag as
+    // zero-source. Both web roles now go via the Responses API + the web_search tool. deep_research is
+    // ASYNC (background -> submit/poll, safe against the ~150s EF 504); current_web is SYNC. NB: no
+    // stream:true anywhere — gpt-5.5-pro rejects streaming, and background mode is non-streaming.
+    const isDeep = req.role === "deep_research";
+    const body: Record<string, unknown> = {
+      model: req.model,
+      input: req.prompt,
+      tools: [{ type: "web_search_preview" }],
+      ...(isDeep ? { background: true } : {}),
+      ...(req.opts?.max_tokens !== undefined ? { max_output_tokens: req.opts.max_tokens } : {}),
+    };
 
     let res: Response;
     try {
-      res = await fetch(url, { method: "POST", signal: ctl.signal, headers: authHeaders(), body: JSON.stringify(body) });
+      res = await fetch(RESPONSES_ENDPOINT, { method: "POST", signal: ctl.signal, headers: authHeaders(), body: JSON.stringify(body) });
     } catch (e) {
       clearTimeout(timer);
       if ((e as Error).name === "AbortError") {
@@ -141,18 +107,27 @@ export const openaiAdapter: Adapter = {
       return { ok: false, error: { kind: "api_error", message: `http ${res.status}`, retryable: res.status >= 500, http_status: res.status, raw } };
     }
 
-    if (isDeepResearch(req.model)) {
-      const id = (raw as { id?: string })?.id;
-      if (!id) return { ok: false, error: { kind: "api_error", message: "responses submit returned no id", retryable: false, raw } };
-      // Possibility: a fast response could return status="completed" immediately. Honour it.
-      const status = String((raw as { status?: string })?.status ?? "");
+    const status = String((raw as { status?: string })?.status ?? "");
+    const id = (raw as { id?: string })?.id;
+
+    // deep_research: async submit -> poll, unless it returned completed inline (short jobs).
+    if (isDeep) {
       if (status === "completed") {
         return { ok: true, done: true, response: parseResponsesCompleted(raw as Record<string, unknown>, req.model) };
       }
+      if (!id) return { ok: false, error: { kind: "api_error", message: "responses submit returned no id", retryable: false, raw } };
       return { ok: true, done: false, job_ref: id };
     }
 
-    return { ok: true, done: true, response: parseChatCompletion(raw as Record<string, unknown>, req.model) };
+    // current_web: sync /responses — the completed response comes back inline.
+    if (status === "completed" || status === "") {
+      return { ok: true, done: true, response: parseResponsesCompleted(raw as Record<string, unknown>, req.model) };
+    }
+    // Defensive: if a sync call somehow came back still running, fall through to the poll path.
+    if ((status === "queued" || status === "in_progress") && id) {
+      return { ok: true, done: false, job_ref: id };
+    }
+    return { ok: true, done: true, response: parseResponsesCompleted(raw as Record<string, unknown>, req.model) };
   },
 
   async poll(jobRef: string): Promise<AdapterPollResult> {
