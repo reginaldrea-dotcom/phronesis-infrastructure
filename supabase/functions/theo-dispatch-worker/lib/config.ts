@@ -148,7 +148,10 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
     model: "gpt-5.5-pro",               // repointed from o3-deep-research (deprecated 2026-07-23); deep_research
     async: true,
     poll_staleness_ms: 40 * 60 * 1000,  // 40 min ceiling
-    rate_limit: { rpm: 500, tpm: 200_000 }, // gpt-5.5-pro: 200k TPM / 500 RPM (Reg's account, raised from the earlier 50k that threw TPM 429s)
+    rate_limit: { rpm: 500, tpm: 200_000 }, // gpt-5.5-pro: 200k TPM / 500 RPM (Reg's account). NB OBSERVED: a single deep_research job
+                                             // burns ~183k+ tok in its peak minute and STILL 429s at 200k (smoke 16 Jun). This tpm only PACES
+                                             // SUBMITS; the throttle is the background job's own server-side consumption, which pacing can't cap.
+                                             // OpenAI deep_research needs a higher TPM tier to be reliable; meanwhile prefer perplexity/gemini deep.
     defaults: { timeout_ms: 60_000 },
   },
   "openai-o4-mini-deep-research": {
