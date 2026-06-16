@@ -1,15 +1,20 @@
 // Gemini (Google) adapter.
 //
-// SYNC standard models: gemini-3.1-pro, gemini-2.5-pro
+// SYNC standard models (the LIVE production path): gemini-2.5-pro, etc.
 //   POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+//   Both the gemini-2-5-pro AND the gemini-deep-research engines now route here:
+//   per DEC e2955403 (board 6cbd8107 / refinement dafaf1c4) the Gemini deep_research
+//   role re-plumbed to gemini-2.5-pro + google_search (config.ts), so its model no
+//   longer matches isDeepResearch() and it takes the sync branch below.
 //
-// ASYNC Deep Research: deep-research-pro-preview
-//   ⚠ ENDPOINT SHAPE NOT YET LIVE-VERIFIED.
-//   Argos's research (msg d56e3525) names this surface as the "Interactions API"
-//   with background=true and interactions.get for polling. The best-guess paths
-//   below are based on Google's standard Long-Running-Operations / Interactions
-//   convention; if the first live call returns 404 or a schema mismatch, the raw
-//   response is preserved in error.raw and the path needs amending.
+// ASYNC Deep Research (EVAL-GATED, NOT in live config): deep-research-*-preview
+//   ⚠ ENDPOINT SHAPE NOT LIVE-VERIFIED — kept as scaffolding only. The undated
+//   "deep-research-pro-preview" 404'd on generateContent (B1 smoke); the dated
+//   deep-research-*-preview family is in models.list but appears NOT callable via
+//   generateContent (a separate async/agent surface). Per DEC, no preview is wired
+//   as production until a Heph smoke confirms its real endpoint. The best-guess
+//   paths below follow Google's Long-Running-Operations / Interactions convention;
+//   if a live call 404s or schema-mismatches, error.raw preserves it for amending.
 //
 // Auth: ?key=$GEMINI_API_KEY (or x-goog-api-key header)
 

@@ -76,20 +76,29 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
   },
 
   // ── Gemini (Google) ─────────────────────────────────────────────────────
-  // Deep Research goes via the Interactions API with background=true; standard
-  // Gemini models use generateContent (sync). The adapter branches on engine.
+  // Standard Gemini models use generateContent (sync) + googleSearch grounding.
+  // The adapter attaches google_search to every request.
   "gemini-deep-research": {
     provider: "gemini",
-    // Drive spec §5: "Deep Research Pro Preview" — API equivalent of browser
-    // Gemini Deep Research. 1 RPM global across tenants is the binding constraint;
-    // worker serialises submits via provider_rate_limit before adapter call.
-    // Model id is TBD pending live API confirmation at Task 5 (Google's current
-    // SKU naming for this surface).
-    model: "deep-research-pro-preview",
-    async: true,
-    poll_staleness_ms: 35 * 60 * 1000,  // 35 min ceiling
-    rate_limit: { rpm: 1, tpm: 500_000, rpd: 1440 },
-    defaults: { timeout_ms: 60_000 },
+    // DEC e2955403 / board 6cbd8107 (Gemini refinement dafaf1c4, Theophrastus):
+    // the Gemini deep_research role re-plumbs to a STABLE generateContent model +
+    // google_search — NOT a preview deep-research SKU. The prior undated
+    // "deep-research-pro-preview" 404'd ("not found … or not supported for
+    // generateContent"): the deep-research-*-preview family is listed in models.list
+    // but is NOT callable via generateContent (a separate async/agent surface), so
+    // it is eval-gated on a Heph smoke before any adoption — not a config swap.
+    // Production = gemini-2.5-pro, version-pinned (NOT the floating gemini-pro-latest
+    // alias — a moving alias breaks research reproducibility). gemini-2.5-pro is
+    // already fixed (googleSearch) and smoke-verified grounded (B1: 11 sources).
+    // This makes the gemini deep_research role SYNC; the A1a zero-source honesty
+    // guard (tick.ts finalizeResponse) still applies to role==='deep_research'.
+    model: "gemini-2.5-pro",
+    async: false,
+    // Conservative tier, mirrors the gemini-2-5-pro engine (same model/key); raise
+    // once the key's real rate tier is confirmed. The bounded-submit-retry ceiling
+    // is the structural backstop regardless.
+    rate_limit: { rpm: 10, rpd: 1000 },
+    defaults: { timeout_ms: 240_000 },
   },
   "gemini-3-1-pro": {
     provider: "gemini",
@@ -253,7 +262,7 @@ export const PRICE_PER_MTOK: Record<EngineName, { input: number; output: number 
   "perplexity-sonar-deep-research":  { input: 2,    output: 8 },   // CONFIRM (+ reasoning/search fees not modelled)
   "gemini-3-1-pro":                  { input: 2,    output: 12 },  // CONFIRM
   "gemini-2-5-pro":                  { input: 1.25, output: 10 },  // CONFIRM
-  "gemini-deep-research":            { input: 2,    output: 12 },  // CONFIRM (+ research surcharge not modelled)
+  "gemini-deep-research":            { input: 1.25, output: 10 },  // now gemini-2.5-pro (DEC e2955403) — mirrors gemini-2-5-pro; CONFIRM
   "openai-gpt-5-search":             { input: 2,    output: 8 },   // now gpt-5.4-mini (current_web) — placeholder, price CONFIRM
   "openai-gpt-4o-search":            { input: 2.5,  output: 10 },  // now gpt-5.4-mini (current_web alt) — placeholder, price CONFIRM
   "openai-o3-deep-research":         { input: 10,   output: 40 },  // now gpt-5.5-pro (deep_research) — placeholder, price CONFIRM
