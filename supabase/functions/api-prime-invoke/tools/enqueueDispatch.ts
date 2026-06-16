@@ -66,7 +66,7 @@ export const enqueueDispatchTool: Tool = {
     description:
       "Hand a composed research dispatch to the async worker. Use AFTER you have refined the brief and decided which engines will handle which questions — this writes the theo_session + engine_dispatch rows the worker drains, and files a start-of-job wake_delta. The worker fires the engines past the 150s wall and files a completion wake_delta when done. Required: original_brief, refined_prompt, engine_selection_rationale, questions[] (each with prompt, engine_name, role). " +
       "Valid engine_name values: perplexity-sonar-deep-research, perplexity-sonar-pro, perplexity-sonar-reasoning-pro, gemini-deep-research, gemini-3-1-pro, gemini-2-5-pro, openai-o3-deep-research, openai-o4-mini-deep-research, openai-gpt-5-search, openai-gpt-4o-search, anthropic-claude-opus-4-8, anthropic-claude-sonnet-4-6. " +
-      "Search role (openai-gpt-5-search) runs gpt-5.4-mini + Responses-API web_search (2M TPM), not the 45k-capped gpt-5-search-api. " +
+      "Search role (openai-gpt-5-search) runs gpt-5.4-mini + Responses-API web_search (2M TPM), not the 45k-capped gpt-5-search-api. For HEAVY analytical questions use the deep_research role/engines (async gpt-5.5-pro) rather than a sync search engine. " +
       "Valid role values: deep_source, deep_research, current_web, synthesist.",
     input_schema: {
       type: "object",

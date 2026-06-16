@@ -129,28 +129,34 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
   // as-is for now (renaming touches ROLE_TO_ENGINE + enqueue refs; deferred to Theo) — so the keys
   // no longer name their model; the model field below is authoritative.
   //
-  // SEARCH-ROLE TIERING (B1-search 098a2e46 / DEC e2955403). gpt-5-search-api IS a real model but is
-  // hard-capped at 45k TPM / 500 RPM (Tier 2; raising needs Tier 3 = $100 cumulative spend) — real
-  // search load is ~32k tok/call in 2-3 call bursts, so 45k throttles to ~1 call/min and a throttled
-  // search returns degraded/empty. So the search role does NOT use gpt-5-search-api at all: it runs a
-  // CHAT model + Responses-API web_search tool, same mechanism as the deep path. DELIVERED default
-  // search tier = gpt-5.4-mini (2M TPM, openai-gpt-5-search) — smoke-green (B1-search), grounded, no
-  // 45k throttle. HEAVY analytical tier is BLOCKED on OpenAI project access: gpt-5.4 AND gpt-5.5 both
-  // return 403 model_not_found on this project (smoke-verified); the only accessible non-mini model is
-  // gpt-5.5-pro, which is itself 50k-TPM-throttled and is the costly deep tier. Adding a heavy search
-  // engine needs either a model-access grant (Reg, OpenAI project) or a Theo ruling that gpt-5.5-pro
-  // is acceptable as the heavy tier — until then every search role runs gpt-5.4-mini.
+  // SEARCH-ROLE TIERING (B1-search 098a2e46 / DEC e2955403). gpt-5-search-api is hard-capped at
+  // 45k TPM / 500 RPM — real search load is ~32k tok/call in 2-3 call bursts, so 45k throttles to
+  // ~1 call/min and a throttled search returns degraded/empty. So the search role does NOT use
+  // gpt-5-search-api at all: it runs a CHAT model + Responses-API web_search tool, same mechanism as
+  // the deep path. Tiers reflect this OpenAI project's ACTUAL model access + TPM (Reg's account page,
+  // 16 Jun 2026): gpt-5.4-mini 2M TPM, gpt-5.5-pro 200k TPM; gpt-5.4 and gpt-5.5 are NOT on the project
+  // (403 model_not_found, smoke-verified). So:
+  //   DEFAULT search tier  = gpt-5.4-mini (2M TPM, openai-gpt-5-search) — SYNC, fast, smoke-green/grounded.
+  //   HEAVY analytical work = the ASYNC deep_research path (openai-o3-deep-research -> gpt-5.5-pro). A
+  //     SYNC heavy-search engine on gpt-5.5-pro was built, smoke-tested and REVERTED: gpt-5.5-pro +
+  //     web_search runs past the worker's ~150s EF tick ceiling (the sync call hung >150s and 504'd,
+  //     also starving rows queued behind it). gpt-5.5-pro is async-by-nature, so heavy analytical
+  //     questions route through deep_research (already async gpt-5.5-pro), NOT a sync search tier.
+  //     gpt-5.4-mini is the only accessible sync model, hence the sole search tier.
   "openai-o3-deep-research": {
     provider: "openai",
     model: "gpt-5.5-pro",               // repointed from o3-deep-research (deprecated 2026-07-23); deep_research
     async: true,
     poll_staleness_ms: 40 * 60 * 1000,  // 40 min ceiling
-    rate_limit: { rpm: 500 },           // Tier-1 baseline; confirm post-deploy
+    rate_limit: { rpm: 500, tpm: 200_000 }, // gpt-5.5-pro: 200k TPM / 500 RPM (Reg's account, raised from the earlier 50k that threw TPM 429s)
     defaults: { timeout_ms: 60_000 },
   },
   "openai-o4-mini-deep-research": {
     provider: "openai",
-    model: "gpt-5.4",                   // repointed from o4-mini-deep-research (deprecated); Theo's deep cost-cap option
+    // ⚠ gpt-5.4 is NOT accessible on this project (403 model_not_found, smoke-verified B1-search) —
+    // this engine WILL fail if assigned until repointed. Repoint pending Theo (roster/cost lane):
+    // gpt-5.5-pro for a true deep cost-cap-with-access, or gpt-5.4-mini for a cheap shallow option.
+    model: "gpt-5.4",                   // INACCESSIBLE placeholder — see warning above
     async: true,
     poll_staleness_ms: 30 * 60 * 1000,  // 30 min ceiling
     rate_limit: { rpm: 500 },
@@ -163,9 +169,8 @@ export const ENGINES: Record<EngineName, EngineConfig> = {
     rate_limit: { rpm: 500 },           // RPM-paced; the binding 45k-TPM cap is gone (gpt-5.4-mini is 2M TPM)
     defaults: { timeout_ms: 240_000 },
   },
-  // NOTE: a heavy-tier search engine (openai-gpt-5-4 -> gpt-5.4, then gpt-5.5) was added and reverted
-  // during B1-search — both 403'd model_not_found on this OpenAI project. Re-add once access is granted
-  // or Theo rules gpt-5.5-pro acceptable as the heavy tier. See the SEARCH-ROLE TIERING note above.
+  // (no sync openai-gpt-5-pro-search engine — gpt-5.5-pro is too slow for a sync tick; heavy analytical
+  //  routes through the async deep_research path instead. See the SEARCH-ROLE TIERING note above.)
   "openai-gpt-4o-search": {
     provider: "openai",
     model: "gpt-5.4-mini",              // repointed from gpt-4o-search-preview (deprecated 2026-07-23); current_web alt
