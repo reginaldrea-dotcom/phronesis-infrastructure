@@ -17,11 +17,45 @@
 import type { SupabaseClient } from "../tools/types.ts";
 
 const FETCH_TIMEOUT_MS = 8000;
+const FIRECRAWL_TIMEOUT_MS = 30_000; // Firecrawl renders + solves challenges → slower than a raw fetch
 const MAX_CONTENT_BYTES = 800_000; // inline text cap; larger → truncated + attested (blob is the follow-up)
+const FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v1/scrape";
 
 async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// da384853 — challenge-solving fallback. Grand-View-class sites bot-block plain server-side fetches
+// with a Cloudflare MANAGED CHALLENGE (HTTP 403 "Just a moment…", JS-gated, UA/header-independent), so
+// captureSource's raw fetch cannot anchor them. Firecrawl renders the page (executing the challenge)
+// and returns the raw HTML, which we then hash + freeze exactly like a direct capture. Returns the
+// rendered HTML + the upstream status, or null. NO-OP IF FIRECRAWL_API_KEY IS UNSET — so deploying this
+// before the key is provisioned changes nothing; GVR-class sites simply stay cited-not-anchored as before.
+async function captureViaFirecrawl(url: string): Promise<{ content: string; httpStatus: number } | null> {
+  const key = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!key) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FIRECRAWL_TIMEOUT_MS);
+    const res = await fetch(FIRECRAWL_ENDPOINT, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "content-type": "application/json", "authorization": `Bearer ${key}` },
+      // rawHtml = the page's HTML after render/challenge — closest to the direct-fetch snapshot for the
+      // evidence locker's hash. onlyMainContent:false to keep the whole document (it's the frozen source).
+      body: JSON.stringify({ url, formats: ["rawHtml"], onlyMainContent: false, timeout: FIRECRAWL_TIMEOUT_MS - 3000 }),
+    });
+    clearTimeout(timer);
+    if (!res.ok) { console.error(`capture(firecrawl): ${url} -> HTTP ${res.status}`); return null; }
+    const j = await res.json().catch(() => null) as { success?: boolean; data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } } } | null;
+    const html = j?.data?.rawHtml ?? j?.data?.html ?? "";
+    if (!j?.success || !html) { console.error(`capture(firecrawl): ${url} -> empty/unsuccessful`); return null; }
+    return { content: html, httpStatus: j.data?.metadata?.statusCode ?? 200 };
+  } catch (e) {
+    console.error(`capture(firecrawl): ${url} -> ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  }
 }
 
 export interface CaptureInput { url: string; title?: string | null; sourceDate?: string | null; sessionId: string; }
@@ -47,8 +81,11 @@ export async function captureSource(supabase: SupabaseClient, input: CaptureInpu
     if (existing.data?.id) return existing.data.id as string;
   } catch (_) { /* fall through and capture fresh */ }
 
-  // Fetch the content NOW.
-  let content = "", contentType = "", httpStatus = 0, truncated = false;
+  // Fetch the content NOW. Track WHY a direct fetch failed so the Firecrawl fallback fires only for a
+  // BLOCK/timeout (da384853), never for a real binary (a PDF filing → the blob follow-up, not a challenge).
+  let content: string | null = null;
+  let contentType = "", httpStatus = 0, capturedVia = "direct";
+  let directFail: "" | "blocked" | "throw" | "nontext" = "";
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -56,20 +93,38 @@ export async function captureSource(supabase: SupabaseClient, input: CaptureInpu
     clearTimeout(timer);
     httpStatus = res.status;
     contentType = res.headers.get("content-type") ?? "";
-    if (!res.ok) { console.error(`capture: ${url} -> HTTP ${res.status}`); return null; }
-    // v1 inlines TEXT/HTML/JSON/XML. Binary (PDF filings etc.) is left un-anchored pending the blob
-    // follow-up — a loud gap, not a fake row. An empty content-type is tolerated (treated as text).
-    if (contentType !== "" && !/^(text\/|application\/(json|xml|xhtml\+xml))/i.test(contentType)) {
+    if (!res.ok) {
+      directFail = "blocked"; // 403 Cloudflare challenge / 401 / 5xx → Firecrawl-eligible
+      console.error(`capture: ${url} -> HTTP ${res.status} (trying Firecrawl fallback)`);
+    } else if (contentType !== "" && !/^(text\/|application\/(json|xml|xhtml\+xml))/i.test(contentType)) {
+      // v1 inlines TEXT/HTML/JSON/XML. Binary (PDF filings etc.) is left un-anchored pending the blob
+      // follow-up — a loud gap, not a fake row. NOT Firecrawl-eligible (it's a real payload, not a block).
+      directFail = "nontext";
       console.error(`capture: ${url} -> non-text '${contentType}' deferred to blob follow-up`);
-      return null;
+    } else {
+      // empty content-type is tolerated (treated as text)
+      content = await res.text();
     }
-    const raw = await res.text();
-    truncated = raw.length > MAX_CONTENT_BYTES;
-    content = truncated ? raw.slice(0, MAX_CONTENT_BYTES) : raw;
   } catch (e) {
-    console.error(`capture: ${url} -> fetch failed: ${e instanceof Error ? e.message : String(e)}`);
-    return null;
+    directFail = "throw";
+    console.error(`capture: ${url} -> fetch failed: ${e instanceof Error ? e.message : String(e)} (trying Firecrawl fallback)`);
   }
+
+  // Fallback: only for a block or a timeout/throw (a challenge-class failure), never a real binary.
+  if (content === null && (directFail === "blocked" || directFail === "throw")) {
+    const fc = await captureViaFirecrawl(url);
+    if (fc) {
+      content = fc.content;
+      contentType = "text/html"; // Firecrawl returns rendered HTML
+      httpStatus = fc.httpStatus;
+      capturedVia = "firecrawl";
+    }
+  }
+
+  if (content === null) return null; // cited-not-anchored: direct failed AND (no Firecrawl key OR Firecrawl also failed)
+
+  const truncated = content.length > MAX_CONTENT_BYTES;
+  if (truncated) content = content.slice(0, MAX_CONTENT_BYTES);
 
   const contentHash = await sha256Hex(content);
   const nowIso = new Date().toISOString();
@@ -88,7 +143,7 @@ export async function captureSource(supabase: SupabaseClient, input: CaptureInpu
         captured_in_session: input.sessionId,
         client_scope: null, // web/public — no client scope
         content_hash: contentHash,
-        attestation: { http_status: httpStatus, content_type: contentType, bytes: content.length, truncated, fetched_at: nowIso },
+        attestation: { http_status: httpStatus, content_type: contentType, bytes: content.length, truncated, fetched_at: nowIso, captured_via: capturedVia },
         retention_basis: "public_source",
         content,
         content_ref: null,
