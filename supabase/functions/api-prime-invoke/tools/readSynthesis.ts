@@ -35,7 +35,7 @@ export const readSynthesisTool: Tool = {
   definition: {
     name: "read_synthesis",
     description:
-      "Read the assembled synthesis for a theo_session. Default mode returns the synthesis header + per-section list with short excerpts (good for scanning structure and finding flagged join points). Pass knit=true to return the full assembled markdown — use before delivery to verify the document reads as intended. Always surfaces sections flagged needs_review (with join_note) and any in-flight or failed engine_dispatch rows that mean the synthesis is being built on incomplete dispatch.",
+      "Read the assembled synthesis for a theo_session. Default mode returns the synthesis header + per-section list with short excerpts (good for scanning structure and finding flagged join points). Pass knit=true to return the full assembled markdown — use before delivery to verify the document reads as intended. Always surfaces sections flagged needs_review (with join_note), any in-flight or failed engine_dispatch rows that mean the synthesis is being built on incomplete dispatch, and a `citations` block with each citation's resolution status (resolved vs 'unchecked' — i.e. whether a liveness pass has verified it) and anchored state (frozen-snapshot vs live URL), with exact counts.",
     input_schema: {
       type: "object",
       properties: {
@@ -131,6 +131,53 @@ export const readSynthesisTool: Tool = {
       content_md_excerpt: knit ? null : excerpt(s.content_md),
     }));
 
+    // C3 (baton df7cafbb) — surface citation-RESOLUTION status so verification can see resolved-vs-unchecked
+    // THROUGH the tool. resolution defaults 'unchecked' at write_claims time and is only moved by a
+    // separate citation-liveness pass (not yet built — queue.ts:150). Anchoring (source_document_id) is an
+    // INDEPENDENT dimension (frozen snapshot vs live URL); we surface both so "anchored but unchecked" and
+    // "unanchored" are each visible, not conflated. Read is bounded (synthesis citations are dozens, not
+    // thousands); per-row list is capped, counts are always exact.
+    const CITATION_ROW_CAP = 200;
+    const claimIdsQ = await ctx.supabase.from("synthesis_claim").select("id").eq("synthesis_id", synthesisId);
+    if (claimIdsQ.error) return fail(`claim lookup failed: ${claimIdsQ.error.message}`);
+    const claimIds = (claimIdsQ.data ?? []).map(r => r.id as string);
+    let citationRows: Array<{ id: string; claim_id: string; url: string | null; resolution: string; resolved_at: string | null; source_document_id: string | null; note: string | null }> = [];
+    if (claimIds.length > 0) {
+      const citQ = await ctx.supabase
+        .from("claim_citation")
+        .select("id, claim_id, url, resolution, resolved_at, source_document_id, note")
+        .in("claim_id", claimIds);
+      if (citQ.error) return fail(`citation lookup failed: ${citQ.error.message}`);
+      citationRows = (citQ.data ?? []) as typeof citationRows;
+    }
+    const byResolution: Record<string, number> = {};
+    let anchoredCount = 0;
+    for (const c of citationRows) {
+      byResolution[c.resolution] = (byResolution[c.resolution] ?? 0) + 1;
+      if (c.source_document_id) anchoredCount++;
+    }
+    const resolvedCount = citationRows.length - (byResolution["unchecked"] ?? 0);
+    const citations = {
+      total: citationRows.length,
+      // anchoring (frozen snapshot) — independent of resolution
+      anchored: anchoredCount,
+      unanchored: citationRows.length - anchoredCount,
+      // resolution (liveness/verification state) — the C3 surface
+      by_resolution: byResolution,
+      resolved_or_checked: resolvedCount,   // anything not 'unchecked'
+      unchecked: byResolution["unchecked"] ?? 0,
+      rows: citationRows.slice(0, CITATION_ROW_CAP).map(c => ({
+        id: c.id,
+        claim_id: c.claim_id,
+        url: c.url,
+        resolution: c.resolution,
+        resolved_at: c.resolved_at,
+        anchored: !!c.source_document_id,
+        note: c.note,
+      })),
+      rows_truncated: citationRows.length > CITATION_ROW_CAP ? citationRows.length - CITATION_ROW_CAP : 0,
+    };
+
     let systemNote: string;
     if (sectionRows.length === 0) {
       systemNote = "synthesis row exists but has no sections — write sections with write_synthesis_section, starting with section_index 0 (executive summary).";
@@ -140,6 +187,12 @@ export const readSynthesisTool: Tool = {
       systemNote = `${sectionRows.length} sections written; ${flagged.length} flagged for Ghostwheel review (see flagged_sections). Resolve flags before delivery.`;
     } else {
       systemNote = `${sectionRows.length} sections written; nothing flagged. ${knit ? "Knit is in knit_md — verify it reads as intended before delivery." : "Pass knit=true to read the full assembled markdown."}`;
+    }
+    // C3 — append citation-resolution status so the verification signal is in the system line, not just buried.
+    if (citations.total > 0 && citations.resolved_or_checked === 0) {
+      systemNote += ` CITATIONS: ${citations.total} present, ${citations.anchored} anchored, but 0 resolved (all 'unchecked') — no citation-liveness pass has run on this synthesis; resolved-vs-unchecked cannot be trusted as verified yet.`;
+    } else if (citations.total > 0) {
+      systemNote += ` CITATIONS: ${citations.resolved_or_checked}/${citations.total} resolved (non-'unchecked'), ${citations.anchored}/${citations.total} anchored.`;
     }
 
     const result: Record<string, unknown> = {
@@ -160,6 +213,7 @@ export const readSynthesisTool: Tool = {
         sources_json: synth.data.sources_json,
       },
       dispatch_counts: counts,
+      citations,                  // C3 (df7cafbb) — per-citation resolution + anchored state, with exact counts
       sections: sectionsOut,
       flagged_sections: flagged,
       "[SYSTEM]": systemNote,
