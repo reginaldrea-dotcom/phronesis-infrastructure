@@ -83,7 +83,7 @@ export const enqueueDispatchTool: Tool = {
           items: {
             type: "object",
             properties: {
-              prompt: { type: "string", description: "The fully-rendered prompt to send to this engine for this question. Already includes any vendor-data labels, source caveats, etc." },
+              prompt: { type: "string", description: "The fully-rendered prompt to send to this engine for this question. Already includes any vendor-data labels, source caveats, etc. For a deep_research engine, FRAME IT AS A RESEARCH TASK and explicitly ask the engine to cite its sources with URLs (e.g. 'research X using current web sources and cite every figure with its source URL'). A prompt that hands the engine the facts and asks it to 'organise/describe' them yields an answer with web searches run but ZERO citations surfaced (A1b 4c1b7fb9: dispatch 586dc5a7 ran 10 searches, returned 0 citations; the same engine returned 16 when the prompt asked for sources) — and the A1a zero-source guard then correctly holds it as ungrounded/partial." },
               engine_name: { type: "string", description: "Canonical engine name. See tool description for valid values." },
               role: { type: "string", enum: ["deep_source", "deep_research", "current_web", "synthesist"], description: "Semantic role this engine plays for this question." },
               role_description: { type: "string", description: "Optional free-form clarification of the role for this specific question." },
