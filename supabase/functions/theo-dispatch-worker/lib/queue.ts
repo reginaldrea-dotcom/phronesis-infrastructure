@@ -156,13 +156,46 @@ export function countSources(responseRaw: string | null | undefined): number {
   return distinct.size;
 }
 
+// C1 (baton 9283c919) — worker act-trail. Every TERMINAL dispatch transition (completed /
+// partial / failed) leaves an execution_ledger row keyed to theo_session_id, so the worker leg
+// is no longer "invisible until queried": a finishing OR dying dispatch posts a queryable worker
+// execution record into the session (read_execution_ledger surfaces it). Theo's own post-mortem
+// found execution_ledger EMPTY for a real dispatched session — this closes that gap. Best-effort:
+// an audit-write failure must NEVER fail the dispatch finalize it records, so it's caught here.
+// Only fires when the CAS update actually transitioned a row (select returns it) — a stale write
+// (0 rows matched) records nothing, which is correct.
+const LEDGER_FIELDS = "theo_session_id, engine_name, role_in_dispatch, source_count";
+interface LedgerRow { theo_session_id: string; engine_name: string; role_in_dispatch: string; source_count: number | null }
+
+async function writeWorkerLedger(
+  supabase: SupabaseClient,
+  rowId: string,
+  r: LedgerRow,
+  status: "completed" | "partial" | "failed",
+  outcome: string,
+): Promise<void> {
+  try {
+    await supabase.from("execution_ledger").insert({
+      lineage: "theo-dispatch-worker",
+      session_id: r.theo_session_id,          // text session key (NOT NULL) — the theo_session id
+      via: "worker",
+      tool: `dispatch:${status}`,
+      input_summary: `${r.engine_name} / ${r.role_in_dispatch} (dispatch ${rowId})`,
+      outcome: outcome.length > 2000 ? outcome.slice(0, 2000) + "…" : outcome,
+      theo_session_id: r.theo_session_id,      // uuid FK (A4) — keys the row to the session for audits
+    });
+  } catch (e) {
+    console.error("writeWorkerLedger", e);
+  }
+}
+
 export async function markCompleted(
   supabase: SupabaseClient,
   rowId: string,
   args: { response_raw: string; tokens_in?: number; tokens_out?: number; cost_usd?: number },
   expectedStatus: "pending" | "dispatched",
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("engine_dispatch")
     .update({
       status: "completed",
@@ -174,8 +207,15 @@ export async function markCompleted(
       cost_usd: args.cost_usd ?? null,
     })
     .eq("id", rowId)
-    .eq("status", expectedStatus);
+    .eq("status", expectedStatus)
+    .select(LEDGER_FIELDS);
   if (error) throw new Error(`markCompleted failed: ${error.message}`);
+  const r = (data ?? [])[0] as LedgerRow | undefined;
+  if (r) {
+    await writeWorkerLedger(supabase, rowId, r, "completed",
+      `completed: ${r.source_count ?? 0} sources, ${args.tokens_in ?? 0}/${args.tokens_out ?? 0} tok` +
+      (args.cost_usd != null ? `, $${args.cost_usd}` : ""));
+  }
 }
 
 export async function markPartial(
@@ -184,7 +224,7 @@ export async function markPartial(
   args: { response_raw: string; reason: string; tokens_in?: number; tokens_out?: number; cost_usd?: number },
   expectedStatus: "pending" | "dispatched",
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("engine_dispatch")
     .update({
       status: "partial",
@@ -197,8 +237,11 @@ export async function markPartial(
       cost_usd: args.cost_usd ?? null,
     })
     .eq("id", rowId)
-    .eq("status", expectedStatus);
+    .eq("status", expectedStatus)
+    .select(LEDGER_FIELDS);
   if (error) throw new Error(`markPartial failed: ${error.message}`);
+  const r = (data ?? [])[0] as LedgerRow | undefined;
+  if (r) await writeWorkerLedger(supabase, rowId, r, "partial", `partial: ${args.reason}`);
 }
 
 // rawBody (baton 143072ab #3): the provider's raw error response, persisted
@@ -221,12 +264,15 @@ export async function markFailed(
     const s = typeof rawBody === "string" ? rawBody : JSON.stringify(rawBody);
     if (s) patch.response_raw = s.length > RAW_ERROR_MAX ? s.slice(0, RAW_ERROR_MAX) + "…[truncated]" : s;
   }
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("engine_dispatch")
     .update(patch)
     .eq("id", rowId)
-    .eq("status", expectedStatus);
+    .eq("status", expectedStatus)
+    .select(LEDGER_FIELDS);
   if (error) throw new Error(`markFailed failed: ${error.message}`);
+  const r = (data ?? [])[0] as LedgerRow | undefined;
+  if (r) await writeWorkerLedger(supabase, rowId, r, "failed", `failed: ${errorDetail}`);
 }
 
 export interface SessionTerminalCounts {
