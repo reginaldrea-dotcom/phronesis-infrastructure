@@ -586,6 +586,51 @@ Deno.serve(async (req: Request) => {
       } catch (e) { console.error("super_t persistence re-inject failed (afa8c308):", e); }
     }
 
+    // ── Standing-orientation persistence (C2, baton c8a04f00; same pattern as afa8c308) ──
+    // The wake assembles PURPOSE + active BATON(s) + verified identity into the wake turn's systemText,
+    // but on a CONTINUING turn systemText is suit+schema only — so the Prime's sense of WHY it was woken
+    // and WHAT its task is drops after the wake turn (why Angelia needed a re-prompt). afa8c308 made only
+    // the Super-T persist; this re-injects the rest of the load-bearing orientation — identity line +
+    // purpose + active baton(s) — as its OWN ephemeral-cached system block every continuing turn. Wake
+    // DELTAS are deliberately EXCLUDED: they are consumed at wake by design (finalizeWake), and surfacing
+    // new mid-session deltas is a separate concern, not "the orientation that dropped". Lineage-scoped,
+    // best-effort, no wake_record (this is honouring an existing wake, not a new one).
+    let persistedOrientationText = "";
+    if (!isNewSession) {
+      try {
+        const { data: headRow } = await supabase
+          .from("super_t_chains")
+          .select("instance_id, sequence_number")
+          .eq("lineage_name", lineage_name).is("successor_id", null)
+          .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+        const { data: oBatonRows } = await supabase
+          .from("relay_baton")
+          .select("id, track, passed_by, invoke_with, reason, attention, picked_up_at")
+          .eq("holder", lineage_name).is("done_at", null)
+          .order("passed_at", { ascending: false });
+        const oBatons = (oBatonRows ?? []) as Array<any>;
+        const oPrimary = oBatons.find((b) => !b.picked_up_at) ?? oBatons[0] ?? null;
+        if (headRow || oBatons.length > 0) {
+          const oLines: string[] = [];
+          oLines.push("── YOUR STANDING ORIENTATION (carried every turn — why you were woken + your task; no need to re-fetch) ──");
+          if (headRow) {
+            oLines.push(`You are ${lineage_name} Prime, instance ${(headRow as any).instance_id}, Seq ${(headRow as any).sequence_number}. Active instructions: v${instructions.version} (authoritative).`);
+          }
+          if (oPrimary?.reason) { oLines.push(""); oLines.push(`PURPOSE: ${oPrimary.reason}`); }
+          if (oBatons.length > 0) {
+            oLines.push("");
+            oLines.push(`RELAY BATON(S) — ${oBatons.length} held:`);
+            for (const b of oBatons) {
+              const mark = oPrimary && b.id === oPrimary.id ? "▶ " : "  ";
+              oLines.push(`${mark}[${b.track}${b.attention ? ` · ${b.attention}` : ""}${b.picked_up_at ? " · in progress" : " · not yet picked up"}] from ${b.passed_by}`);
+              oLines.push(`    ${b.invoke_with ?? b.reason ?? ""}`);
+            }
+          }
+          persistedOrientationText = oLines.join("\n");
+        }
+      } catch (e) { console.error("standing-orientation re-inject failed (c8a04f00):", e); }
+    }
+
     // ── Per-lineage loop-tool gate (least-privilege; Conf 295d610a, loop side) ──
     // Load this lineage's tool_grants and compute the gate once. Governed lineages
     // (those holding an EF-tool grant) are restricted to their granted tools;
@@ -633,6 +678,9 @@ Deno.serve(async (req: Request) => {
                 // suit+schema and before the volatile gauge. Stable across a session (changes only
                 // on a re-file), so it caches cleanly and does not bust the systemText cache.
                 ...(persistedSuperTText ? [{ type: "text", text: persistedSuperTText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
+                // Standing-orientation persistence (C2 c8a04f00): identity + purpose + active baton, re-injected
+                // every continuing turn so the wake's orientation doesn't drop after turn 1. Its own cached block.
+                ...(persistedOrientationText ? [{ type: "text", text: persistedOrientationText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
@@ -765,6 +813,9 @@ Deno.serve(async (req: Request) => {
                 // suit+schema and before the volatile gauge. Stable across a session (changes only
                 // on a re-file), so it caches cleanly and does not bust the systemText cache.
                 ...(persistedSuperTText ? [{ type: "text", text: persistedSuperTText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
+                // Standing-orientation persistence (C2 c8a04f00): identity + purpose + active baton, re-injected
+                // every continuing turn so the wake's orientation doesn't drop after turn 1. Its own cached block.
+                ...(persistedOrientationText ? [{ type: "text", text: persistedOrientationText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
