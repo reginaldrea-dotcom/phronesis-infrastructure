@@ -40,36 +40,43 @@ that index is the keeper's, not this service's.
 
 `GET /health` — reports pandoc presence + whether creds/auth are configured (no secrets leaked).
 
-## Run locally
+## Deployment
+
+Hosted on **Fly.io** (`phronesis-markdown-bridge`); Fly builds the image on its remote builder from the
+`Dockerfile`, so no local Docker is needed.
 
 ```bash
-docker build -t markdown-bridge services/markdown-bridge
-docker run -p 8080:8080 \
-  -e BRIDGE_API_KEY=dev-secret \
-  -e GOOGLE_SERVICE_ACCOUNT_JSON="$(cat sa.json)" \
-  markdown-bridge
-curl localhost:8080/health
+fly deploy -c services/markdown-bridge/fly.toml     # with FLY_API_TOKEN set
 ```
 
-## Deploy (host-agnostic — pick one)
+### Secrets (set via `fly secrets set -a phronesis-markdown-bridge`, never in the repo)
 
-- **Cloud Run** (recommended; serverless, scales to zero, ~free at this volume):
-  `gcloud run deploy markdown-bridge --source services/markdown-bridge --region <r> --no-allow-unauthenticated`
-  set env `BRIDGE_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`.
-- **Fly.io / Railway**: `fly launch` / Railway from the Dockerfile; set the same two env vars.
-- **Hetzner VPS (£3–5/mo, per the synthesis)**: `docker run` behind a reverse proxy.
+- `BRIDGE_API_KEY` — the `/render` (and `/oauth/start`) auth key.
+- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — the OAuth client (Google Cloud Console).
+- `GOOGLE_OAUTH_REFRESH_TOKEN` — minted once via the consent flow below.
 
-## GATED ON PROVISIONING (the build is done; these are Reg's to supply)
+## Drive auth — OAuth USER delegation (free, no Workspace)
 
-1. **A host** — Cloud Run / Fly / Railway / VPS (decision + account). Recommendation: Cloud Run.
-2. **Drive credentials** — a Google **service account** with write access to the delivery folder,
-   as `GOOGLE_SERVICE_ACCOUNT_JSON` (raw JSON or base64). Share the delivery folder with the SA email.
-3. **The house `reference.docx`** — the styled Word template (house style). A design asset (Eames / Reg).
-   Until it exists, docx renders against pandoc's default reference; the wiring already accepts a real one
-   via `reference_docx_drive_id`.
+A **service account has zero storage quota in a personal My Drive** (`storageQuotaExceeded` on upload),
+and the SA-copy workaround fails too (a copy is owned by the SA that made it). So the service uploads
+**as the user**: rendered files are owned by the user and count against their 15 GB.
 
-Once those land: deploy, set `BRIDGE_API_KEY` + the service URL into the EF env so a Prime tool
-(`render_document`, a thin follow-on) can POST to `/render`, then smoke a real MD → docx → Drive round-trip.
+One-time consent (mint the refresh token from the browser — no local Python):
+
+1. **Google Cloud Console** (project `phronesis-markdown-bridge`):
+   - OAuth consent screen → **External**, publishing status **Production** (so the refresh token doesn't
+     expire after 7 days; `drive.file` is a *sensitive* — not *restricted* — scope, so unverified
+     self-use is fine), add the Drive-owning account as a user.
+   - Credentials → create **OAuth client ID** → type **Web application** →
+     authorized redirect URI `https://phronesis-markdown-bridge.fly.dev/oauth/callback`.
+   - Set the client id/secret as the two Fly secrets above; deploy.
+2. Visit `https://phronesis-markdown-bridge.fly.dev/oauth/start?k=<BRIDGE_API_KEY>` in the owning
+   account's browser → consent → `/oauth/callback` shows the refresh token.
+3. `fly secrets set GOOGLE_OAUTH_REFRESH_TOKEN=<token> -a phronesis-markdown-bridge`. Done — uploads now
+   land in any My Drive folder you point `/render` at, owned by you.
+
+The house **`reference.docx`** stays optional (a design asset, Eames/Reg); until it exists docx renders
+against pandoc's default reference, and the wiring already accepts a real one via `reference_docx_drive_id`.
 
 ## Caller side (follow-on, not in this baton)
 

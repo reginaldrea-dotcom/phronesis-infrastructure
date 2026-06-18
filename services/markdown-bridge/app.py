@@ -10,6 +10,13 @@
 # Pandoc is a native binary + the docx path wants a real reference.docx, neither of which runs in a
 # Deno Edge Function or a Cloudflare Worker — so this is a small container service the Prime calls once.
 #
+# DRIVE AUTH — OAuth USER delegation (not a service account). A service account has ZERO storage quota
+# in a personal "My Drive" (storageQuotaExceeded on upload), and the SA-copy workaround fails too (a copy
+# is owned by the SA that made it). So the service authenticates AS THE USER via a stored refresh token:
+# rendered files are owned by the user and count against their 15GB — free, no Workspace. The one-time
+# consent is done through /oauth/start -> /oauth/callback (below); the resulting refresh token is set as
+# the GOOGLE_OAUTH_REFRESH_TOKEN secret.
+#
 # CONTRACT
 #   POST /render   (auth: header  X-Bridge-Key == env BRIDGE_API_KEY, constant-time)
 #     body: {
@@ -22,32 +29,28 @@
 #     -> { "ok": true, "stem": "...", "renderings": [ {"format":"docx","drive_id":"...","name":"...","bytes":N}, ... ] }
 #
 # The caller maps each returned drive_id back to the canonical Markdown artifact via drive_assets
-# (standard §3) — that mapping is the keeper's index, not this service's job. This service does the
-# render + the SINGLE upload and returns the ids.
-#
-# GATED ON PROVISIONING (see README): a host with pandoc installed, a Google service-account credential
-# with write access to the delivery folder (GOOGLE_SERVICE_ACCOUNT_JSON), and the house reference.docx.
+# (standard §3) — that index is the keeper's, not this service's. This service does the render + the
+# SINGLE upload and returns the ids.
 
-import base64
 import hashlib
 import hmac
-import json
 import os
 import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import RedirectResponse, PlainTextResponse
 from pydantic import BaseModel
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as UserCredentials
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-app = FastAPI(title="Markdown Bridge", version="1.0")
+app = FastAPI(title="Markdown Bridge", version="1.1")
 
-# Formats this service can emit. docx is the primary path (uses the house reference.docx).
-# pdf uses weasyprint as the pandoc engine — HTML/CSS based, no LaTeX/texlive, so the image stays lean
-# and prose+table documents render well. Swap to a LaTeX engine only if heavy math is ever needed.
+# docx is the primary path (uses the house reference.docx). pdf uses weasyprint as the pandoc engine —
+# HTML/CSS based, no LaTeX/texlive — so the image stays lean and prose+table documents render well.
 SUPPORTED_FORMATS = {"docx", "pdf"}
 PDF_ENGINE = "weasyprint"
 
@@ -55,6 +58,14 @@ DRIVE_MIME = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pdf": "application/pdf",
 }
+
+# drive.file = the narrowest ("sensitive", not "restricted") Drive scope: per-file access to files the
+# app creates. The SA smoke confirmed this scope accepts create-with-parent (it reached the quota check),
+# so an OAuth user with the same scope can create the rendering in the target folder, owned by the user.
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+TOKEN_URI = "https://oauth2.googleapis.com/token"
+# Where Google sends the consent redirect. Override via env if the app URL changes.
+REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "https://phronesis-markdown-bridge.fly.dev/oauth/callback")
 
 
 class RenderRequest(BaseModel):
@@ -75,25 +86,40 @@ def _authorized(presented: str | None) -> bool:
     )
 
 
+def _oauth_client():
+    cid = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    csec = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    if not (cid and csec):
+        raise HTTPException(503, "GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET not configured")
+    return cid, csec
+
+
 def _drive():
-    """Drive client from a service-account credential (env GOOGLE_SERVICE_ACCOUNT_JSON: raw JSON or base64)."""
-    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if not raw:
-        raise HTTPException(503, "GOOGLE_SERVICE_ACCOUNT_JSON not configured")
-    try:
-        info = json.loads(raw)
-    except json.JSONDecodeError:
-        info = json.loads(base64.b64decode(raw))
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/drive.file"]
+    """Drive client from the stored OAuth USER refresh token (uploads owned by the user, against their quota)."""
+    rt = os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
+    if not rt:
+        raise HTTPException(503, "GOOGLE_OAUTH_REFRESH_TOKEN not configured — run the /oauth/start consent once")
+    cid, csec = _oauth_client()
+    creds = UserCredentials(
+        token=None, refresh_token=rt, client_id=cid, client_secret=csec,
+        token_uri=TOKEN_URI, scopes=SCOPES,
     )
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
+def _flow() -> Flow:
+    cid, csec = _oauth_client()
+    return Flow.from_client_config(
+        {"web": {"client_id": cid, "client_secret": csec,
+                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                 "token_uri": TOKEN_URI, "redirect_uris": [REDIRECT_URI]}},
+        scopes=SCOPES, redirect_uri=REDIRECT_URI,
+    )
+
+
 def _fetch_reference(drive, file_id: str, dest: Path) -> None:
     """Download the cached house reference.docx from Drive to dest."""
-    data = drive.files().get_media(fileId=file_id).execute()
-    dest.write_bytes(data)
+    dest.write_bytes(drive.files().get_media(fileId=file_id).execute())
 
 
 def _pandoc(md_path: Path, out_path: Path, fmt: str, reference: Path | None) -> None:
@@ -102,7 +128,6 @@ def _pandoc(md_path: Path, out_path: Path, fmt: str, reference: Path | None) -> 
         cmd += ["--reference-doc", str(reference)]
     if fmt == "pdf":
         cmd += [f"--pdf-engine={PDF_ENGINE}"]
-    # One deterministic pass, no LLM, no iteration. Bounded so a malformed doc can't hang the host.
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
         raise HTTPException(422, f"pandoc {fmt} failed: {proc.stderr.strip()[:500]}")
@@ -112,16 +137,42 @@ def _upload(drive, path: Path, name: str, mime: str, folder_id: str) -> str:
     media = MediaFileUpload(str(path), mimetype=mime, resumable=False)
     created = drive.files().create(
         body={"name": name, "parents": [folder_id]},
-        media_body=media,
-        fields="id",
-        supportsAllDrives=True,
+        media_body=media, fields="id", supportsAllDrives=True,
     ).execute()
     return created["id"]
 
 
+# ── One-time OAuth consent (mint the user refresh token) ────────────────────────────────────────────
+# Visit /oauth/start?k=<BRIDGE_API_KEY> in the OWNING user's browser, consent, and /oauth/callback shows
+# the refresh token to set as the GOOGLE_OAUTH_REFRESH_TOKEN secret. /start is gated by the bridge key so
+# a random visitor can't kick it off; /callback only ever yields the consenter their OWN token.
+@app.get("/oauth/start")
+def oauth_start(k: str = Query(default="")):
+    if not _authorized(k):
+        raise HTTPException(401, "bad or missing ?k=<BRIDGE_API_KEY>")
+    flow = _flow()
+    url, _ = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
+    return RedirectResponse(url)
+
+
+@app.get("/oauth/callback")
+def oauth_callback(code: str = Query(default="")):
+    if not code:
+        raise HTTPException(400, "missing ?code")
+    flow = _flow()
+    flow.fetch_token(code=code)
+    rt = flow.credentials.refresh_token
+    if not rt:
+        return PlainTextResponse(
+            "No refresh token returned. Re-run /oauth/start (it forces prompt=consent); if this persists, "
+            "revoke the app's access at myaccount.google.com/permissions and try again.\n", status_code=400)
+    return PlainTextResponse(
+        "Consent OK. Set this as the Fly secret GOOGLE_OAUTH_REFRESH_TOKEN, then close this tab:\n\n"
+        f"{rt}\n")
+
+
 @app.get("/health")
 def health():
-    # Reports readiness without leaking secrets: is pandoc present, are creds configured.
     try:
         v = subprocess.run(["pandoc", "--version"], capture_output=True, text=True, timeout=10)
         pandoc_ok = v.returncode == 0
@@ -131,8 +182,9 @@ def health():
     return {
         "ok": pandoc_ok,
         "pandoc": pandoc_ver,
-        "drive_creds": bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")),
         "auth_configured": bool(os.environ.get("BRIDGE_API_KEY")),
+        "oauth_client_configured": bool(os.environ.get("GOOGLE_OAUTH_CLIENT_ID") and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")),
+        "oauth_refresh_token_set": bool(os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")),
     }
 
 
@@ -159,7 +211,7 @@ def render(req: RenderRequest, x_bridge_key: str | None = Header(default=None)):
             reference = tmpd / "reference.docx"
             _fetch_reference(drive, req.reference_docx_drive_id, reference)
 
-        # Single render pass per requested format, then a SINGLE upload each (baton: single-pass, single-upload).
+        # Single render pass per format, then a SINGLE upload each (baton: single-pass, single-upload).
         for fmt in fmts:
             out_path = tmpd / f"{req.stem}.{fmt}"
             _pandoc(md_path, out_path, fmt, reference)
