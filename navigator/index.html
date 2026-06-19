@@ -227,6 +227,51 @@ id<html lang="en">
     .bp details.lane .lbody{max-height:340px;overflow-y:auto;} /* Fix 4: full unclaimed lane uncapped but scrollable, nothing buried */
     .bp :focus-visible{outline:2px solid var(--invoke);outline-offset:2px;}
     @media (prefers-reduced-motion:reduce){.bp *{transition:none!important;}}
+    /* ===== DELIVERABLE VIEW (cfaaa070; Eames SP f729d071). Outcome-oriented, legibility-first — older eyes, decision-at-a-glance. ===== */
+    #deliverables{max-width:940px}
+    .dv-banner{font-size:14.5px;color:var(--badge-amber);background:#FBF3E6;border:1px solid #EBD9B8;padding:11px 18px;border-radius:4px;margin-bottom:26px;font-style:italic}
+    .dv-banner code{font-family:'IBM Plex Mono',monospace;font-style:normal;font-size:13px}
+    .dv-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:26px 30px;margin-bottom:22px;box-shadow:0 1px 5px rgba(0,0,0,.06)}
+    .dv-card.done{opacity:.6}
+    .dv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+    .dv-name{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;line-height:1.12;color:var(--text)}
+    .dv-outcome{font-size:16px;line-height:1.5;color:var(--muted);margin-top:9px;max-width:64ch}
+    .dv-status{flex:none;font-family:'Cormorant SC',serif;font-size:15px;letter-spacing:1.5px;font-weight:600;padding:8px 16px;border-radius:4px;white-space:nowrap}
+    .dv-status.NOT_STARTED{background:var(--bg-dim);color:var(--muted)}
+    .dv-status.IN_PROGRESS{background:#E3ECF8;color:var(--badge-blue)}
+    .dv-status.BLOCKED{background:var(--badge-red);color:#fff}
+    .dv-status.DONE{background:#E2F1E7;color:var(--badge-green)}
+    /* THE NEXT STEP — the loudest thing on the card */
+    .dv-next{margin-top:22px;font-size:20px;line-height:1.4;font-weight:600;display:flex;align-items:center;gap:13px;padding:17px 22px;border-radius:5px}
+    .dv-next.act{background:#100F0D;color:#FAFAF8}
+    .dv-next.act .baton{color:#fff}
+    .dv-next.act .prime{color:#FFCF6E}
+    .dv-next.flight{background:#EAF0F8;color:var(--badge-blue);font-weight:500}
+    .dv-next .arrow{font-size:23px;line-height:1}
+    /* BLOCKED band — louder still */
+    .dv-block{margin-top:22px;background:var(--badge-red);color:#fff;border-radius:5px;padding:17px 22px}
+    .dv-block .bhead{font-size:21px;font-weight:700;letter-spacing:.4px;display:flex;align-items:center;gap:11px}
+    .dv-block .bnote{font-size:16px;line-height:1.55;margin-top:9px;color:#FCE7E7}
+    .dv-meta{display:flex;align-items:center;gap:18px;margin-top:18px;font-size:14.5px;color:var(--muted);flex-wrap:wrap}
+    .dv-prog{font-weight:600;color:var(--text)}
+    .dv-progbar{flex:1;max-width:220px;height:8px;background:var(--bg-dim);border-radius:4px;overflow:hidden}
+    .dv-progbar i{display:block;height:100%;background:var(--badge-green)}
+    .dv-novalue{font-size:13px;color:var(--badge-amber);font-style:italic;border:1px solid #EBD9B8;background:#FBF3E6;padding:3px 11px;border-radius:3px}
+    .dv-expand{margin-top:16px}
+    .dv-expand summary{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1.2px;color:var(--light);cursor:pointer;list-style:none;padding:4px 0}
+    .dv-expand summary::-webkit-details-marker{display:none}
+    .dv-chain{margin-top:12px;border-top:1px solid var(--border-lt);padding-top:6px}
+    .dv-step{display:flex;align-items:center;gap:14px;padding:10px 0;font-size:15px;border-bottom:1px solid var(--border-lt)}
+    .dv-step:last-child{border-bottom:none}
+    .dv-step .pos{flex:none;width:27px;height:27px;border-radius:50%;background:var(--bg-dim);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+    .dv-step.DONE .pos{background:#E2F1E7;color:var(--badge-green)}
+    .dv-step.ACTIVE .pos{background:#E3ECF8;color:var(--badge-blue)}
+    .dv-step.HALTED .pos{background:var(--badge-red);color:#fff}
+    .dv-step .stk{flex:1;color:var(--text)}
+    .dv-step .vk{font-size:11px;color:var(--light);font-style:italic}
+    .dv-step .sstate{font-size:12px;letter-spacing:.8px;font-variant:small-caps;color:var(--muted);min-width:74px;text-align:right}
+    .dv-step .sholder{font-size:13px;color:var(--light);min-width:96px;text-align:right}
+    .dv-empty{font-size:16px;color:var(--muted);font-style:italic;padding:48px 0;text-align:center}
   </style>
 </head>
 <body>
@@ -242,6 +287,7 @@ id<html lang="en">
   <button onclick="showPage('wheel',this)">Tiles</button>
   <button onclick="showPage('notices',this)">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
   <button onclick="showPage('batons',this)">Baton board</button>
+  <button onclick="showPage('deliverables',this)">Deliverables</button>
 </nav>
 
 <!-- ROUND TABLE -->
@@ -306,6 +352,12 @@ id<html lang="en">
       <details class="lane"><summary>Unclaimed — never picked up <span id="bpCtUnpicked"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpUnpickedList"></div></details>
     </div>
   </div>
+</div>
+
+<div id="deliverables" class="page">
+  <div class="section-label">DELIVERABLES — what each outcome needs next, and how close it is to banking value</div>
+  <div id="dvBanner"></div>
+  <div id="dvList"><div class="dv-empty">Loading…</div></div>
 </div>
 
 <!-- INVOKE MODAL -->
@@ -801,7 +853,7 @@ async function saveRtAdmin(){
     errEl.textContent='Error: '+e.message;
   }
 }
-function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');if(id==='batons')loadBatonPanel();}
+function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');if(id==='batons')loadBatonPanel();if(id==='deliverables')loadDeliverables();}
 
 /* ===== BATON BOARD (Eames SP 76019f72; prototype 383aa695). Derive-from-rows; reads via sb() (anon + RLS). ===== */
 const BP_KINDS={
@@ -916,6 +968,106 @@ async function bpPromote(btn){
     await loadBatonPanel();
   }catch(e){console.error('promote failed',e);btn.textContent=orig;btn.disabled=false;}
 }
+/* ===== DELIVERABLES VIEW (cfaaa070; Eames SP f729d071). Renders deliverable_board to the legibility contract.
+   Scaffolded off the spec now (card layout + computed contract); reads the live deliverable_board view the
+   moment it lands (Connie). Until then, shows sample data shaped exactly to the contract so layout is final. ===== */
+
+// Sample data (shape == the normalized deliverable the renderer consumes). Demonstrates all three loud states:
+// blocked band, actionable next, in-flight. Replaced by live deliverable_board rows when the view exists.
+const DV_SAMPLE=[
+ {id:'s1',name:'AESSEAL live report — delivery',outcome:'The AESSEAL report renders to a frozen, two-URL snapshot delivered to the client with no further intervention.',owner:'reg',rank:null,chain:[
+   {pos:1,track:'recompute engine',holder:'hephaestus',value_kind:'standalone',state:'DONE'},
+   {pos:2,track:'freeze + two-URL render',holder:'hephaestus',value_kind:'chain_only',state:'HALTED',halt_kind:'gated',halt_note:'Waiting on Connie’s freeze-contract DDL (the snapshot column) before the freeze endpoint can snapshot the complete payload.'},
+   {pos:3,track:'snapshot → document',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'}
+ ]},
+ {id:'s2',name:'MD to Doc / PDF',outcome:'Create MD in house → external render to docx/pdf → delivered to a Drive address, no further intervention.',owner:'reg',rank:null,chain:[
+   {pos:1,track:'render build (Markdown Bridge)',holder:'hephaestus',value_kind:'chain_only',state:'DONE'},
+   {pos:2,track:'house reference.docx',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'},
+   {pos:3,track:'render_document caller',holder:'hephaestus',value_kind:'chain_only',state:'UNCLAIMED'},
+   {pos:4,track:'hands-off Drive delivery',holder:'antechamber',value_kind:'chain_only',state:'UNCLAIMED'}
+ ]},
+ {id:'s3',name:'AES Engineering report — Phase 0',outcome:'A configurable, dig-down market analysis Sprinter can operate himself, plus frozen snapshot documents.',owner:'reg',rank:null,chain:[
+   {pos:1,track:'competitive read / capture',holder:'theophrastus',value_kind:'chain_only',state:'ACTIVE'},
+   {pos:2,track:'master / version schema',holder:'constantinople',value_kind:'chain_only',state:'UNCLAIMED'},
+   {pos:3,track:'read surface + freeze render',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'},
+   {pos:4,track:'snapshot → document',holder:'hephaestus',value_kind:'chain_only',state:'UNCLAIMED'}
+ ]}
+];
+
+// Per-baton state from relay_baton timestamps (the existing rule). Uses a precomputed `state` if the view
+// exposes one, else derives from done_at / halted_at / picked_up_at (the columns the join carries).
+function dvState(r){
+  if(r.state)return (''+r.state).toUpperCase();
+  if(r.done_at||r.baton_done_at)return 'DONE';
+  if(r.halted_at||r.baton_halted_at)return 'HALTED';
+  if(r.picked_up_at||r.baton_picked_up_at)return 'ACTIVE';
+  return 'UNCLAIMED';
+}
+// ADAPTER: deliverable_board rows (one per baton-in-chain, joined to relay_baton) -> normalized deliverables.
+// select=* so it tolerates whatever columns Connie's view ships; field names read defensively. If the live
+// view names differ, this is the ONE place to adjust on her ping.
+function dvAdapt(rows){
+  const by={};
+  rows.forEach(r=>{
+    const id=r.deliverable_id||r.id;
+    if(!by[id])by[id]={id:id,name:r.deliverable_name||r.name||'(unnamed)',outcome:r.outcome||r.deliverable_outcome||'',owner:r.owner||null,rank:(r.rank==null?null:+r.rank),chain:[]};
+    by[id].chain.push({pos:(r.chain_position!=null?+r.chain_position:by[id].chain.length+1),track:r.track||r.baton_track||r.deliverable_step||'(step)',holder:r.holder||r.baton_holder||'?',value_kind:r.value_kind||'chain_only',halt_kind:r.halt_kind||null,halt_note:r.halt_note||null,baton_id:r.baton_id||null,state:dvState(r)});
+  });
+  return Object.values(by).map(dvCompute);
+}
+// COMPUTED CONTRACT (per the spec): next_baton, status, progress, banks_value.
+function dvCompute(d){
+  d.chain.sort((a,b)=>a.pos-b.pos);
+  d.total=d.chain.length; d.done=d.chain.filter(s=>s.state==='DONE').length;
+  d.allChainOnly=d.chain.length>0&&d.chain.every(s=>s.value_kind==='chain_only');
+  d.banks_value=d.chain.some(s=>s.state==='DONE'&&s.value_kind==='standalone');
+  let next=null; for(const s of d.chain){ if(s.state!=='DONE'){ next=s; break; } } // first not-DONE (lower all DONE in a linear chain)
+  if(d.total>0&&d.done===d.total){ d.status='DONE'; d.next=null; }
+  else if(next&&next.state==='HALTED'){ d.status='BLOCKED'; d.next={kind:'blocked',step:next}; }
+  else if(next&&next.state==='ACTIVE'){ d.status='IN_PROGRESS'; d.next={kind:'flight',step:next}; }
+  else if(next){ d.status=(d.done>0?'IN_PROGRESS':'NOT_STARTED'); d.next={kind:'act',step:next}; }
+  else { d.status='NOT_STARTED'; d.next=null; }
+  return d;
+}
+// Ordering: blocked first, then in-progress-actionable, then in-progress in-flight, then not-started; done collapse.
+// Manual rank overrides (a ranked deliverable sorts ahead, by rank).
+function dvSortKey(d){ if(d.status==='BLOCKED')return 0; if(d.status==='IN_PROGRESS')return (d.next&&d.next.kind==='act')?1:2; if(d.status==='NOT_STARTED')return 3; return 9; }
+function dvOrder(a,b){ const ar=a.rank!=null,br=b.rank!=null; if(ar&&br)return a.rank-b.rank; if(ar!==br)return ar?-1:1; return dvSortKey(a)-dvSortKey(b)||((a.name||'')<(b.name||'')?-1:1); }
+
+function dvCard(d){
+  let nextHtml='';
+  if(d.next&&d.next.kind==='act'){const s=d.next.step;
+    nextHtml='<div class="dv-next act"><span class="arrow">&#8594;</span><span>Next: lift <span class="baton">'+bpEsc(s.track)+'</span> &middot; invoke <span class="prime">'+bpEsc(s.holder)+'</span></span></div>';}
+  else if(d.next&&d.next.kind==='flight'){const s=d.next.step;
+    nextHtml='<div class="dv-next flight"><span class="arrow">&#8594;</span><span>In flight with <strong>'+bpEsc(s.holder)+'</strong> &mdash; '+bpEsc(s.track)+'</span></div>';}
+  else if(d.next&&d.next.kind==='blocked'){const s=d.next.step;const k=BP_KINDS[s.halt_kind]||{glyph:'⊘'};
+    nextHtml='<div class="dv-block"><div class="bhead">'+k.glyph+' BLOCKED at '+bpEsc(s.track)+'</div>'+(s.halt_note?'<div class="bnote">'+bpEsc(s.halt_note)+'</div>':'')+'</div>';}
+  const noVal=(d.status!=='DONE'&&d.allChainOnly)?'<span class="dv-novalue">banks no value until complete</span>':'';
+  const pct=d.total?Math.round(d.done/d.total*100):0;
+  const chain=d.chain.map(s=>'<div class="dv-step '+s.state+'"><div class="pos">'+s.pos+'</div><div class="stk">'+bpEsc(s.track)+' <span class="vk">'+(s.value_kind==='standalone'?'standalone':'chain-only')+'</span></div><span class="sstate">'+s.state.toLowerCase()+'</span><span class="sholder">'+bpEsc(s.holder)+'</span></div>').join('');
+  return '<div class="dv-card'+(d.status==='DONE'?' done':'')+'">'+
+    '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
+    '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+
+    '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+'</div>'+
+    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+chain+'</div></details></div>';
+}
+function dvRender(list){
+  const el=document.getElementById('dvList');
+  if(!list.length){el.innerHTML='<div class="dv-empty">No deliverables yet.</div>';return;}
+  const sorted=list.slice().sort(dvOrder);
+  const live=sorted.filter(d=>d.status!=='DONE'),done=sorted.filter(d=>d.status==='DONE');
+  let html=live.map(dvCard).join('')||'<div class="dv-empty">Nothing open — all deliverables done.</div>';
+  if(done.length)html+='<details class="dv-expand" style="margin-top:10px"><summary>&#9656; Done ('+done.length+')</summary><div style="margin-top:14px">'+done.map(dvCard).join('')+'</div></details>';
+  el.innerHTML=html;
+}
+async function loadDeliverables(){
+  let rows=null;
+  try{ rows=await sb('deliverable_board?select=*'); }catch(e){ rows=null; }
+  const banner=document.getElementById('dvBanner');
+  if(Array.isArray(rows)&&rows.length){ banner.innerHTML=''; dvRender(dvAdapt(rows)); }
+  else { banner.innerHTML='<div class="dv-banner">Showing <strong>sample data</strong> — the <code>deliverable_board</code> view is not live yet. The layout and legibility are final; real deliverables render automatically the moment Connie’s view lands.</div>'; dvRender(DV_SAMPLE.map(dvCompute)); }
+}
+
 document.addEventListener('DOMContentLoaded',loadData);
 </script>
 </body>
