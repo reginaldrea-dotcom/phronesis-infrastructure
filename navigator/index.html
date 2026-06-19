@@ -994,55 +994,48 @@ const DV_SAMPLE=[
  ]}
 ];
 
-// Per-baton state from relay_baton timestamps (the existing rule). Uses a precomputed `state` if the view
-// exposes one, else derives from done_at / halted_at / picked_up_at (the columns the join carries).
-function dvState(r){
-  if(r.state)return (''+r.state).toUpperCase();
-  if(r.done_at||r.baton_done_at)return 'DONE';
-  if(r.halted_at||r.baton_halted_at)return 'HALTED';
-  if(r.picked_up_at||r.baton_picked_up_at)return 'ACTIVE';
-  return 'UNCLAIMED';
+// Connie's deliverable_board is ONE ROW PER DELIVERABLE with the contract precomputed: status, status_order,
+// done_count/total_count, next_track/next_holder/next_state, blocked_at, halt_kind/halt_note,
+// banks_no_value_until_complete, and the chain as jsonb. So the reader maps her fields to the card — no
+// client-side computation. Samples below are reshaped to the same card model so layout review is faithful.
+function dvNextBand(status,nextState,track,holder,haltKind,haltNote,blockedAt){
+  if(status==='BLOCKED')return {kind:'blocked',track:blockedAt||track||'',holder:holder||'',halt_kind:haltKind,halt_note:haltNote};
+  const ns=(''+(nextState||'')).toUpperCase();
+  if(ns==='ACTIVE')return {kind:'flight',track:track||'',holder:holder||''};
+  if(ns==='UNCLAIMED'||(track&&status!=='DONE'))return {kind:'act',track:track||'',holder:holder||''};
+  return null; // DONE / no next step
 }
-// ADAPTER: deliverable_board rows (one per baton-in-chain, joined to relay_baton) -> normalized deliverables.
-// select=* so it tolerates whatever columns Connie's view ships; field names read defensively. If the live
-// view names differ, this is the ONE place to adjust on her ping.
-function dvAdapt(rows){
-  const by={};
-  rows.forEach(r=>{
-    const id=r.deliverable_id||r.id;
-    if(!by[id])by[id]={id:id,name:r.deliverable_name||r.name||'(unnamed)',outcome:r.outcome||r.deliverable_outcome||'',owner:r.owner||null,rank:(r.rank==null?null:+r.rank),chain:[]};
-    by[id].chain.push({pos:(r.chain_position!=null?+r.chain_position:by[id].chain.length+1),track:r.track||r.baton_track||r.deliverable_step||'(step)',holder:r.holder||r.baton_holder||'?',value_kind:r.value_kind||'chain_only',halt_kind:r.halt_kind||null,halt_note:r.halt_note||null,baton_id:r.baton_id||null,state:dvState(r)});
-  });
-  return Object.values(by).map(dvCompute);
+function dvKey(status,next){ if(status==='BLOCKED')return 0; if(status==='IN_PROGRESS')return (next&&next.kind==='act')?1:2; if(status==='NOT_STARTED')return 3; return 9; }
+function dvChain(arr){ return (Array.isArray(arr)?arr:[]).map(c=>({pos:(c.chain_position!=null?c.chain_position:(c.position!=null?c.position:0)),track:c.track||c.baton_track||'(step)',state:(''+(c.state||'UNCLAIMED')).toUpperCase(),holder:c.holder||c.baton_holder||'?',value_kind:c.value_kind||'chain_only'})).sort((a,b)=>a.pos-b.pos); }
+// LIVE: a deliverable_board row -> the card model (consumes the view's precomputed fields directly).
+function dvFromRow(r){
+  const status=(''+(r.status||'NOT_STARTED')).toUpperCase();
+  return {id:r.deliverable_id,name:r.name||'(unnamed)',outcome:r.outcome||'',rank:(r.rank==null?null:+r.rank),status:status,
+    status_order:(r.status_order==null?dvKey(status,null):+r.status_order),done:+(r.done_count||0),total:+(r.total_count||0),
+    banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
+    chain:dvChain(r.chain)};
 }
-// COMPUTED CONTRACT (per the spec): next_baton, status, progress, banks_value.
-function dvCompute(d){
-  d.chain.sort((a,b)=>a.pos-b.pos);
-  d.total=d.chain.length; d.done=d.chain.filter(s=>s.state==='DONE').length;
-  d.allChainOnly=d.chain.length>0&&d.chain.every(s=>s.value_kind==='chain_only');
-  d.banks_value=d.chain.some(s=>s.state==='DONE'&&s.value_kind==='standalone');
-  let next=null; for(const s of d.chain){ if(s.state!=='DONE'){ next=s; break; } } // first not-DONE (lower all DONE in a linear chain)
-  if(d.total>0&&d.done===d.total){ d.status='DONE'; d.next=null; }
-  else if(next&&next.state==='HALTED'){ d.status='BLOCKED'; d.next={kind:'blocked',step:next}; }
-  else if(next&&next.state==='ACTIVE'){ d.status='IN_PROGRESS'; d.next={kind:'flight',step:next}; }
-  else if(next){ d.status=(d.done>0?'IN_PROGRESS':'NOT_STARTED'); d.next={kind:'act',step:next}; }
-  else { d.status='NOT_STARTED'; d.next=null; }
-  return d;
+// SAMPLE: chain-with-states -> the same card model (faithful layout before the view is seeded).
+function dvFromSample(d){
+  const chain=dvChain(d.chain),total=chain.length,done=chain.filter(s=>s.state==='DONE').length;
+  let nx=null; for(const s of chain){ if(s.state!=='DONE'){ nx=s; break; } }
+  let status='NOT_STARTED';
+  if(total>0&&done===total)status='DONE'; else if(nx&&nx.state==='HALTED')status='BLOCKED'; else if(done>0||(nx&&nx.state==='ACTIVE'))status='IN_PROGRESS';
+  const next=!nx?null:(nx.state==='HALTED'?{kind:'blocked',track:nx.track,holder:nx.holder,halt_kind:nx.halt_kind||(d.chain.find(x=>x.pos===nx.pos)||{}).halt_kind,halt_note:(d.chain.find(x=>x.pos===nx.pos)||{}).halt_note}:(nx.state==='ACTIVE'?{kind:'flight',track:nx.track,holder:nx.holder}:{kind:'act',track:nx.track,holder:nx.holder}));
+  return {id:d.id,name:d.name,outcome:d.outcome,rank:(d.rank==null?null:d.rank),status:status,status_order:dvKey(status,next),done:done,total:total,banks_no_value:total>0&&chain.every(s=>s.value_kind==='chain_only'),next:next,chain:chain};
 }
-// Ordering: blocked first, then in-progress-actionable, then in-progress in-flight, then not-started; done collapse.
-// Manual rank overrides (a ranked deliverable sorts ahead, by rank).
-function dvSortKey(d){ if(d.status==='BLOCKED')return 0; if(d.status==='IN_PROGRESS')return (d.next&&d.next.kind==='act')?1:2; if(d.status==='NOT_STARTED')return 3; return 9; }
-function dvOrder(a,b){ const ar=a.rank!=null,br=b.rank!=null; if(ar&&br)return a.rank-b.rank; if(ar!==br)return ar?-1:1; return dvSortKey(a)-dvSortKey(b)||((a.name||'')<(b.name||'')?-1:1); }
+// Order: manual rank first (override), else the view's status_order (blocked < in-progress-actionable < in-flight < not-started < done).
+function dvOrder(a,b){ const ar=a.rank!=null,br=b.rank!=null; if(ar&&br)return a.rank-b.rank; if(ar!==br)return ar?-1:1; return (a.status_order-b.status_order)||(dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.name||'')<(b.name||'')?-1:1); }
 
 function dvCard(d){
   let nextHtml='';
-  if(d.next&&d.next.kind==='act'){const s=d.next.step;
-    nextHtml='<div class="dv-next act"><span class="arrow">&#8594;</span><span>Next: lift <span class="baton">'+bpEsc(s.track)+'</span> &middot; invoke <span class="prime">'+bpEsc(s.holder)+'</span></span></div>';}
-  else if(d.next&&d.next.kind==='flight'){const s=d.next.step;
-    nextHtml='<div class="dv-next flight"><span class="arrow">&#8594;</span><span>In flight with <strong>'+bpEsc(s.holder)+'</strong> &mdash; '+bpEsc(s.track)+'</span></div>';}
-  else if(d.next&&d.next.kind==='blocked'){const s=d.next.step;const k=BP_KINDS[s.halt_kind]||{glyph:'⊘'};
-    nextHtml='<div class="dv-block"><div class="bhead">'+k.glyph+' BLOCKED at '+bpEsc(s.track)+'</div>'+(s.halt_note?'<div class="bnote">'+bpEsc(s.halt_note)+'</div>':'')+'</div>';}
-  const noVal=(d.status!=='DONE'&&d.allChainOnly)?'<span class="dv-novalue">banks no value until complete</span>':'';
+  if(d.next&&d.next.kind==='act')
+    nextHtml='<div class="dv-next act"><span class="arrow">&#8594;</span><span>Next: lift <span class="baton">'+bpEsc(d.next.track)+'</span> &middot; invoke <span class="prime">'+bpEsc(d.next.holder)+'</span></span></div>';
+  else if(d.next&&d.next.kind==='flight')
+    nextHtml='<div class="dv-next flight"><span class="arrow">&#8594;</span><span>In flight with <strong>'+bpEsc(d.next.holder)+'</strong> &mdash; '+bpEsc(d.next.track)+'</span></div>';
+  else if(d.next&&d.next.kind==='blocked'){const k=BP_KINDS[d.next.halt_kind]||{glyph:'⊘'};
+    nextHtml='<div class="dv-block"><div class="bhead">'+k.glyph+' BLOCKED at '+bpEsc(d.next.track)+'</div>'+(d.next.halt_note?'<div class="bnote">'+bpEsc(d.next.halt_note)+'</div>':'')+'</div>';}
+  const noVal=(d.status!=='DONE'&&d.banks_no_value)?'<span class="dv-novalue">banks no value until complete</span>':'';
   const pct=d.total?Math.round(d.done/d.total*100):0;
   const chain=d.chain.map(s=>'<div class="dv-step '+s.state+'"><div class="pos">'+s.pos+'</div><div class="stk">'+bpEsc(s.track)+' <span class="vk">'+(s.value_kind==='standalone'?'standalone':'chain-only')+'</span></div><span class="sstate">'+s.state.toLowerCase()+'</span><span class="sholder">'+bpEsc(s.holder)+'</span></div>').join('');
   return '<div class="dv-card'+(d.status==='DONE'?' done':'')+'">'+
@@ -1061,11 +1054,12 @@ function dvRender(list){
   el.innerHTML=html;
 }
 async function loadDeliverables(){
-  let rows=null;
-  try{ rows=await sb('deliverable_board?select=*'); }catch(e){ rows=null; }
+  let rows=null,exists=false;
+  try{ rows=await sb('deliverable_board?select=*'); exists=Array.isArray(rows); }catch(e){ exists=false; }
   const banner=document.getElementById('dvBanner');
-  if(Array.isArray(rows)&&rows.length){ banner.innerHTML=''; dvRender(dvAdapt(rows)); }
-  else { banner.innerHTML='<div class="dv-banner">Showing <strong>sample data</strong> — the <code>deliverable_board</code> view is not live yet. The layout and legibility are final; real deliverables render automatically the moment Connie’s view lands.</div>'; dvRender(DV_SAMPLE.map(dvCompute)); }
+  if(exists&&rows.length){ banner.innerHTML=''; dvRender(rows.map(dvFromRow)); }
+  else if(exists){ banner.innerHTML='<div class="dv-banner">The <code>deliverable_board</code> view is live but no deliverables are tagged into it yet — showing <strong>sample layout</strong>. Real cards render the moment AC seeds the chains.</div>'; dvRender(DV_SAMPLE.map(dvFromSample)); }
+  else { banner.innerHTML='<div class="dv-banner">Showing <strong>sample data</strong> — the <code>deliverable_board</code> view is not reachable. Layout and legibility are final.</div>'; dvRender(DV_SAMPLE.map(dvFromSample)); }
 }
 
 document.addEventListener('DOMContentLoaded',loadData);
