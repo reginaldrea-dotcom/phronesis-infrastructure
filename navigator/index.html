@@ -1140,13 +1140,16 @@ async function loadDeliverables(){
   if(btn){ btn.disabled=true; btn.classList.add('spinning'); }
   dvCleared.clear(); // refresh is the graduation trigger: cleared-in-view cards re-sort normally now
   const settle=()=>{ if(btn){ btn.disabled=false; btn.classList.remove('spinning'); } dvStamp(); };
+  // Cache bypass via {cache:'no-store'} ONLY — NO query param: PostgREST parses every query param as a
+  // column filter, so a cache-bust like &_=Date.now() 400s ("column _ does not exist"). no-store alone
+  // makes fetch skip the browser cache and always hit the network, which is the whole requirement.
   const nostore={cache:'no-store'};
   let rows;
-  try{ rows=await sb('deliverable_board?select=*&_='+Date.now(),nostore); }
+  try{ rows=await sb('deliverable_board?select=*',nostore); }
   catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; settle(); return; }
   if(Array.isArray(rows)&&rows.length) dvRender(rows.map(dvFromRow));
   else { el.innerHTML='<div class="dv-empty">No deliverables on the board yet.</div>'; dvData={}; }
-  try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc&_='+Date.now(),nostore); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
+  try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc',nostore); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
   catch(e){ dvRenderDismissed([]); }
   settle();
 }
