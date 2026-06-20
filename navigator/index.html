@@ -263,6 +263,28 @@ id<html lang="en">
     .dv-next.fold .dv-fold-hero{font-size:18px;font-weight:600}
     .dv-next.fold .dv-fold-sub{font-size:13.5px;font-weight:500;color:#E4D2A6;letter-spacing:.3px}
     .dv-foldrep{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5B3A6B;background:#F2EBF5;border:1px solid #E0D2E8;border-radius:3px;padding:7px 11px;margin-bottom:10px;word-break:break-all}
+    /* v2.4 — Refresh control + "Updated HH:MM:SS" stamp (re-fetch is cache-bypassed; see loadDeliverables). */
+    .dv-head{display:flex;align-items:center;gap:14px;margin:2px 0 14px}
+    .dv-refresh{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 13px;border-radius:3px;cursor:pointer}
+    .dv-refresh:hover{background:var(--bg-dim);border-color:var(--muted)}
+    .dv-refresh:disabled,.dv-refresh.spinning{opacity:.55;cursor:default}
+    .dv-updated{font-size:12.5px;color:var(--light);font-style:italic}
+    /* v2.6 — sitting-duration: NEUTRAL muted metadata, never a red/overdue alarm (letting work sit is legitimate). */
+    .dv-sitting{font-size:12.5px;color:var(--light);font-style:italic;border:1px solid var(--border-lt);border-radius:3px;padding:2px 9px}
+    /* v2.5 — just-cleared confirmation IN PLACE: grey + pulse where the cursor already is; persists till refresh. */
+    .dv-card.dv-cleared{opacity:.62;border-left:3px solid var(--badge-green)}
+    .dv-card.dv-cleared .dv-name{text-decoration:line-through;color:var(--muted);font-weight:500}
+    .dv-donemark{flex:none;font-family:'Cormorant SC',serif;font-size:15px;letter-spacing:1px;font-weight:600;color:var(--badge-green);background:#E2F1E7;padding:8px 16px;border-radius:4px;white-space:nowrap}
+    .dv-clearrow{margin-top:12px}
+    .dv-cleartidy{font-family:'IBM Plex Mono',monospace;font-size:11.5px;border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:4px 11px;border-radius:3px;cursor:pointer}
+    .dv-cleartidy:hover{background:var(--bg-dim)}
+    @keyframes dvpulse{0%{box-shadow:0 0 0 0 rgba(95,150,95,.55)}100%{box-shadow:0 0 0 16px rgba(95,150,95,0)}}
+    .dv-pulse{animation:dvpulse .9s ease-out}
+    /* v2.5/v2.6 deliberate actions — off the card face, in the Full-chain expansion (keeps the body clean, v2). */
+    .dv-xactions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-lt)}
+    .dv-xbtn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 12px;border-radius:3px;cursor:pointer}
+    .dv-xbtn.clear:hover{background:#E2F1E7;border-color:var(--badge-green);color:var(--badge-green)}
+    .dv-xbtn.dismiss:hover{background:#F4EAE6;border-color:#B4493A;color:#9A5746}
     .dv-actions{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
     .dv-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 12px;border-radius:3px;cursor:pointer}
     .dv-btn:hover{background:var(--bg-dim);border-color:var(--muted)}
@@ -383,8 +405,9 @@ id<html lang="en">
 
 <div id="deliverables" class="page active">
   <div class="section-label">DELIVERABLES — what each outcome needs next, and how close it is to banking value</div>
+  <div class="dv-head"><button class="dv-refresh" id="dvRefreshBtn" onclick="loadDeliverables()" title="Re-fetch the board, bypassing the browser cache">&#8635; Refresh</button><span class="dv-updated" id="dvUpdated"></span></div>
   <div id="dvBanner"></div>
-  <div class="dv-hint">Double-click a card to dismiss it (or a single step inside Full chain). You get an Undo.</div>
+  <div class="dv-hint">Open <em>full chain</em> on a card for Clear (mark done) and Dismiss. Double-clicking a card also dismisses it — you get an Undo.</div>
   <div id="dvList"><div class="dv-empty">Loading…</div></div>
   <div id="dvDismissed"></div>
 </div>
@@ -491,8 +514,9 @@ function updateRtTabs(){
   document.getElementById('btnCloseConf').style.display=hasConf?'':'none';
 }
 
-async function sb(path){
-  const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+async function sb(path,opts){
+  // opts lets a caller bypass the browser cache ({cache:'no-store'}) — see v2.4 (loadDeliverables).
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,Object.assign({headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}},opts||{}));
   if(!r.ok)throw new Error('Supabase '+r.status);
   return r.json();
 }
@@ -504,6 +528,7 @@ async function sbRpc(fn,body){
   const t=await r.text(); return t?JSON.parse(t):null;
 }
 let dvData={}; // id -> card model, so click handlers read data without embedding text in HTML attributes
+let dvCleared=new Set(); // v2.5: deliverable_ids cleared in this view; reset on every refresh (graduation)
 
 async function loadData(){
   document.getElementById('lastRefreshed').textContent='Refreshing…';
@@ -1039,13 +1064,23 @@ function dvFromRow(r){
     status_order:(r.status_order==null?dvKey(status,null):+r.status_order),done:+(r.done_count||0),total:+(r.total_count||0),
     banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
     next_baton_id:r.next_baton_id||null,next_action:r.next_action||'',
+    is_sitting:!!r.is_sitting,quiet_hours:(r.quiet_for_hours==null?null:+r.quiet_for_hours),
     chain:dvChain(r.chain)};
 }
 // Order: the ACTIONABILITY BAND is primary (dvKey: act → in-flight → blocked → done). Manual rank
 // orders WITHIN a band, not across it, so rank can't bury a card out of its band.
 function dvOrder(a,b){ return (dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.rank==null?9999:a.rank)-(b.rank==null?9999:b.rank))||((a.name||'')<(b.name||'')?-1:1); }
 
+// v2.5: a card cleared this view renders its in-place greyed Done confirmation (until the next refresh).
+function dvClearedCard(d){
+  return '<div class="dv-card dv-cleared" data-id="'+d.id+'">'+
+    '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
+    '<div class="dv-donemark">&#10003; Done</div></div>'+
+    '<div class="dv-clearrow"><button class="dv-cleartidy" onclick="dvClearTidy(\''+d.id+'\')">&times; clear from view</button></div></div>';
+}
+function dvSitLabel(h){ if(h==null)return 'Sitting'; const days=Math.round(h/24); return h>=24?('Sitting '+days+'d'):('Sitting '+Math.max(1,Math.round(h))+'h'); }
 function dvCard(d){
+  if(dvCleared.has(d.id)) return dvClearedCard(d); // v2.5 just-cleared, in place
   const act=d.next&&(d.next.kind==='act'||d.next.kind==='fold');
   // v2.2: the lilac tablet (word-led; glyph is reinforcement only) marks this card a CATCH, and the
   // report-artifact pointer lives in the Full-chain dropdown, not on the card face (keep the body clean).
@@ -1064,6 +1099,9 @@ function dvCard(d){
   const actions=act?('<div class="dv-actions"><button class="dv-btn" onclick="dvCopyNext(\''+d.id+'\',event)">Copy next step</button>'+
     (d.next.holder?'<button class="dv-btn" onclick="dvOpenPrime(\''+d.id+'\',event)">Open '+bpEsc(d.next.holder)+'</button>':'')+'</div>'):'';
   const noVal=(d.status!=='DONE'&&d.banks_no_value)?'<span class="dv-novalue">banks no value until complete</span>':'';
+  const sitting=(d.is_sitting&&d.status!=='DONE')?'<span class="dv-sitting">'+dvSitLabel(d.quiet_hours)+'</span>':''; // v2.6 neutral stamp
+  // v2.5/v2.6 deliberate actions live in the expansion (off the face): Clear (mark done) + Dismiss (reversible drop).
+  const xactions=(d.status!=='DONE')?('<div class="dv-xactions"><button class="dv-xbtn clear" onclick="dvClear(\''+d.id+'\',event)">&#10003; Clear (mark done)</button><button class="dv-xbtn dismiss" onclick="dvDismiss(\''+d.id+'\',null)">Dismiss &mdash; we won&rsquo;t do this</button></div>'):'';
   const pct=d.total?Math.round(d.done/d.total*100):0;
   const chain=d.chain.map(s=>{
     const halt=(s.state==='HALTED'&&s.halt_note)?'<span class="shalt">'+((BP_KINDS[s.halt_kind]||{}).glyph||'⊘')+' '+bpEsc(s.halt_note)+'</span>':'';
@@ -1073,8 +1111,8 @@ function dvCard(d){
   return '<div class="dv-card'+(d.status==='DONE'?' done':'')+(act?' dv-act':'')+'" data-id="'+d.id+'" ondblclick="dvDismiss(\''+d.id+'\',event)" title="double-click to dismiss">'+tablet+
     '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
     '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+actions+
-    '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+'</div>'+
-    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+foldrep+chain+'</div></details></div>';
+    '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+sitting+'</div>'+
+    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+foldrep+chain+'</div>'+xactions+'</details></div>';
 }
 function dvRender(list){
   const el=document.getElementById('dvList');
@@ -1093,17 +1131,38 @@ function dvRenderDismissed(list){
   const rows=list.map(x=>'<div class="dv-drow"><span class="dvk">'+(x.kind==='baton'?'step':'deliverable')+'</span><span class="dvl">'+bpEsc(x.label||'(untitled)')+'</span><button class="dv-btn" onclick="dvRestore(\''+(x.kind==='baton'?'baton':'deliverable')+'\',\''+x.id+'\')">Restore</button></div>').join('');
   el.innerHTML='<details class="dv-dismissed"><summary>&#9656; Dismissed ('+list.length+')</summary><div class="dv-dbody">'+rows+'</div></details>';
 }
+// v2.4: every load is a live RE-FETCH that BYPASSES the browser cache (no-store + cache-bust param) —
+// not a re-render off in-memory state, never location.reload. A spinner + "Updated HH:MM:SS" stamp make
+// a refresh visibly acknowledged even when nothing changed. A refresh also graduates v2.5 cleared cards.
+function dvStamp(){ const u=document.getElementById('dvUpdated'); if(!u)return; const d=new Date(),p=n=>(''+n).padStart(2,'0'); u.textContent='Updated '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
 async function loadDeliverables(){
-  const el=document.getElementById('dvList'),banner=document.getElementById('dvBanner');
-  banner.innerHTML='';
+  const el=document.getElementById('dvList'),btn=document.getElementById('dvRefreshBtn');
+  if(btn){ btn.disabled=true; btn.classList.add('spinning'); }
+  dvCleared.clear(); // refresh is the graduation trigger: cleared-in-view cards re-sort normally now
+  const settle=()=>{ if(btn){ btn.disabled=false; btn.classList.remove('spinning'); } dvStamp(); };
+  const nostore={cache:'no-store'};
   let rows;
-  try{ rows=await sb('deliverable_board?select=*'); }
-  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; return; }
+  try{ rows=await sb('deliverable_board?select=*&_='+Date.now(),nostore); }
+  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; settle(); return; }
   if(Array.isArray(rows)&&rows.length) dvRender(rows.map(dvFromRow));
   else { el.innerHTML='<div class="dv-empty">No deliverables on the board yet.</div>'; dvData={}; }
-  try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc'); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
+  try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc&_='+Date.now(),nostore); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
   catch(e){ dvRenderDismissed([]); }
+  settle();
 }
+// v2.5: clear a deliverable IN PLACE — grey + a one-shot pulse where the cursor is, no re-sort. The card
+// stays put (we replace just its node, not the list) until the next refresh graduates it. NO DB write:
+// "Clear" is a view-acknowledgement that a delivered outcome is done; the substrate stays the source of truth.
+function dvClear(id,e){
+  if(e)e.stopPropagation();
+  if(!dvData[id]||dvData[id].status==='DONE')return;
+  dvCleared.add(id);
+  const card=document.querySelector('.dv-card[data-id="'+id+'"]');
+  if(!card){ return; }
+  const tmp=document.createElement('div'); tmp.innerHTML=dvCard(dvData[id]); const nu=tmp.firstElementChild;
+  if(nu){ card.replaceWith(nu); nu.classList.add('dv-pulse'); setTimeout(()=>{nu.classList.remove('dv-pulse');},950); }
+}
+function dvClearTidy(id){ const c=document.querySelector('.dv-card[data-id="'+id+'"]'); if(c)c.remove(); }
 // ---- dismiss / restore (RPC-only) + undo + actionable controls ----
 async function dvDismiss(id,e){
   if(e){ if(e.target&&e.target.closest&&e.target.closest('button,summary,a,.dv-step'))return; e.stopPropagation(); }

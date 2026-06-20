@@ -1,0 +1,9 @@
+# Cloudflare Pages headers — Phronesis Navigator.
+# v2.4 code-staleness fix: always revalidate the HTML entry so a deploy's NEW FEATURES appear without a
+# hard refresh (Ctrl+Shift+R). This is distinct from the DATA-staleness fix (the no-store deliverable_board
+# fetch in index.html). no-cache = revalidate-before-use (304 when unchanged), not "never store".
+# Inline JS/CSS ride in index.html, so revalidating it covers code too; images keep their default caching.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
