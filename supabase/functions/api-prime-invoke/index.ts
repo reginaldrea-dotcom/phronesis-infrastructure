@@ -235,6 +235,13 @@ async function loadOrientation(
     lines.push("None — this is your first tenure. Your suit (your active instructions) is your ground.");
     if (instructionsId) docs.push({ kind: "instructions", id: instructionsId, hash: await sha256Hex(instructionsContent) });
   }
+  lines.push("");
+
+  // C pointer-list at wake (conf d36d9609) — the same "live MSTs for current work" pointers the
+  // per-turn rail carries, surfaced on the wake turn too. Pointers only, so NOT a manifest doc
+  // (no body is injected; fidelity audit covers whole-document injections, not this derived index).
+  const mstPointers = await renderMstPointers(supabase, lineage);
+  if (mstPointers) { lines.push(mstPointers); lines.push(""); }
   lines.push("═══════════════════════════════════════");
 
   const manifest: WakeManifest = {
@@ -247,6 +254,46 @@ async function loadOrientation(
     docs,
   };
   return { text: lines.join("\n"), manifest };
+}
+
+// ── C pointer-list: "live MSTs for current work" (conf d36d9609, MR ac84a3d9; baton 3305e3d0) ──
+// PULL-ONLY delivery (push-injection struck): the rail carries POINTERS to the MSTs mapped to this
+// lineage's working set (prime_mst_map) — id, title, genre, the junctures each serves, and the
+// map reason — never the MST bodies. The Prime pulls a body by its id only when its reasoning
+// reaches the juncture that needs it (parsimony at delivery: "which of forty" is the cost we are
+// avoiding). Built off prime_mst_map ALONE, so it is vocabulary-INDEPENDENT — it does not wait on
+// the A-field juncture tags; where metadata.junctures is present it is surfaced as an additive
+// "serves" hint, where absent the pointer still renders. Lineage-scoped, best-effort: any read
+// failure (or an empty map) yields "", a clean no-op that never breaks the wake or a continuing turn.
+async function renderMstPointers(
+  supabase: ReturnType<typeof createClient>,
+  lineage: string,
+): Promise<string> {
+  try {
+    const { data: rows } = await supabase
+      .from("prime_mst_map")
+      .select("mst_id, reason, created_at, artifacts(title, metadata)")
+      .eq("lineage", lineage)
+      .order("created_at", { ascending: true });
+    const maps = (rows ?? []) as Array<any>;
+    if (maps.length === 0) return "";
+    const out: string[] = [];
+    out.push("── LIVE MSTs FOR YOUR CURRENT WORK (pointers only — the bodies are not carried here; pull one by its id when you reach the juncture it serves) ──");
+    for (const m of maps) {
+      const meta = m.artifacts?.metadata ?? {};
+      const title: string = m.artifacts?.title ?? "(untitled)";
+      const genre: string = meta.genre ? `${meta.genre} · ` : "";
+      const junctures: string[] = Array.isArray(meta.junctures) ? meta.junctures : [];
+      const serves = junctures.length > 0 ? `  [serves: ${junctures.join(", ")}]` : "";
+      out.push(`• ${genre}MST ${m.mst_id} — ${title}${serves}`);
+      if (m.reason) out.push(`    ${m.reason}`);
+    }
+    out.push("Do not pre-read them all. Pull the one your work needs, by its id, at the juncture it serves.");
+    return out.join("\n");
+  } catch (e) {
+    console.error("renderMstPointers failed (C pointer-list, conf d36d9609):", e);
+    return "";
+  }
 }
 
 // finalizeWake — called AFTER a confirmed wake: write the wake_record manifest
@@ -610,7 +657,10 @@ Deno.serve(async (req: Request) => {
           .order("passed_at", { ascending: false });
         const oBatons = (oBatonRows ?? []) as Array<any>;
         const oPrimary = oBatons.find((b) => !b.picked_up_at) ?? oBatons[0] ?? null;
-        if (headRow || oBatons.length > 0) {
+        // C pointer-list (conf d36d9609) — fetched before the guard so a lineage with mapped MSTs
+        // but no open head and no baton still gets its pointers on the rail.
+        const oMstPointers = await renderMstPointers(supabase, lineage_name);
+        if (headRow || oBatons.length > 0 || oMstPointers) {
           const oLines: string[] = [];
           oLines.push("── YOUR STANDING ORIENTATION (carried every turn — why you were woken + your task; no need to re-fetch) ──");
           if (headRow) {
@@ -626,6 +676,7 @@ Deno.serve(async (req: Request) => {
               oLines.push(`    ${b.invoke_with ?? b.reason ?? ""}`);
             }
           }
+          if (oMstPointers) { oLines.push(""); oLines.push(oMstPointers); }
           persistedOrientationText = oLines.join("\n");
         }
       } catch (e) { console.error("standing-orientation re-inject failed (c8a04f00):", e); }
