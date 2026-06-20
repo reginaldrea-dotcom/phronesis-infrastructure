@@ -253,6 +253,16 @@ id<html lang="en">
     .dv-block{margin-top:14px;background:#F4EAE6;color:#7A4A3C;border:1px solid #E6D2CB;border-radius:5px;padding:11px 16px}
     .dv-block .bhead{font-size:15px;font-weight:600;letter-spacing:.2px;display:flex;align-items:center;gap:9px}
     .dv-block .bglyph{color:#B4493A;font-size:15px}
+    /* v2.2 PENDING_FOLD (Eames ruling, f729d071): a CATCH, not a throw — actionable band (loud, it IS
+       Reg's move) plus a light lilac "Sibling reported" tablet that does the discriminating work the band
+       can't. Plum (#5B3A6B on #E6DCEC) is distinct from every state colour, so it can't read as done. */
+    .dv-status.PENDING_FOLD{background:#E6DCEC;color:#5B3A6B}
+    .dv-tablet{display:inline-flex;align-items:center;gap:6px;background:#E6DCEC;color:#5B3A6B;font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;font-weight:600;padding:4px 11px;border-radius:3px;margin-bottom:11px}
+    .dv-tablet .tg{font-size:13px;line-height:1}
+    .dv-next.fold{flex-direction:column;align-items:flex-start;gap:5px}
+    .dv-next.fold .dv-fold-hero{font-size:18px;font-weight:600}
+    .dv-next.fold .dv-fold-sub{font-size:13.5px;font-weight:500;color:#E4D2A6;letter-spacing:.3px}
+    .dv-foldrep{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5B3A6B;background:#F2EBF5;border:1px solid #E0D2E8;border-radius:3px;padding:7px 11px;margin-bottom:10px;word-break:break-all}
     .dv-actions{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
     .dv-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 12px;border-radius:3px;cursor:pointer}
     .dv-btn:hover{background:var(--bg-dim);border-color:var(--muted)}
@@ -1004,6 +1014,12 @@ async function bpPromote(btn){
 // banks_no_value_until_complete, and the chain as jsonb. So the reader maps her fields to the card — no
 // client-side computation. Samples below are reshaped to the same card model so layout review is faithful.
 function dvNextBand(status,nextState,track,holder,haltKind,haltNote,blockedAt){
+  // v2.2: PENDING_FOLD renders ACTIONABLE (a finished result to absorb), never blocked. The report
+  // artifact id rides in halt_note; pull it for the Full-chain pointer (word-led tablet does the rest).
+  if(status==='PENDING_FOLD'||(''+(nextState||'')).toUpperCase()==='PENDING_FOLD'){
+    const m=(''+(haltNote||'')).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return {kind:'fold',track:track||'',holder:holder||'',report_id:m?m[0]:null};
+  }
   if(status==='BLOCKED')return {kind:'blocked',track:blockedAt||track||'',holder:holder||'',halt_kind:haltKind,halt_note:haltNote};
   const ns=(''+(nextState||'')).toUpperCase();
   if(ns==='ACTIVE')return {kind:'flight',track:track||'',holder:holder||''};
@@ -1012,7 +1028,9 @@ function dvNextBand(status,nextState,track,holder,haltKind,haltNote,blockedAt){
 }
 // v2 (Eames f729d071): order & loudness follow ACTIONABILITY, not alarm —
 // act (liftable now) → in-flight → blocked (waiting; muted) → done. Replaces v1 blocked-first.
-function dvKey(status,next){ if(next&&next.kind==='act')return 1; if(next&&next.kind==='flight')return 2; if(status==='BLOCKED')return 3; if(status==='DONE')return 9; return 4; }
+// v2.2: PENDING_FOLD sorts FIRST within the actionable band (0) — a completed-but-unfolded result is the
+// most perishable thing on the board (catch before you throw), above the throw-the-next-baton cards (1).
+function dvKey(status,next){ if(next&&next.kind==='fold')return 0; if(next&&next.kind==='act')return 1; if(next&&next.kind==='flight')return 2; if(status==='BLOCKED')return 3; if(status==='DONE')return 9; return 4; }
 function dvChain(arr){ return (Array.isArray(arr)?arr:[]).map(c=>({pos:(c.chain_position!=null?c.chain_position:(c.position!=null?c.position:0)),track:c.track||c.baton_track||'(step)',state:(''+(c.state||'UNCLAIMED')).toUpperCase(),holder:c.holder||c.baton_holder||'?',value_kind:c.value_kind||'chain_only',baton_id:c.baton_id||null,halt_kind:c.halt_kind||null,halt_note:c.halt_note||null})).sort((a,b)=>a.pos-b.pos); }
 // LIVE: a deliverable_board row -> the card model (consumes the view's precomputed fields directly).
 function dvFromRow(r){
@@ -1028,9 +1046,15 @@ function dvFromRow(r){
 function dvOrder(a,b){ return (dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.rank==null?9999:a.rank)-(b.rank==null?9999:b.rank))||((a.name||'')<(b.name||'')?-1:1); }
 
 function dvCard(d){
-  const act=d.next&&d.next.kind==='act';
+  const act=d.next&&(d.next.kind==='act'||d.next.kind==='fold');
+  // v2.2: the lilac tablet (word-led; glyph is reinforcement only) marks this card a CATCH, and the
+  // report-artifact pointer lives in the Full-chain dropdown, not on the card face (keep the body clean).
+  const tablet=(d.next&&d.next.kind==='fold')?'<div class="dv-tablet"><span class="tg">&#8600;</span> Sibling reported</div>':'';
+  const foldrep=(d.next&&d.next.kind==='fold'&&d.next.report_id)?'<div class="dv-foldrep">Sibling report &rarr; artifact '+bpEsc(d.next.report_id)+'</div>':'';
   let nextHtml='';
-  if(act)
+  if(d.next&&d.next.kind==='fold')
+    nextHtml='<div class="dv-next act fold"><span class="dv-fold-hero">Invoke <span class="prime">'+bpEsc(d.next.holder)+'</span></span><span class="dv-fold-sub">fold the Sibling&rsquo;s report</span></div>';
+  else if(d.next&&d.next.kind==='act')
     nextHtml='<div class="dv-next act"><span class="arrow">&#8594;</span><span>Next: lift <span class="baton">'+bpEsc(d.next.track)+'</span> &middot; invoke <span class="prime">'+bpEsc(d.next.holder)+'</span></span></div>';
   else if(d.next&&d.next.kind==='flight')
     nextHtml='<div class="dv-next flight"><span class="arrow">&#8594;</span><span>In flight with <strong>'+bpEsc(d.next.holder)+'</strong> &mdash; '+bpEsc(d.next.track)+'</span></div>';
@@ -1046,11 +1070,11 @@ function dvCard(d){
     const dbl=s.baton_id?(' ondblclick="dvDismissBaton(\''+s.baton_id+'\',event)" title="double-click to dismiss this step"'):'';
     return '<div class="dv-step '+s.state+'"'+dbl+'><div class="pos">'+s.pos+'</div><div class="stk">'+bpEsc(s.track)+' <span class="vk">'+(s.value_kind==='standalone'?'standalone':'chain-only')+'</span>'+halt+'</div><span class="sstate">'+s.state.toLowerCase()+'</span><span class="sholder">'+bpEsc(s.holder)+'</span></div>';
   }).join('');
-  return '<div class="dv-card'+(d.status==='DONE'?' done':'')+(act?' dv-act':'')+'" data-id="'+d.id+'" ondblclick="dvDismiss(\''+d.id+'\',event)" title="double-click to dismiss">'+
+  return '<div class="dv-card'+(d.status==='DONE'?' done':'')+(act?' dv-act':'')+'" data-id="'+d.id+'" ondblclick="dvDismiss(\''+d.id+'\',event)" title="double-click to dismiss">'+tablet+
     '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
     '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+actions+
     '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+'</div>'+
-    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+chain+'</div></details></div>';
+    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+foldrep+chain+'</div></details></div>';
 }
 function dvRender(list){
   const el=document.getElementById('dvList');
@@ -1106,10 +1130,20 @@ async function dvRestore(kind,id,quiet){
 async function dvCopyNext(id,e){
   if(e)e.stopPropagation();
   const d=dvData[id]; if(!d)return;
-  let text=d.next_action||'';
-  if(d.next_baton_id){ try{ const r=await sb('relay_baton?id=eq.'+d.next_baton_id+'&select=invoke_with'); if(r&&r[0]&&r[0].invoke_with)text=r[0].invoke_with; }catch(_){} }
-  if(!text)text='lift '+((d.next&&d.next.track)||'')+' — invoke '+((d.next&&d.next.holder)||'');
-  try{ await navigator.clipboard.writeText(text); dvToast('Copied next step'); }
+  const holder=(d.next&&d.next.holder)||d.next_holder||'';
+  let invoke='';
+  if(d.next_baton_id){ try{ const r=await sb('relay_baton?id=eq.'+d.next_baton_id+'&select=invoke_with'); if(r&&r[0]&&r[0].invoke_with)invoke=(''+r[0].invoke_with).trim(); }catch(_){} }
+  // v2.3 copy-compose: guarantee a paste-ready invocation even when invoke_with is terse — prefix
+  // "<holder> — pick up baton <id>: " UNLESS invoke_with already self-addresses (so a well-authored
+  // line per the v2.3 microcopy isn't double-prefixed). Falls back to next_action / a built line.
+  let text;
+  if(invoke){
+    const addressed=(holder&&invoke.toLowerCase().startsWith(holder.toLowerCase()))||/pick up baton/i.test(invoke);
+    text=addressed?invoke:((holder?holder+' — pick up baton '+(d.next_baton_id||'')+': ':'')+invoke);
+  } else {
+    text=d.next_action||('lift '+((d.next&&d.next.track)||'')+' — invoke '+holder);
+  }
+  try{ await navigator.clipboard.writeText(text); dvToast('Copied invocation'); }
   catch(_){ dvToast('Copy blocked by browser'); }
 }
 async function dvOpenPrime(id,e){
