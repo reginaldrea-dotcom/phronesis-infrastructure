@@ -15,6 +15,7 @@ import { writeClaimsTool } from "./writeClaims.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
+import { loadMstTool } from "./loadMst.ts";
 import { runScriptTool, readExecutionLedgerTool } from "./runScript.ts";
 
 // execute_sql, get_conference_result, and the read_wake_deltas/read_inbox/get_message/
@@ -39,6 +40,7 @@ const TOOLS: Tool[] = [
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,
+  loadMstTool,
   runScriptTool,
   readExecutionLedgerTool,
   readGithubFileTool,
