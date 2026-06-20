@@ -992,8 +992,11 @@ function dvFromRow(r){
     banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
     chain:dvChain(r.chain)};
 }
-// Order: manual rank first (override), else the view's status_order (blocked < in-progress-actionable < in-flight < not-started < done).
-function dvOrder(a,b){ const ar=a.rank!=null,br=b.rank!=null; if(ar&&br)return a.rank-b.rank; if(ar!==br)return ar?-1:1; return (a.status_order-b.status_order)||(dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.name||'')<(b.name||'')?-1:1); }
+// Order: the STATUS BAND is primary — blocked → in-progress-actionable → in-flight → not-started → done.
+// Manual rank orders WITHIN a band, not across it (every deliverable is ranked, so rank-as-global-override
+// would bury the blocked card — blocked-first is the acceptance). So a blocked card always leads; rank just
+// sequences the cards inside each band.
+function dvOrder(a,b){ return (dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.rank==null?9999:a.rank)-(b.rank==null?9999:b.rank))||((a.name||'')<(b.name||'')?-1:1); }
 
 function dvCard(d){
   let nextHtml='';
