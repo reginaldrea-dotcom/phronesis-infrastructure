@@ -968,31 +968,8 @@ async function bpPromote(btn){
     await loadBatonPanel();
   }catch(e){console.error('promote failed',e);btn.textContent=orig;btn.disabled=false;}
 }
-/* ===== DELIVERABLES VIEW (cfaaa070; Eames SP f729d071). Renders deliverable_board to the legibility contract.
-   Scaffolded off the spec now (card layout + computed contract); reads the live deliverable_board view the
-   moment it lands (Connie). Until then, shows sample data shaped exactly to the contract so layout is final. ===== */
-
-// Sample data (shape == the normalized deliverable the renderer consumes). Demonstrates all three loud states:
-// blocked band, actionable next, in-flight. Replaced by live deliverable_board rows when the view exists.
-const DV_SAMPLE=[
- {id:'s1',name:'AESSEAL live report — delivery',outcome:'The AESSEAL report renders to a frozen, two-URL snapshot delivered to the client with no further intervention.',owner:'reg',rank:null,chain:[
-   {pos:1,track:'recompute engine',holder:'hephaestus',value_kind:'standalone',state:'DONE'},
-   {pos:2,track:'freeze + two-URL render',holder:'hephaestus',value_kind:'chain_only',state:'HALTED',halt_kind:'gated',halt_note:'Waiting on Connie’s freeze-contract DDL (the snapshot column) before the freeze endpoint can snapshot the complete payload.'},
-   {pos:3,track:'snapshot → document',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'}
- ]},
- {id:'s2',name:'MD to Doc / PDF',outcome:'Create MD in house → external render to docx/pdf → delivered to a Drive address, no further intervention.',owner:'reg',rank:null,chain:[
-   {pos:1,track:'render build (Markdown Bridge)',holder:'hephaestus',value_kind:'chain_only',state:'DONE'},
-   {pos:2,track:'house reference.docx',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'},
-   {pos:3,track:'render_document caller',holder:'hephaestus',value_kind:'chain_only',state:'UNCLAIMED'},
-   {pos:4,track:'hands-off Drive delivery',holder:'antechamber',value_kind:'chain_only',state:'UNCLAIMED'}
- ]},
- {id:'s3',name:'AES Engineering report — Phase 0',outcome:'A configurable, dig-down market analysis Sprinter can operate himself, plus frozen snapshot documents.',owner:'reg',rank:null,chain:[
-   {pos:1,track:'competitive read / capture',holder:'theophrastus',value_kind:'chain_only',state:'ACTIVE'},
-   {pos:2,track:'master / version schema',holder:'constantinople',value_kind:'chain_only',state:'UNCLAIMED'},
-   {pos:3,track:'read surface + freeze render',holder:'eames',value_kind:'chain_only',state:'UNCLAIMED'},
-   {pos:4,track:'snapshot → document',holder:'hephaestus',value_kind:'chain_only',state:'UNCLAIMED'}
- ]}
-];
+/* ===== DELIVERABLES VIEW (cfaaa070; Eames SP f729d071). Renders the live deliverable_board view to the
+   legibility contract: one row per deliverable, contract precomputed, chain as jsonb. ===== */
 
 // Connie's deliverable_board is ONE ROW PER DELIVERABLE with the contract precomputed: status, status_order,
 // done_count/total_count, next_track/next_holder/next_state, blocked_at, halt_kind/halt_note,
@@ -1014,15 +991,6 @@ function dvFromRow(r){
     status_order:(r.status_order==null?dvKey(status,null):+r.status_order),done:+(r.done_count||0),total:+(r.total_count||0),
     banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
     chain:dvChain(r.chain)};
-}
-// SAMPLE: chain-with-states -> the same card model (faithful layout before the view is seeded).
-function dvFromSample(d){
-  const chain=dvChain(d.chain),total=chain.length,done=chain.filter(s=>s.state==='DONE').length;
-  let nx=null; for(const s of chain){ if(s.state!=='DONE'){ nx=s; break; } }
-  let status='NOT_STARTED';
-  if(total>0&&done===total)status='DONE'; else if(nx&&nx.state==='HALTED')status='BLOCKED'; else if(done>0||(nx&&nx.state==='ACTIVE'))status='IN_PROGRESS';
-  const next=!nx?null:(nx.state==='HALTED'?{kind:'blocked',track:nx.track,holder:nx.holder,halt_kind:nx.halt_kind||(d.chain.find(x=>x.pos===nx.pos)||{}).halt_kind,halt_note:(d.chain.find(x=>x.pos===nx.pos)||{}).halt_note}:(nx.state==='ACTIVE'?{kind:'flight',track:nx.track,holder:nx.holder}:{kind:'act',track:nx.track,holder:nx.holder}));
-  return {id:d.id,name:d.name,outcome:d.outcome,rank:(d.rank==null?null:d.rank),status:status,status_order:dvKey(status,next),done:done,total:total,banks_no_value:total>0&&chain.every(s=>s.value_kind==='chain_only'),next:next,chain:chain};
 }
 // Order: manual rank first (override), else the view's status_order (blocked < in-progress-actionable < in-flight < not-started < done).
 function dvOrder(a,b){ const ar=a.rank!=null,br=b.rank!=null; if(ar&&br)return a.rank-b.rank; if(ar!==br)return ar?-1:1; return (a.status_order-b.status_order)||(dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.name||'')<(b.name||'')?-1:1); }
@@ -1054,12 +1022,13 @@ function dvRender(list){
   el.innerHTML=html;
 }
 async function loadDeliverables(){
-  let rows=null,exists=false;
-  try{ rows=await sb('deliverable_board?select=*'); exists=Array.isArray(rows); }catch(e){ exists=false; }
-  const banner=document.getElementById('dvBanner');
-  if(exists&&rows.length){ banner.innerHTML=''; dvRender(rows.map(dvFromRow)); }
-  else if(exists){ banner.innerHTML='<div class="dv-banner">The <code>deliverable_board</code> view is live but no deliverables are tagged into it yet — showing <strong>sample layout</strong>. Real cards render the moment AC seeds the chains.</div>'; dvRender(DV_SAMPLE.map(dvFromSample)); }
-  else { banner.innerHTML='<div class="dv-banner">Showing <strong>sample data</strong> — the <code>deliverable_board</code> view is not reachable. Layout and legibility are final.</div>'; dvRender(DV_SAMPLE.map(dvFromSample)); }
+  const el=document.getElementById('dvList'),banner=document.getElementById('dvBanner');
+  banner.innerHTML='';
+  let rows;
+  try{ rows=await sb('deliverable_board?select=*'); }
+  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; return; }
+  if(Array.isArray(rows)&&rows.length) dvRender(rows.map(dvFromRow));
+  else el.innerHTML='<div class="dv-empty">No deliverables on the board yet.</div>';
 }
 
 document.addEventListener('DOMContentLoaded',loadData);
