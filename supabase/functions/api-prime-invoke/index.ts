@@ -288,7 +288,7 @@ async function renderMstPointers(
       out.push(`• ${genre}MST ${m.mst_id} — ${title}${serves}`);
       if (m.reason) out.push(`    ${m.reason}`);
     }
-    out.push("Do not pre-read them all. Pull the one your work needs, by its id, at the juncture it serves.");
+    out.push("Do not pre-read them all — pull the one your work needs with load_mst (by mst_id, or by juncture/topic) at the juncture it serves.");
     return out.join("\n");
   } catch (e) {
     console.error("renderMstPointers failed (C pointer-list, conf d36d9609):", e);
