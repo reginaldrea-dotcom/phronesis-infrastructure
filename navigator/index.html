@@ -233,7 +233,7 @@ id<html lang="en">
     .dv-banner code{font-family:'IBM Plex Mono',monospace;font-style:normal;font-size:13px}
     .dv-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 24px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
     .dv-card.done{opacity:.6}
-    .dv-card.dv-act{border-left:3px solid #100F0D}
+    .dv-card.dv-act{border-left:3px solid #1B2C4A}
     .dv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
     .dv-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;line-height:1.12;color:var(--text)}
     .dv-outcome{font-size:14.5px;line-height:1.45;color:var(--muted);margin-top:6px;max-width:64ch}
@@ -244,7 +244,7 @@ id<html lang="en">
     .dv-status.DONE{background:#E2F1E7;color:var(--badge-green)}
     /* THE NEXT STEP — visual loudness follows ACTIONABILITY, not alarm (Eames v2). */
     .dv-next{margin-top:16px;font-size:18px;line-height:1.35;font-weight:600;display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:5px}
-    .dv-next.act{background:#100F0D;color:#FAFAF8}            /* actionable = hero */
+    .dv-next.act{background:#1B2C4A;color:#FAFAF8}            /* actionable = hero. v2.7: deep blue (navy+gold), not strident black — dark-blue=your-move, light-blue=in-flight */
     .dv-next.act .baton{color:#fff}
     .dv-next.act .prime{color:#FFCF6E}
     .dv-next.flight{background:#EAF0F8;color:var(--badge-blue);font-weight:500;font-size:16px} /* in-flight = calm */
@@ -263,12 +263,15 @@ id<html lang="en">
     .dv-next.fold .dv-fold-hero{font-size:18px;font-weight:600}
     .dv-next.fold .dv-fold-sub{font-size:13.5px;font-weight:500;color:#E4D2A6;letter-spacing:.3px}
     .dv-foldrep{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5B3A6B;background:#F2EBF5;border:1px solid #E0D2E8;border-radius:3px;padding:7px 11px;margin-bottom:10px;word-break:break-all}
-    /* v2.4 — Refresh control + "Updated HH:MM:SS" stamp (re-fetch is cache-bypassed; see loadDeliverables). */
-    .dv-head{display:flex;align-items:center;gap:14px;margin:2px 0 14px}
-    .dv-refresh{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 13px;border-radius:3px;cursor:pointer}
-    .dv-refresh:hover{background:var(--bg-dim);border-color:var(--muted)}
-    .dv-refresh:disabled,.dv-refresh.spinning{opacity:.55;cursor:default}
-    .dv-updated{font-size:12.5px;color:var(--light);font-style:italic}
+    /* v2.7 — colour legend: a one-line key (the bands encode WHO MUST ACT). The single refresh + stamp
+       now live in the page header (loadData), so there is no scoped Deliverables refresh control. */
+    .dv-legend{display:flex;align-items:center;gap:16px;margin:2px 0 14px;font-size:12px;color:var(--light)}
+    .dv-legend .dv-k{display:inline-flex;align-items:center;gap:6px}
+    .dv-legend .sw{width:11px;height:11px;border-radius:2px;display:inline-block}
+    .dv-legend .sw.act{background:#1B2C4A}
+    .dv-legend .sw.flight{background:#7FA8D9}
+    .dv-legend .sw.blocked{background:#C9A99E}
+    .dv-legend .sw.fold{background:#E6DCEC;border:1px solid #C9B6D6}
     /* v2.6 — sitting-duration: NEUTRAL muted metadata, never a red/overdue alarm (letting work sit is legitimate). */
     .dv-sitting{font-size:12.5px;color:var(--light);font-style:italic;border:1px solid var(--border-lt);border-radius:3px;padding:2px 9px}
     /* v2.5 — just-cleared confirmation IN PLACE: grey + pulse where the cursor already is; persists till refresh. */
@@ -328,7 +331,7 @@ id<html lang="en">
   <div class="header-left"><h1>Phronesis</h1><span class="header-sub">Navigator</span></div>
   <div class="header-right">
     <span class="last-refreshed" id="lastRefreshed">Loading…</span>
-    <button class="refresh-btn" onclick="loadData()">Refresh</button>
+    <button class="refresh-btn" onclick="loadData();loadDeliverables()">Refresh</button>
   </div>
 </header>
 <nav>
@@ -405,9 +408,9 @@ id<html lang="en">
 
 <div id="deliverables" class="page active">
   <div class="section-label">DELIVERABLES — what each outcome needs next, and how close it is to banking value</div>
-  <div class="dv-head"><button class="dv-refresh" id="dvRefreshBtn" onclick="loadDeliverables()" title="Re-fetch the board, bypassing the browser cache">&#8635; Refresh</button><span class="dv-updated" id="dvUpdated"></span></div>
+  <div class="dv-legend"><span class="dv-k"><span class="sw act"></span>your move</span><span class="dv-k"><span class="sw flight"></span>in flight</span><span class="dv-k"><span class="sw blocked"></span>blocked</span><span class="dv-k"><span class="sw fold"></span>to fold</span></div>
   <div id="dvBanner"></div>
-  <div class="dv-hint">Open <em>full chain</em> on a card for Clear (mark done) and Dismiss. Double-clicking a card also dismisses it — you get an Undo.</div>
+  <div class="dv-hint">Refresh is the header button (top-right). Open <em>full chain</em> on a card for Clear (mark done) and Dismiss; double-clicking a card also dismisses it — you get an Undo.</div>
   <div id="dvList"><div class="dv-empty">Loading…</div></div>
   <div id="dvDismissed"></div>
 </div>
@@ -555,7 +558,7 @@ openConference = freshConf || confs[0];
     // FIX 3: an in-app refresh re-fetches the baton board too (incl NEXT INVOCATION), not only a full
     // reload — so a spent invocation clears and pickups/halts reflect without a page reload.
     if(document.getElementById('batons')&&document.getElementById('batons').classList.contains('active'))loadBatonPanel();
-    const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
 }
 
@@ -1134,36 +1137,44 @@ function dvRenderDismissed(list){
 // v2.4: every load is a live RE-FETCH that BYPASSES the browser cache (no-store + cache-bust param) —
 // not a re-render off in-memory state, never location.reload. A spinner + "Updated HH:MM:SS" stamp make
 // a refresh visibly acknowledged even when nothing changed. A refresh also graduates v2.5 cleared cards.
-function dvStamp(){ const u=document.getElementById('dvUpdated'); if(!u)return; const d=new Date(),p=n=>(''+n).padStart(2,'0'); u.textContent='Updated '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+// v2.4/v2.7#4: ONE refresh — the global header Refresh (loadData) re-fetches the board too; the
+// scoped Deliverables refresh + its stamp are gone (collapsed to one control, one stamp in the header).
+// Every load BYPASSES the browser cache ({cache:'no-store'}; NO query param — PostgREST reads params
+// as column filters, so &_=Date.now() 400s). A refresh also graduates v2.5 cleared cards (dvCleared
+// reset) so they re-sort to their Done home.
 async function loadDeliverables(){
-  const el=document.getElementById('dvList'),btn=document.getElementById('dvRefreshBtn');
-  if(btn){ btn.disabled=true; btn.classList.add('spinning'); }
-  dvCleared.clear(); // refresh is the graduation trigger: cleared-in-view cards re-sort normally now
-  const settle=()=>{ if(btn){ btn.disabled=false; btn.classList.remove('spinning'); } dvStamp(); };
-  // Cache bypass via {cache:'no-store'} ONLY — NO query param: PostgREST parses every query param as a
-  // column filter, so a cache-bust like &_=Date.now() 400s ("column _ does not exist"). no-store alone
-  // makes fetch skip the browser cache and always hit the network, which is the whole requirement.
+  const el=document.getElementById('dvList');
+  dvCleared.clear();
   const nostore={cache:'no-store'};
   let rows;
   try{ rows=await sb('deliverable_board?select=*',nostore); }
-  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; settle(); return; }
+  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; return; }
   if(Array.isArray(rows)&&rows.length) dvRender(rows.map(dvFromRow));
   else { el.innerHTML='<div class="dv-empty">No deliverables on the board yet.</div>'; dvData={}; }
   try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc',nostore); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
   catch(e){ dvRenderDismissed([]); }
-  settle();
 }
-// v2.5: clear a deliverable IN PLACE — grey + a one-shot pulse where the cursor is, no re-sort. The card
-// stays put (we replace just its node, not the list) until the next refresh graduates it. NO DB write:
-// "Clear" is a view-acknowledgement that a delivered outcome is done; the substrate stays the source of truth.
-function dvClear(id,e){
+// v2.5 + v2.7#2: clear = mark done, PERSISTED. clear_deliverable sets done_at (Connie's RPC); it
+// survives refresh — the bug v2.7 found was Clear painting locally only. Confirmation stays IN PLACE:
+// the card greys + pulses where the cursor is, no re-sort, until the next refresh graduates it to the
+// Done stack. Undo via unclear_deliverable. (Reg's override: a leftover unclaimed baton is fine — done_at wins.)
+async function dvClear(id,e){
   if(e)e.stopPropagation();
   if(!dvData[id]||dvData[id].status==='DONE')return;
+  try{ await sbRpc('clear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
+  catch(_){ dvToast('Couldn’t mark done'); return; }
   dvCleared.add(id);
   const card=document.querySelector('.dv-card[data-id="'+id+'"]');
-  if(!card){ return; }
-  const tmp=document.createElement('div'); tmp.innerHTML=dvCard(dvData[id]); const nu=tmp.firstElementChild;
-  if(nu){ card.replaceWith(nu); nu.classList.add('dv-pulse'); setTimeout(()=>{nu.classList.remove('dv-pulse');},950); }
+  if(card){ const tmp=document.createElement('div'); tmp.innerHTML=dvCard(dvData[id]); const nu=tmp.firstElementChild;
+    if(nu){ card.replaceWith(nu); nu.classList.add('dv-pulse'); setTimeout(()=>{nu.classList.remove('dv-pulse');},950); } }
+  dvUndo('Marked “'+((dvData[id]&&dvData[id].name)||'deliverable')+'” done',()=>dvUnclear(id));
+}
+async function dvUnclear(id){
+  try{ await sbRpc('unclear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
+  catch(_){ dvToast('Couldn’t undo'); return; }
+  dvCleared.delete(id);
+  const u=document.getElementById('dvUndo'); if(u)u.style.display='none';
+  loadDeliverables();
 }
 function dvClearTidy(id){ const c=document.querySelector('.dv-card[data-id="'+id+'"]'); if(c)c.remove(); }
 // ---- dismiss / restore (RPC-only) + undo + actionable controls ----
