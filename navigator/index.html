@@ -233,6 +233,7 @@ id<html lang="en">
     .dv-banner code{font-family:'IBM Plex Mono',monospace;font-style:normal;font-size:13px}
     .dv-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 24px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
     .dv-card.done{opacity:.6}
+    .dv-card.done .dv-name{text-decoration:line-through;color:var(--muted);font-weight:500} /* v2.8 present-as-done: struck title */
     .dv-card.dv-act{border-left:3px solid #1B2C4A}
     .dv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
     .dv-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;line-height:1.12;color:var(--text)}
@@ -1042,6 +1043,10 @@ async function bpPromote(btn){
 // banks_no_value_until_complete, and the chain as jsonb. So the reader maps her fields to the card — no
 // client-side computation. Samples below are reshaped to the same card model so layout review is faithful.
 function dvNextBand(status,nextState,track,holder,haltKind,haltNote,blockedAt){
+  // v2.8: a DONE card has NO actionable band — even if its front baton is still UNCLAIMED (a manual
+  // clear of an incomplete chain). done_at -> DONE -> present as done, not "done AND actionable". First,
+  // so it wins over the UNCLAIMED/PENDING_FOLD branches below.
+  if(status==='DONE')return null;
   // v2.2: PENDING_FOLD renders ACTIONABLE (a finished result to absorb), never blocked. The report
   // artifact id rides in halt_note; pull it for the Full-chain pointer (word-led tablet does the rest).
   if(status==='PENDING_FOLD'||(''+(nextState||'')).toUpperCase()==='PENDING_FOLD'){
@@ -1068,6 +1073,7 @@ function dvFromRow(r){
     banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
     next_baton_id:r.next_baton_id||null,next_action:r.next_action||'',
     is_sitting:!!r.is_sitting,quiet_hours:(r.quiet_for_hours==null?null:+r.quiet_for_hours),
+    done_at:(r.deliverable_done_at||null), // v2.8: set => MANUALLY cleared (Reopen-able); null on a chain-complete done
     chain:dvChain(r.chain)};
 }
 // Order: the ACTIONABILITY BAND is primary (dvKey: act → in-flight → blocked → done). Manual rank
@@ -1101,6 +1107,9 @@ function dvCard(d){
     nextHtml='<div class="dv-block"><div class="bhead"><span class="bglyph">'+k.glyph+'</span> Blocked at '+bpEsc(d.next.track)+'</div></div>';}
   const actions=act?('<div class="dv-actions"><button class="dv-btn" onclick="dvCopyNext(\''+d.id+'\',event)">Copy next step</button>'+
     (d.next.holder?'<button class="dv-btn" onclick="dvOpenPrime(\''+d.id+'\',event)">Open '+bpEsc(d.next.holder)+'</button>':'')+'</div>'):'';
+  // v2.8 Reopen: ONLY on a MANUALLY-cleared Done card (done_at set) — mirrors the Dismissed-bucket
+  // Restore. unclear_deliverable nulls done_at and the card returns to its real active status + steps.
+  const reopen=(d.status==='DONE'&&d.done_at)?('<div class="dv-actions"><button class="dv-btn" onclick="dvReopen(\''+d.id+'\',event)" title="Return this to its active status with its remaining steps">Reopen</button></div>'):'';
   const noVal=(d.status!=='DONE'&&d.banks_no_value)?'<span class="dv-novalue">banks no value until complete</span>':'';
   const sitting=(d.is_sitting&&d.status!=='DONE')?'<span class="dv-sitting">'+dvSitLabel(d.quiet_hours)+'</span>':''; // v2.6 neutral stamp
   // v2.5/v2.6 deliberate actions live in the expansion (off the face): Clear (mark done) + Dismiss (reversible drop).
@@ -1113,7 +1122,7 @@ function dvCard(d){
   }).join('');
   return '<div class="dv-card'+(d.status==='DONE'?' done':'')+(act?' dv-act':'')+'" data-id="'+d.id+'" ondblclick="dvDismiss(\''+d.id+'\',event)" title="double-click to dismiss">'+tablet+
     '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
-    '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+actions+
+    '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+actions+reopen+
     '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+sitting+'</div>'+
     '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+foldrep+chain+'</div>'+xactions+'</details></div>';
 }
@@ -1177,6 +1186,15 @@ async function dvUnclear(id){
   loadDeliverables();
 }
 function dvClearTidy(id){ const c=document.querySelector('.dv-card[data-id="'+id+'"]'); if(c)c.remove(); }
+// v2.8: Reopen a manually-cleared Done card — unclear_deliverable nulls done_at; the card returns to its
+// real active status with remaining steps. Mirror of the Dismissed-bucket Restore (dvRestore).
+async function dvReopen(id,e){
+  if(e)e.stopPropagation();
+  try{ await sbRpc('unclear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
+  catch(_){ dvToast('Couldn’t reopen'); return; }
+  dvToast('Reopened');
+  loadDeliverables();
+}
 // ---- dismiss / restore (RPC-only) + undo + actionable controls ----
 async function dvDismiss(id,e){
   if(e){ if(e.target&&e.target.closest&&e.target.closest('button,summary,a,.dv-step'))return; e.stopPropagation(); }
