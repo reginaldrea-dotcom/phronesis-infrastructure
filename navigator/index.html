@@ -207,6 +207,18 @@ id<html lang="en">
     .bp details.lane > summary{cursor:pointer;list-style:none;padding:10px 13px;background:var(--surface-2);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.12em;color:var(--ink-soft);display:flex;align-items:center;gap:9px;}
     .bp details.lane > summary::-webkit-details-marker{display:none;} .bp details.lane > summary .tw{margin-left:auto;transition:transform .2s;color:var(--ink-faint);} .bp details.lane[open] > summary .tw{transform:rotate(90deg);}
     .bp details.lane.routing > summary{color:var(--k-blocked);} .bp details.lane.possibly > summary{color:var(--stale);} .bp details.lane .lbody{padding:12px 13px;}
+    /* Possibly-halted check-in (baton 38e5d802 / SP 76019f72): route button -> file a halt without SQL */
+    .bp .hrow.poss .checkin{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;margin-left:10px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);color:var(--stale);cursor:pointer;}
+    .bp .ci-form{margin-top:9px;padding:9px 10px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--surface-2);}
+    .bp .ci-form[hidden]{display:none;}
+    .bp .ci-q{font-size:12.5px;color:var(--ink-soft);margin-bottom:7px;}
+    .bp .ci-row{display:flex;align-items:center;gap:9px;margin-bottom:7px;} .bp .ci-or{font-size:11.5px;color:var(--ink-faint);}
+    .bp .ci-halt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+    .bp .ci-halt select,.bp .ci-halt input{font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);color:inherit;}
+    .bp .ci-halt .ci-note{flex:1 1 220px;} .bp .ci-halt .ci-needs{flex:1 1 220px;}
+    .bp .ci-onit,.bp .ci-file{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:4px 10px;border-radius:3px;cursor:pointer;}
+    .bp .ci-onit{border:1px solid var(--rule-soft);background:var(--bp-surface);color:var(--ink-soft);}
+    .bp .ci-file{border:1px solid var(--k-blocked);background:var(--k-blocked-dim,transparent);color:var(--k-blocked);}
     .bp .arow{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);margin-bottom:6px;font-size:13.5px;}
     .bp .arow .who{font-family:var(--mono);font-size:11px;color:var(--ink-soft);min-width:84px;} .bp .arow .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .bp .arow .when{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);white-space:nowrap;} .bp .arow.staleflag .when{color:var(--stale);}
@@ -948,7 +960,7 @@ async function loadBatonPanel(){
   let open=[],poss=[],itis=[];
   try{open=await sb('relay_baton?select=id,holder,track,halt_kind,halt_note,halt_needs,child_baton_ids,halted_at,passed_at,picked_up_at,attention,stale_after_hours&done_at=is.null&order=passed_at.asc');}
   catch(e){console.warn('baton panel: relay_baton not readable',e);open=[];}
-  try{poss=await sb('baton_possibly_halted?select=holder,track,picked_up_at,stale_after_hours,hours_since_pickup&order=hours_since_pickup.desc');}catch(e){poss=[];}
+  try{poss=await sb('baton_possibly_halted?select=id,holder,track,picked_up_at,stale_after_hours,hours_since_pickup&order=hours_since_pickup.desc');}catch(e){poss=[];}
   try{itis=await sb('relay_iti?select=id,body,generated_by,generated_at,primary_baton_id&order=generated_at.desc');}catch(e){itis=[];}
   window.__bpCopy={};
   const itiByBaton={};itis.forEach(t=>{if(t.primary_baton_id&&!itiByBaton[t.primary_baton_id])itiByBaton[t.primary_baton_id]=t;});
@@ -1011,7 +1023,28 @@ function bpRenderFull(active,halted,poss,unpicked,itiByBaton){
       '<div class="hmeta"><span class="age">halted '+bpAgo(h.halted_at)+'</span>'+action+'</div></div></div>'+unblock+'</div>';
   }).join(''):'<div class="lane-empty">No halted batons.</div>';
   document.getElementById('bpCtRouting').textContent='· '+halted.length;
-  document.getElementById('bpPossiblyList').innerHTML=poss.length?poss.map(p=>{const over=Math.round((p.hours_since_pickup||0)-(p.stale_after_hours||0));return '<div class="hrow poss"><div class="main"><div class="kind">?</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(p.holder)+'</span> <span class="track">'+bpEsc(p.track)+'</span></div><div class="hnote">picked up but quiet; no halt filed</div><div class="hmeta"><span class="age stale" style="color:var(--stale)">stuck '+Math.round(p.hours_since_pickup)+'h'+(over>0?', '+over+'h over':'')+'</span></div></div></div></div>';}).join(''):'<div class="lane-empty">Nothing possibly halted.</div>';
+  document.getElementById('bpPossiblyList').innerHTML=poss.length?poss.map(p=>{
+    const over=Math.round((p.hours_since_pickup||0)-(p.stale_after_hours||0));
+    // Route button (baton 38e5d802): check in -> turn a silent stall into a filed halt, no SQL.
+    const kinds=['blocked','needs_ruling','failed','gated','spawned'];
+    const opts=kinds.map(k=>'<option value="'+k+'">'+bpEsc((BP_KINDS[k]||{}).lab||k)+'</option>').join('');
+    return '<div class="hrow poss"><div class="main"><div class="kind">?</div><div class="hbody">'+
+      '<div class="hline"><span class="holder">'+bpEsc(p.holder)+'</span> <span class="track">'+bpEsc(p.track)+'</span></div>'+
+      '<div class="hnote">picked up but quiet; no halt filed</div>'+
+      '<div class="hmeta"><span class="age stale" style="color:var(--stale)">stuck '+Math.round(p.hours_since_pickup)+'h'+(over>0?', '+over+'h over':'')+'</span>'+
+        '<button class="checkin" data-baton="'+p.id+'">&#8594; check in</button></div>'+
+      '<div class="ci-form" id="ci-'+p.id+'" hidden>'+
+        '<div class="ci-q">Still on it, or halted?</div>'+
+        '<div class="ci-row"><button class="ci-onit" data-baton="'+p.id+'">Still on it</button><span class="ci-or">or file a halt:</span></div>'+
+        '<div class="ci-halt">'+
+          '<select class="ci-kind" aria-label="halt kind">'+opts+'</select>'+
+          '<input class="ci-note" type="text" placeholder="halt note — why it is stuck (required)">'+
+          '<input class="ci-needs" type="text" placeholder="halt needs — the unblock route (optional)">'+
+          '<button class="ci-file" data-baton="'+p.id+'">File halt</button>'+
+        '</div>'+
+      '</div>'+
+      '</div></div></div>';
+  }).join(''):'<div class="lane-empty">Nothing possibly halted.</div>';
   document.getElementById('bpCtPoss').textContent='· '+poss.length;
   document.getElementById('bpUnpickedList').innerHTML=unpicked.length?unpicked.map(u=>'<div class="hrow unpicked"><div class="main"><div class="kind">·</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(u.holder)+'</span> <span class="track">'+bpEsc(u.track)+'</span></div><div class="hnote">passed but never picked up</div><div class="hmeta"><span class="age">unpicked '+bpAgo(u.passed_at)+'</span><button class="promote" data-baton="'+u.id+'">&#8593; promote to next invocation</button></div></div></div></div>').join(''):'<div class="lane-empty">Nothing unclaimed.</div>';
   document.getElementById('bpCtUnpicked').textContent='· '+unpicked.length;
@@ -1020,7 +1053,11 @@ document.getElementById('bpExpandBtn').addEventListener('click',function(){docum
 document.getElementById('batons').addEventListener('click',function(e){
   const ub=e.target.closest('.unblock');if(ub){const c=ub.closest('.nx,.hrow');if(c)c.classList.toggle('open');return;}
   const cp=e.target.closest('.copy');if(cp){bpCopy(window.__bpCopy[cp.dataset.copy]||'',cp);return;}
-  const pr=e.target.closest('.promote');if(pr){bpPromote(pr);}
+  const pr=e.target.closest('.promote');if(pr){bpPromote(pr);return;}
+  // Possibly-halted check-in (baton 38e5d802): toggle the form, or fire an outcome.
+  const ci=e.target.closest('.checkin');if(ci){const f=document.getElementById('ci-'+ci.dataset.baton);if(f)f.hidden=!f.hidden;return;}
+  const on=e.target.closest('.ci-onit');if(on){bpCheckin(on.dataset.baton,'on_it',on);return;}
+  const fl=e.target.closest('.ci-file');if(fl){bpFileHalt(fl);return;}
 });
 // FIX 5: promote-to-top — generate the baton's ITI (templated server-side per SC_ITI_HaltTemplates)
 // and surface it in NEXT INVOCATION. relay_iti is service-write only, so the write goes through the
@@ -1034,6 +1071,25 @@ async function bpPromote(btn){
     btn.textContent='Promoted ✓';
     await loadBatonPanel();
   }catch(e){console.error('promote failed',e);btn.textContent=orig;btn.disabled=false;}
+}
+// Possibly-halted check-in (baton 38e5d802 / SP 76019f72 ONE OPEN ITEM). The route action calls the
+// checkin_baton RPC: 'halted' files the halt properly (it then drops from this lane into Halted-needs-
+// routing on reload); 'on_it' records the holder is still working. No manual SQL.
+async function bpCheckin(id,outcome,btn,extra){
+  if(!id)return;const orig=btn.textContent;btn.disabled=true;btn.textContent='…';
+  try{
+    await sbRpc('checkin_baton',Object.assign({p_baton_id:id,p_outcome:outcome,p_actor:'reg'},extra||{}));
+    btn.textContent='✓';
+    await loadBatonPanel();
+  }catch(e){console.error('checkin failed',e);btn.textContent=orig;btn.disabled=false;alert('Check-in failed: '+e.message);}
+}
+function bpFileHalt(btn){
+  const id=btn.dataset.baton;const f=document.getElementById('ci-'+id);if(!f)return;
+  const kind=f.querySelector('.ci-kind').value;
+  const note=(f.querySelector('.ci-note').value||'').trim();
+  const needs=(f.querySelector('.ci-needs').value||'').trim();
+  if(!note){const n=f.querySelector('.ci-note');n.style.borderColor='var(--k-blocked)';n.focus();return;}
+  bpCheckin(id,'halted',btn,{p_halt_kind:kind,p_halt_note:note,p_halt_needs:needs||null});
 }
 /* ===== DELIVERABLES VIEW (cfaaa070; Eames SP f729d071). Renders the live deliverable_board view to the
    legibility contract: one row per deliverable, contract precomputed, chain as jsonb. ===== */
