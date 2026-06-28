@@ -20,7 +20,7 @@ import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropi
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
-import { digestToolCall, type ToolDigest } from "./lib/provenance.ts";
+import { digestToolCall, extractLedgerJuncture, type ToolDigest } from "./lib/provenance.ts";
 import { claimIdempotency, markDone, markDoneFromResponse, awaitDuplicateResponse } from "./lib/idempotency.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
@@ -827,6 +827,9 @@ Deno.serve(async (req: Request) => {
             input_summary: dg.input_summary,
             outcome: dg.outcome,
             theo_session_id: theoSessionId,
+            // First-class juncture key for the MST-delivery F audit / M1 (baton 5dfb4003): lifted from
+            // the tool input so load_mst / mark_juncture calls join on (lineage, session, juncture).
+            juncture: extractLedgerJuncture(toolUse.input),
           });
         } catch (e) { console.error("execution_ledger (loop) write failed:", e); }
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });

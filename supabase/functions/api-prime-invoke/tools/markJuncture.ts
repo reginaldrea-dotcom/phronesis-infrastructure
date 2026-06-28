@@ -15,7 +15,6 @@
 // own reasoning. Read/write is the single ledger insert; best-effort, always offered.
 
 import type { Tool, ToolContext } from "./types.ts";
-import { logMstEvent } from "../lib/mstLedger.ts";
 
 export const markJunctureTool: Tool = {
   definition: {
@@ -50,13 +49,9 @@ export const markJunctureTool: Tool = {
     const juncture = raw.toUpperCase();
     const lineage = ctx.lineageName;
 
-    // Record the denominator event (best-effort; never blocks the Prime).
-    await logMstEvent(ctx, {
-      kind: "juncture_reached",
-      source: "marker",
-      juncture,
-      detail: i.note ? { note: i.note } : {},
-    });
+    // The denominator event (an unattended juncture:reached) is recorded by the harness execution_ledger
+    // row for this very call — tool='mark_juncture' with the first-class juncture key — so F (baton
+    // 5dfb4003) joins on the ledger. No tool-side metrics write here.
 
     // Return the pointers mapped to this juncture (over Connie's D-lite view), so the ritual completes
     // with a load_mst pull. Best-effort: a read failure still leaves the marker recorded.

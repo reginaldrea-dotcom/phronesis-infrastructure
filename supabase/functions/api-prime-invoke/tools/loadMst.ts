@@ -19,7 +19,6 @@
 // Read-only, always offered (including the wake turn — that is exactly when a Prime may need to pull).
 
 import type { Tool, ToolContext } from "./types.ts";
-import { logMstEvent } from "../lib/mstLedger.ts";
 
 // Parsimony guard: a juncture/topic that resolves to more than this many MSTs returns POINTERS, not
 // bodies — the Prime then pulls the specific one by id. Keeps a broad ask from dumping the working set.
@@ -142,8 +141,6 @@ export const loadMstTool: Tool = {
       if (vRes.error) return `load_mst error: ${vRes.error.message}`;
       const ids = Array.from(new Set(((vRes.data ?? []) as any[]).map((x) => x.mst_id)));
       resolved = ids.map((id) => byId.get(id)).filter((r): r is MapRec => !!r);
-      // M1 denominator: reaching a juncture via load_mst self-reports it (recorded hit OR miss).
-      await logMstEvent(ctx, { kind: "juncture_reached", source: "load_mst", juncture: query });
     } else {
       mode = "topic"; query = (i.topic ?? "").trim();
       const q = query.toLowerCase();
@@ -164,14 +161,9 @@ export const loadMstTool: Tool = {
       });
     }
 
-    // M1 numerator: a pull happened (>=1 resolved). Juncture-keyed only in juncture mode.
-    await logMstEvent(ctx, {
-      kind: "mst_pulled",
-      source: "load_mst",
-      juncture: mode === "juncture" ? query : null,
-      mst_id: mode === "mst_id" ? query : null,
-      detail: { mode, query, mst_ids: resolved.map((r) => r.mst_id) },
-    });
+    // M1 numerator (load_mst calls) is now recorded by the harness execution_ledger row itself —
+    // tool='load_mst' with the first-class juncture key (juncture mode) — so F joins on the ledger,
+    // not a side table. No tool-side metrics write here.
 
     // ── Parsimony cap: a broad match returns pointers, not a body-dump. ──
     if (resolved.length > MAX_BODIES) {

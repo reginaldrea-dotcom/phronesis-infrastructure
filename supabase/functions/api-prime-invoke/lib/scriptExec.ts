@@ -8,7 +8,7 @@
 
 import type { SupabaseClient } from "../tools/types.ts";
 import { withCut2 } from "./cut2conn.ts";
-import { digestToolCall } from "./provenance.ts";
+import { digestToolCall, extractLedgerJuncture } from "./provenance.ts";
 
 export interface ScriptRunCtx {
   lineage: string;
@@ -99,6 +99,9 @@ async function writeLedger(rc: ScriptRunCtx, tool: string, input: unknown, resul
       tool: d.tool,
       input_summary: d.input_summary,
       outcome: d.outcome,
+      // Same first-class juncture key as the loop path, so load_mst / mark_juncture calls made from a
+      // B1 script also join into the MST-delivery F audit / M1 (baton 5dfb4003).
+      juncture: extractLedgerJuncture(input),
     });
   } catch (e) {
     console.error("execution_ledger write failed:", e);

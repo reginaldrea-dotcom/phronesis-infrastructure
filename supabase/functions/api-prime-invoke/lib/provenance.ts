@@ -91,6 +91,16 @@ export function digestToolCall(name: string, input: unknown, resultText: string)
   return { tool: name, input_summary: summariseInput(name, input), outcome: summariseOutcome(resultText) };
 }
 
+/** Lift the reasoning juncture (VALIDATION/DECISION) out of a tool input, so it can be written to
+ *  the first-class execution_ledger.juncture column rather than buried in input_summary. Returns the
+ *  trimmed, uppercased juncture (matching the juncture_mst_index vocabulary) or null. Generic by
+ *  design: only load_mst (juncture mode) and mark_juncture carry a top-level `juncture`, so every
+ *  other tool call yields null. This is the join key for the MST-delivery F audit / M1 (baton 5dfb4003). */
+export function extractLedgerJuncture(input: unknown): string | null {
+  const j = (input as { juncture?: unknown } | null)?.juncture;
+  return typeof j === "string" && j.trim() ? j.trim().toUpperCase() : null;
+}
+
 /** Render a turn's digests as a tagged ground-truth block for replay.
  *  - []        → an explicit "none" (so a no-tool turn that claims a result is contradictable)
  *  - null/undef → "" (a pre-ledger turn: no record exists, so assert nothing) */
