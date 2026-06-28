@@ -47,6 +47,7 @@ interface ClaimIn {
   divergence_status?: unknown; resolution_note?: unknown;
   question_index?: unknown; section_index?: unknown;
   sources?: unknown; citations?: unknown;
+  supersedes_claim_id?: unknown;
 }
 interface QuestionIn { question_index?: unknown; question_text?: unknown; status?: unknown; }
 
@@ -54,7 +55,7 @@ export const writeClaimsTool: Tool = {
   definition: {
     name: "write_claims",
     description:
-      "Write the authored claim layer for a theo_session's synthesis: research_question rows (the navigation spine), synthesis_claim rows (load-bearing claims, not every sentence), claim_source (claim→engine provenance) and claim_citation (the independently-verifiable source; resolution defaults 'unchecked'). Author this AFTER the synthesis exists (write_synthesis_section). Every source/citation must carry a real dispatch_id from this conversation (the arc session or a sibling capture session) — pass dispatch_id, or an engine_name that resolves to exactly one dispatch (ambiguous engines must use dispatch_id). claim_status: convergent/divergent/single_source/synthesis_inference/gap. stance: supports/diverges. Pass replace=true to re-author cleanly (deletes existing questions+claims first).",
+      "Write the authored claim layer for a theo_session's synthesis: research_question rows (the navigation spine), synthesis_claim rows (load-bearing claims, not every sentence), claim_source (claim→engine provenance) and claim_citation (the independently-verifiable source; resolution defaults 'unchecked'). Author this AFTER the synthesis exists (write_synthesis_section). Every source/citation must carry a real dispatch_id from this conversation (the arc session or a sibling capture session) — pass dispatch_id, or an engine_name that resolves to exactly one dispatch (ambiguous engines must use dispatch_id). claim_status: convergent/divergent/single_source/synthesis_inference/gap. stance: supports/diverges. Pass replace=true to re-author cleanly (deletes existing questions+claims first). To CORRECT an existing claim, append the corrected claim with supersedes_claim_id set to the old claim's id: the old claim is atomically marked superseded (auditable correction, never a silent in-place edit), and the new claim carries the correction.",
     input_schema: {
       type: "object",
       properties: {
@@ -87,6 +88,7 @@ export const writeClaimsTool: Tool = {
               resolution_note: { type: "string", description: "How a divergence was resolved (or why it stays open)." },
               question_index: { type: "integer", description: "Link to a question in this call's questions[] (or an existing research_question)." },
               section_index: { type: "integer", description: "Link to an existing synthesis_section by its section_index." },
+              supersedes_claim_id: { type: "string", description: "Optional correction: the full id of an EXISTING claim in this synthesis that this claim replaces. That claim is atomically marked claim_lifecycle='superseded' with superseded_by set to this new claim — an auditable correction, not an in-place edit. Append-only (not valid with replace=true); must be a real claim of this synthesis." },
               sources: {
                 type: "array",
                 description: "Provenance: which engine returns support/diverge on this claim. Each MUST resolve to a real dispatch in this conversation.",
@@ -229,6 +231,25 @@ export const writeClaimsTool: Tool = {
       }
     }
 
+    // Supersede targets (corrections, baton a3c59a67 / Connie ruling): each supersedes_claim_id must be a
+    // REAL claim of THIS synthesis — the forgery floor for corrections; you can only supersede an existing
+    // claim of the synthesis you are authoring. Exact-id only (no prefix match — never risk flipping the
+    // wrong claim). Append-only: incompatible with replace, which would delete the very claims you supersede.
+    const supersedeIds = new Set<string>();
+    for (let c = 0; c < claims.length; c++) {
+      const sid = typeof claims[c]?.supersedes_claim_id === "string" ? (claims[c].supersedes_claim_id as string).trim() : "";
+      if (!sid) continue;
+      if (!ID_RE.test(sid)) return fail(`claims[${c}].supersedes_claim_id must be a claim UUID. Got: ${sid.slice(0, 40)}`);
+      supersedeIds.add(sid);
+    }
+    if (supersedeIds.size > 0) {
+      if (replace) return fail("supersedes_claim_id is append-only and cannot be combined with replace=true (replace deletes the claims you would supersede).");
+      const ex = await ctx.supabase.from("synthesis_claim").select("id").eq("synthesis_id", synthesisId).in("id", [...supersedeIds]);
+      if (ex.error) return fail(`supersede target lookup failed: ${ex.error.message}`);
+      const found = new Set(((ex.data ?? []) as Array<{ id: string }>).map((r) => r.id));
+      for (const sid of supersedeIds) if (!found.has(sid)) return fail(`supersedes_claim_id ${sid} is not a claim of this synthesis — cannot supersede it.`);
+    }
+
     // Optional clean re-author.
     if (replace) {
       const delC = await ctx.supabase.from("synthesis_claim").delete().eq("synthesis_id", synthesisId);
@@ -295,9 +316,10 @@ export const writeClaimsTool: Tool = {
 
     // Claims (+ nested sources/citations). Collect the persisted ids so the author can read the
     // write back (A2 5acd06d0) and chain citation_ids into write_figure (folds Connie's 6e3dbeb6).
-    let claimN = 0, sourceN = 0, citationN = 0, anchoredN = 0;
+    let claimN = 0, sourceN = 0, citationN = 0, anchoredN = 0, supersededN = 0;
     const claimIds: string[] = [];
     const citationIds: string[] = [];
+    const supersededPairs: Array<{ old: string; new: string }> = [];
     for (const cl of claims) {
       const insC = await ctx.supabase.from("synthesis_claim").insert({
         synthesis_id: synthesisId,
@@ -313,6 +335,19 @@ export const writeClaimsTool: Tool = {
       const claimId = insC.data.id as string;
       claimIds.push(claimId);
       claimN++;
+
+      // Atomic correction: the corrected claim is now in (active by default); mark the claim it
+      // supersedes and point that claim at this one. Validated above as a real claim of this synthesis.
+      // Double-guarded on synthesis_id so a flip can only ever land within this synthesis.
+      const supersedesId = typeof cl.supersedes_claim_id === "string" ? cl.supersedes_claim_id.trim() : "";
+      if (supersedesId) {
+        const upd = await ctx.supabase.from("synthesis_claim")
+          .update({ claim_lifecycle: "superseded", superseded_by: claimId })
+          .eq("id", supersedesId).eq("synthesis_id", synthesisId);
+        if (upd.error) return fail(`supersede update failed for claim ${supersedesId}: ${upd.error.message}`);
+        supersededN++;
+        supersededPairs.push({ old: supersedesId, new: claimId });
+      }
 
       const sources = Array.isArray(cl.sources) ? cl.sources as SourceIn[] : [];
       if (sources.length > 0) {
@@ -358,10 +393,11 @@ export const writeClaimsTool: Tool = {
       // Confirmed-persisted counts: every count here is a row that COMMITTED. Each insert is
       // error-checked (and claims use .select().single()), so a failed persist returns a loud
       // error and stops this call — it never returns a count. So a count IS the confirmation.
-      persisted: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN, anchored: anchoredN },
+      persisted: { questions: questionByIndex.size, claims: claimN, sources: sourceN, citations: citationN, anchored: anchoredN, superseded: supersededN },
       claim_ids: claimIds,        // A2 5acd06d0 — the write landed iff these come back
       citation_ids: citationIds,  // folds 6e3dbeb6 — feed straight into write_figure
-      "[SYSTEM]": `PERSISTED + CONFIRMED. ${claimN} claim(s) [ids: ${claimIds.join(", ") || "none"}], ${citationN} citation(s) [ids: ${citationIds.join(", ") || "none"}], ${sourceN} source link(s). These ids ARE the confirmation the write landed — read them back, and pass citation_ids into write_figure. Every count above is a committed row: a failed persist would have surfaced as an error and stopped this call, not returned a count, so silence-on-failure is not possible here. ${anchoredN} citation(s) ANCHORED to a captured source_document (frozen + hashed); ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass. Provenance intact — every source/citation resolved to a real dispatch for this session.`,
+      superseded: supersededPairs, // {old,new} pairs — old claim marked superseded, superseded_by=new
+      "[SYSTEM]": `PERSISTED + CONFIRMED. ${claimN} claim(s) [ids: ${claimIds.join(", ") || "none"}], ${citationN} citation(s) [ids: ${citationIds.join(", ") || "none"}], ${sourceN} source link(s)${supersededN > 0 ? `, ${supersededN} correction(s) [superseded: ${supersededPairs.map((p) => `${p.old}→${p.new}`).join(", ")}]` : ""}. These ids ARE the confirmation the write landed — read them back, and pass citation_ids into write_figure. Every count above is a committed row: a failed persist would have surfaced as an error and stopped this call, not returned a count, so silence-on-failure is not possible here. ${anchoredN} citation(s) ANCHORED to a captured source_document (frozen + hashed); ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass. Provenance intact — every source/citation resolved to a real dispatch for this conversation.${supersededN > 0 ? " Corrections are auditable: the old claim is marked claim_lifecycle='superseded' with superseded_by set to its correction, never edited in place." : ""}`,
     });
   },
 };
