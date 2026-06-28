@@ -11,7 +11,8 @@
 //                        resolution defaults 'unchecked' (claimed-until-checked)
 //
 // GUARD — provenance integrity (the forgery floor applied to claims): every
-// claim_source / claim_citation must carry a REAL dispatch_id for THIS session.
+// claim_source / claim_citation must carry a REAL dispatch_id from THIS CONVERSATION
+// (the arc session OR a sibling capture session of the same conversation — baton 8cb99efa).
 // Callers pass dispatch_id directly, or an engine_name that resolves to exactly
 // ONE dispatch; an engine that ran for multiple questions is ambiguous and MUST
 // be given by dispatch_id. A claim can never be sourced to an engine that did
@@ -53,7 +54,7 @@ export const writeClaimsTool: Tool = {
   definition: {
     name: "write_claims",
     description:
-      "Write the authored claim layer for a theo_session's synthesis: research_question rows (the navigation spine), synthesis_claim rows (load-bearing claims, not every sentence), claim_source (claim→engine provenance) and claim_citation (the independently-verifiable source; resolution defaults 'unchecked'). Author this AFTER the synthesis exists (write_synthesis_section). Every source/citation must carry a real dispatch_id for this session — pass dispatch_id, or an engine_name that resolves to exactly one dispatch (ambiguous engines must use dispatch_id). claim_status: convergent/divergent/single_source/synthesis_inference/gap. stance: supports/diverges. Pass replace=true to re-author cleanly (deletes existing questions+claims first).",
+      "Write the authored claim layer for a theo_session's synthesis: research_question rows (the navigation spine), synthesis_claim rows (load-bearing claims, not every sentence), claim_source (claim→engine provenance) and claim_citation (the independently-verifiable source; resolution defaults 'unchecked'). Author this AFTER the synthesis exists (write_synthesis_section). Every source/citation must carry a real dispatch_id from this conversation (the arc session or a sibling capture session) — pass dispatch_id, or an engine_name that resolves to exactly one dispatch (ambiguous engines must use dispatch_id). claim_status: convergent/divergent/single_source/synthesis_inference/gap. stance: supports/diverges. Pass replace=true to re-author cleanly (deletes existing questions+claims first).",
     input_schema: {
       type: "object",
       properties: {
@@ -88,12 +89,12 @@ export const writeClaimsTool: Tool = {
               section_index: { type: "integer", description: "Link to an existing synthesis_section by its section_index." },
               sources: {
                 type: "array",
-                description: "Provenance: which engine returns support/diverge on this claim. Each MUST resolve to a real dispatch for this session.",
+                description: "Provenance: which engine returns support/diverge on this claim. Each MUST resolve to a real dispatch in this conversation.",
                 items: {
                   type: "object",
                   properties: {
                     dispatch_id: { type: "string", description: "The engine_dispatch id (preferred — exact provenance)." },
-                    engine_name: { type: "string", description: "Alternative to dispatch_id; resolved only if it matches exactly one dispatch in this session." },
+                    engine_name: { type: "string", description: "Alternative to dispatch_id; resolved only if it matches exactly one dispatch in this conversation." },
                     stance: { type: "string", enum: ["supports", "diverges"] },
                   },
                   required: ["stance"],
@@ -155,8 +156,21 @@ export const writeClaimsTool: Tool = {
     if (!synth.data?.id) return fail("no synthesis row for this session — write the synthesis first (write_synthesis_section).");
     const synthesisId = synth.data.id as string;
 
-    // Build provenance maps for this session: dispatch ids, and engine_name → [ids].
-    const disp = await ctx.supabase.from("engine_dispatch").select("id, engine_name").eq("theo_session_id", sessionId);
+    // Build provenance maps for this CONVERSATION: dispatch ids, and engine_name → [ids].
+    // Widen the dispatch pool from the single session to the conversation (Conf d36d9609 / baton
+    // 8cb99efa; Connie ruling 82d38a8f): an arc claim may legitimately cite a dispatch run in a sibling
+    // CAPTURE session of the same conversation. The forgery floor holds, just at conversation scope —
+    // the dispatch must be REAL and IN THIS CONVERSATION, never "any dispatch anywhere". Falls back to
+    // the single session if it has no conversation (legacy).
+    const convRow = await ctx.supabase.from("theo_session").select("conversation_id").eq("id", sessionId).maybeSingle();
+    const conversationId = (convRow.data as { conversation_id?: string } | null)?.conversation_id ?? null;
+    let dispatchSessionIds: string[] = [sessionId];
+    if (conversationId) {
+      const sibs = await ctx.supabase.from("theo_session").select("id").eq("conversation_id", conversationId);
+      const ids = ((sibs.data ?? []) as Array<{ id: string }>).map((r) => String(r.id));
+      if (ids.length > 0) dispatchSessionIds = ids;
+    }
+    const disp = await ctx.supabase.from("engine_dispatch").select("id, engine_name").in("theo_session_id", dispatchSessionIds);
     if (disp.error) return fail(`dispatch lookup failed: ${disp.error.message}`);
     const dispatchIds = new Set<string>();
     const byEngine = new Map<string, string[]>();
@@ -171,13 +185,13 @@ export const writeClaimsTool: Tool = {
     const resolveDispatch = (dispatchId: unknown, engineName: unknown, where: string, required: boolean): { id: string | null; err?: string } => {
       if (typeof dispatchId === "string" && dispatchId.trim()) {
         const id = dispatchId.trim();
-        if (!dispatchIds.has(id)) return { id: null, err: `${where}: dispatch_id ${id} is not an engine_dispatch for this session.` };
+        if (!dispatchIds.has(id)) return { id: null, err: `${where}: dispatch_id ${id} is not an engine_dispatch in this conversation.` };
         return { id };
       }
       if (typeof engineName === "string" && engineName.trim()) {
         const ids = byEngine.get(engineName.trim());
-        if (!ids || ids.length === 0) return { id: null, err: `${where}: engine '${engineName}' did not run in this session — cannot source a claim to it.` };
-        if (ids.length > 1) return { id: null, err: `${where}: engine '${engineName}' ran for ${ids.length} questions — ambiguous; supply dispatch_id.` };
+        if (!ids || ids.length === 0) return { id: null, err: `${where}: engine '${engineName}' did not run in this conversation — cannot source a claim to it.` };
+        if (ids.length > 1) return { id: null, err: `${where}: engine '${engineName}' ran for ${ids.length} questions in this conversation — ambiguous; supply dispatch_id.` };
         return { id: ids[0] };
       }
       if (required) return { id: null, err: `${where}: needs a dispatch_id or engine_name.` };

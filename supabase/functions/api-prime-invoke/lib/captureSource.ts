@@ -65,19 +65,35 @@ export async function captureSource(supabase: SupabaseClient, input: CaptureInpu
   const url = (input.url ?? "").trim();
   if (!/^https?:\/\//i.test(url)) return null; // web/public only here; non-web origins wait on Phase 0
 
-  // Dedup WITHIN the research session: a url already captured this session is reused, not re-fetched.
-  // Re-capture-as-a-new-version is for content that changes across TIME (a report update — Phase 4),
-  // never within one synthesis. (Same-session capture also satisfies Connie's capture-in-own-session rule.)
+  // Reuse an already-frozen snapshot across the CONVERSATION, not just this session (Conf d36d9609 /
+  // baton 8cb99efa; Connie ruling 82d38a8f). The session is a workflow partition; the CONVERSATION is
+  // the evidence-ownership boundary. Capture still WRITES into its own session (the insert below is
+  // unchanged), but a sibling session in the same conversation may already have frozen this exact url —
+  // reuse that immutable anchor rather than re-freezing a duplicate, so an arc can cite capture-session
+  // evidence. client_scope must MATCH (IS NOT DISTINCT FROM) so client-scoped evidence cannot leak
+  // across the widening; web/public captures carry client_scope = null. Re-capture-as-a-new-version is
+  // for content that changes across TIME (Phase 4), never within one conversation.
+  const clientScope: string | null = null; // v1: web/public only (mirrors the insert below)
   try {
-    const existing = await supabase
-      .from("source_document")
-      .select("id")
+    // captured_in_session is TEXT; theo_session.id is uuid. Resolve this session's conversation, then
+    // its sibling sessions, and match captured_in_session against them (string-compared). Falls back to
+    // this session alone if the session has no conversation (legacy) — i.e. the prior same-session dedup.
+    const convRow = await supabase
+      .from("theo_session").select("conversation_id").eq("id", input.sessionId).maybeSingle();
+    const conversationId = (convRow.data as { conversation_id?: string } | null)?.conversation_id ?? null;
+    let siblingIds: string[] = [input.sessionId];
+    if (conversationId) {
+      const sibs = await supabase.from("theo_session").select("id").eq("conversation_id", conversationId);
+      const ids = ((sibs.data ?? []) as Array<{ id: string }>).map((r) => String(r.id));
+      if (ids.length > 0) siblingIds = ids;
+    }
+    let q = supabase
+      .from("source_document").select("id")
       .eq("source_url", url)
-      .eq("captured_in_session", input.sessionId)
       .eq("payload_state", "present")
-      .order("version_index", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .in("captured_in_session", siblingIds);
+    q = clientScope === null ? q.is("client_scope", null) : q.eq("client_scope", clientScope);
+    const existing = await q.order("version_index", { ascending: false }).limit(1).maybeSingle();
     if (existing.data?.id) return existing.data.id as string;
   } catch (_) { /* fall through and capture fresh */ }
 
