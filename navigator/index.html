@@ -1292,6 +1292,7 @@ async function dvCopyNext(id,e){
   }
   try{ await navigator.clipboard.writeText(text); dvToast('Copied invocation'); }
   catch(_){ dvToast('Copy blocked by browser'); }
+  dvDispatch(id);
 }
 async function dvOpenPrime(id,e){
   if(e)e.stopPropagation();
@@ -1300,6 +1301,16 @@ async function dvOpenPrime(id,e){
   let url=(window.instances&&instances[h]&&instances[h].chat_url)||null;
   if(!url){ try{ const r=await sb('instances?name=eq.'+encodeURIComponent(h)+'&select=chat_url'); if(r&&r[0])url=r[0].chat_url; }catch(_){} }
   if(url)window.open(url,'_blank','noopener'); else dvToast('No chat URL on file for '+h);
+  dvDispatch(id);
+}
+// v2.9 (baton b7951c58 / SP f729d071): Copy/Open is the honest "in flight now" moment — stamp
+// picked_up_at on the card's FRONT baton so it moves actionable -> in-flight (next_state ACTIVE ->
+// status IN_PROGRESS, via the existing view). Idempotent server-side (only an UNCLAIMED front is
+// stamped). BEST-EFFORT: the copy/open the user asked for already happened; a dispatch-stamp failure
+// must never block it — log and move on. Reload so the card reflects the new state.
+async function dvDispatch(id){
+  try{ await sbRpc('dispatch_deliverable',{p_deliverable_id:id,p_actor:'reg'}); loadDeliverables(); }
+  catch(e){ console.error('dispatch_deliverable failed',e); }
 }
 let dvUndoTimer=null;
 function dvUndo(msg,fn){
