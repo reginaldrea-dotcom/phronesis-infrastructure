@@ -59,17 +59,35 @@ export const readSynthesisTool: Tool = {
     const knit = i?.knit === true;
     if (!ID_RE.test(sessionRaw)) return fail(`theo_session_id must be a UUID or hex prefix. Got: ${sessionRaw.slice(0, 40)}`);
 
-    // Resolve theo_session_id
+    // Resolve the caller's id to a SESSION. The synthesis tools key on the SESSION id, but a caller may
+    // mistakenly pass a SYNTHESIS id (bug 6e976d33: that miss surfaced as "does not exist" and nearly drove
+    // a destructive create-new on an existing synthesis). So: try as a session id first; if no session
+    // matches, try as a synthesis id and resolve THROUGH it (with a disambiguation note); only if it
+    // matches NEITHER do we report not-found — safely, never implying the object is missing / create-new.
+    type SessRow = { id: string; state: string; refined_prompt: string | null; created_at: string; delivered_at: string | null };
+    let idNote = "";
     const sessionLookup = await ctx.supabase.rpc("execute_raw_sql", {
       query: `SELECT id, state, refined_prompt, created_at, delivered_at FROM theo_session WHERE id::text LIKE '${sessionRaw}%' LIMIT 2`,
     });
     if (sessionLookup.error) return fail(`session lookup failed: ${sessionLookup.error.message}`);
-    const sessRows = (sessionLookup.data ?? []) as Array<{
-      id: string; state: string; refined_prompt: string | null;
-      created_at: string; delivered_at: string | null;
-    }>;
-    if (sessRows.length === 0) return `[]\n[SYSTEM: no theo_session with id starting '${sessionRaw}'. This is the answer; do not retry.]`;
+    let sessRows = (sessionLookup.data ?? []) as Array<SessRow>;
     if (sessRows.length > 1) return fail(`prefix '${sessionRaw}' matches ${sessRows.length} sessions — supply more characters.`);
+    if (sessRows.length === 0) {
+      // Not a session id — is it a SYNTHESIS id? Resolve through it rather than mis-report "missing".
+      const synthByIdLookup = await ctx.supabase.rpc("execute_raw_sql", {
+        query: `SELECT ts.id, ts.state, ts.refined_prompt, ts.created_at, ts.delivered_at FROM synthesis s JOIN theo_session ts ON ts.id = s.theo_session_id WHERE s.id::text LIKE '${sessionRaw}%' LIMIT 2`,
+      });
+      if (synthByIdLookup.error) return fail(`synthesis-id lookup failed: ${synthByIdLookup.error.message}`);
+      const synthRows = (synthByIdLookup.data ?? []) as Array<SessRow>;
+      if (synthRows.length > 1) return fail(`prefix '${sessionRaw}' matches ${synthRows.length} syntheses — supply more characters.`);
+      if (synthRows.length === 1) {
+        sessRows = synthRows;
+        idNote = `'${sessionRaw}' is a SYNTHESIS id, not a session id — the synthesis tools key on the SESSION id. Resolved it through to its session ${synthRows[0].id}; pass that session id next time. `;
+      } else {
+        // Matches NEITHER a session NOR a synthesis. Safe not-found: explicitly NOT a create-new signal.
+        return `[]\n[SYSTEM: '${sessionRaw}' matches no theo_session AND no synthesis by id prefix. This is NOT a signal that a synthesis is missing or that you should create a new one — most often it means a session-id vs synthesis-id mix-up. Re-check which id you hold before any create-new (a create-new can orphan existing sections). Do not retry with the same id.]`;
+      }
+    }
     const session = sessRows[0];
 
     // Dispatch state guardrail — synthesising on incomplete dispatch is the anti-pattern.
@@ -194,6 +212,9 @@ export const readSynthesisTool: Tool = {
     } else if (citations.total > 0) {
       systemNote += ` CITATIONS: ${citations.resolved_or_checked}/${citations.total} resolved (non-'unchecked'), ${citations.anchored}/${citations.total} anchored.`;
     }
+
+    // Lead the system line with the id disambiguation when the caller passed a synthesis id.
+    if (idNote) systemNote = idNote + systemNote;
 
     const result: Record<string, unknown> = {
       session: {
