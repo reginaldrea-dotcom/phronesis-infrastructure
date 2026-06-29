@@ -185,6 +185,10 @@ export const enqueueDispatchTool: Tool = {
       .insert({
         conversation_id: conversationId,
         user_id: appUserId,
+        // created_by_lineage attributes the session to the composing Prime (the autonomous-research
+        // app_user is SHARED across API-Primes, so user_id cannot disambiguate). Drives the wake
+        // capture-landing (loadOrientation) so a re-invoked Prime sees ITS OWN open captures. (572e0a63)
+        created_by_lineage: ctx.lineageName,
         state: "dispatched",
         original_brief: originalBrief,
         refined_prompt: refinedPrompt,

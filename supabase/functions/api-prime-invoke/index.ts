@@ -237,6 +237,12 @@ async function loadOrientation(
   }
   lines.push("");
 
+  // Wake capture-landing (ask 572e0a63 #1) — derived "where your open captures stand", injected BEFORE
+  // the MST pointers (Connie's placement). The API-Prime has no Super-T-equivalent for a live capture,
+  // so a re-invocation re-treads and can confabulate completion; this gives it factual ground.
+  const captureLanding = await renderCaptureLanding(supabase, lineage);
+  if (captureLanding) { lines.push(captureLanding); lines.push(""); }
+
   // C pointer-list at wake (conf d36d9609) — the same "live MSTs for current work" pointers the
   // per-turn rail carries, surfaced on the wake turn too. Pointers only, so NOT a manifest doc
   // (no body is injected; fidelity audit covers whole-document injections, not this derived index).
@@ -292,6 +298,59 @@ async function renderMstPointers(
     return out.join("\n");
   } catch (e) {
     console.error("renderMstPointers failed (C pointer-list, conf d36d9609):", e);
+    return "";
+  }
+}
+
+// ── Wake capture-landing (ask 572e0a63 #1; theo_session.created_by_lineage added by Connie) ──
+// The API-Prime has no Super-T-equivalent that states where a LIVE capture stands, so a re-invocation
+// wakes blank, re-treads, and can confabulate "complete" on an empty record. This derives, from the
+// substrate, the Prime's OWN open research captures — scoped by created_by_lineage, because the
+// autonomous-research app_user is SHARED across API-Primes and so user_id cannot disambiguate — and
+// renders factual state (sections, claims, in-flight) with a LOUD 0-claims warning. Best-effort: any
+// failure yields "" (never breaks the wake). Wake-only (loadOrientation), not the per-turn rail.
+async function renderCaptureLanding(
+  supabase: ReturnType<typeof createClient>,
+  lineage: string,
+): Promise<string> {
+  try {
+    const { data: sessRows } = await supabase
+      .from("theo_session")
+      .select("id, state, created_at")
+      .eq("created_by_lineage", lineage)
+      .not("state", "in", "(delivered,failed,cancelled)")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const sessions = (sessRows ?? []) as Array<{ id: string; state: string; created_at: string }>;
+    if (sessions.length === 0) return "";
+    const out: string[] = [];
+    out.push(`── YOUR OPEN RESEARCH CAPTURES (${sessions.length} derived this wake — factual state from the substrate, not memory; RESUME these, do not re-start or report done without checking) ──`);
+    for (const s of sessions) {
+      const { data: syn } = await supabase
+        .from("synthesis").select("id").eq("theo_session_id", s.id)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const synId = (syn as any)?.id ?? null;
+      let sections = 0, claims = 0;
+      if (synId) {
+        const { count: sc } = await supabase.from("synthesis_section").select("*", { count: "exact", head: true }).eq("synthesis_id", synId);
+        const { count: cc } = await supabase.from("synthesis_claim").select("*", { count: "exact", head: true }).eq("synthesis_id", synId);
+        sections = sc ?? 0; claims = cc ?? 0;
+      }
+      const { data: disp } = await supabase.from("engine_dispatch").select("status").eq("theo_session_id", s.id);
+      const inflight = ((disp ?? []) as Array<{ status: string }>).filter(d => d.status === "pending" || d.status === "dispatched").length;
+      out.push(`• session ${s.id} [${s.state}] — synthesis ${synId ?? "none yet"}: ${sections} section(s), ${claims} claim(s)${inflight > 0 ? `; ${inflight} engine(s) still in flight` : ""}`);
+      if (synId && sections > 0 && claims === 0) {
+        out.push(`    ⚠ INCOMPLETE: sections written but 0 claims — if the brief asked for claims this is NOT done. Resume with write_claims keyed on THIS session id; do not report complete.`);
+      } else if (inflight > 0) {
+        out.push(`    waiting on ${inflight} engine(s); capture after the completion wake_delta. Do not synthesise on incomplete dispatch.`);
+      } else if (!synId) {
+        out.push(`    no synthesis yet — begin with write_synthesis_section (key on this session id) once results are in.`);
+      }
+    }
+    out.push("Read from the substrate, not memory: this IS the true state of your captures. A re-entry RESUMES the open one.");
+    return out.join("\n");
+  } catch (e) {
+    console.error("renderCaptureLanding failed (wake-landing, ask 572e0a63):", e);
     return "";
   }
 }
