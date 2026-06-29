@@ -84,7 +84,10 @@ async function fileSuperT(tp) {
   } catch (err) {
     return fail(err.message || 'network error');
   }
-  if (!res.ok || !data || data.error || !data.sequence_number) {
+  /* R1 (bug 74711787): success requires a GENUINE new filing AND a real retirement. The EF now returns
+     result_type='created' + retired=true only when it filed a fresh Super-T and flipped instance status;
+     a no-op (idempotent_hit) or a failed status-flip comes back non-ok. Never report success otherwise. */
+  if (!res.ok || !data || data.error || data.result_type !== 'created' || !data.retired || !data.sequence_number) {
     return fail((data && (data.message || data.error)) || ('HTTP ' + res.status));
   }
 
@@ -94,7 +97,7 @@ async function fileSuperT(tp) {
   ok.textContent = `Super-T filed: ${tp.title} — seq ${data.sequence_number}, artifact ${data.artifact_id}`;
   insertBefore(ok);
   const closed = document.createElement('div'); closed.className = 'retirement-confirm';
-  closed.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
+  closed.textContent = `${PRIME_CONFIG.name} retired (status flipped) and session closed. ${PRIME_CONFIG.name} will remember.`;
   insertBefore(closed);
   sessionClosed = true;   // clean retirement — disarm the accidental-close guard
   clearPersistedSession();   // retirement is the only thing that ends the persistent thread
