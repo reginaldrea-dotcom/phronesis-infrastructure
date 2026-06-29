@@ -51,7 +51,31 @@ export const fileSuperTAction: Action = {
       );
     }
 
-    // (d) — real retirement: flip status on the confirmed new filing.
+    // R3 (defense-in-depth, bug 74711787) — read back the chain head and confirm the filing we just made
+    // is actually AT the head before declaring success: verify, don't trust the returned id. This makes
+    // "the new TP is the head" structural rather than agent-narrated. Runs BEFORE the status flip, so a
+    // filing that did not land at head can never retire the instance.
+    const { data: head, error: headErr } = await supabase
+      .from("super_t_chains")
+      .select("id, sequence_number, successor_id")
+      .eq("lineage_name", lineage)
+      .is("successor_id", null)
+      .order("sequence_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (headErr) {
+      console.error("retire chain head read-back failed:", headErr);
+      return errResponse(`Super-T filed (seq ${data.sequence_number}) but chain head read-back failed: ${headErr.message}. Instance status unchanged — surface to Reg.`, 500);
+    }
+    if (!head || head.id !== data.chain_id || head.sequence_number !== data.sequence_number) {
+      console.error("retire R3 mismatch", { head, expected: { chain_id: data.chain_id, sequence_number: data.sequence_number } });
+      return errResponse(
+        `Retirement filing is not at the chain head (expected chain ${data.chain_id} seq ${data.sequence_number}; head is ${head ? head.id + " seq " + head.sequence_number : "none"}). Instance status NOT changed — surface to Reg.`,
+        409,
+      );
+    }
+
+    // (d) — real retirement: flip status on the confirmed, head-verified new filing.
     const { error: upErr } = await supabase
       .from("instances")
       .update({ status: "retired", last_seen_at: new Date().toISOString() })
@@ -66,7 +90,7 @@ export const fileSuperTAction: Action = {
 
     // Echo the filing + the confirmed retirement.
     return new Response(
-      JSON.stringify({ ...data, retired: true, instance_id, retire_session_id: retireSession }),
+      JSON.stringify({ ...data, retired: true, head_verified: true, instance_id, retire_session_id: retireSession }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   },
