@@ -213,6 +213,13 @@ export const readSynthesisTool: Tool = {
       systemNote += ` CITATIONS: ${citations.resolved_or_checked}/${citations.total} resolved (non-'unchecked'), ${citations.anchored}/${citations.total} anchored.`;
     }
 
+    // Completion-honesty guard (ask 572e0a63 #2): sections-present-but-ZERO-claims is the exact state
+    // that let a capture be reported "complete and clean" when claims WERE the task. Surface it loudly,
+    // so a re-entering Prime cannot read this as done. Factual, not a hard block — the read still returns.
+    if (sectionRows.length > 0 && claimIds.length === 0) {
+      systemNote = `⚠ CAPTURE INCOMPLETE: ${sectionRows.length} section(s) written but 0 CLAIMS. If the brief asked for claims (the usual case for a capture), this synthesis is NOT complete and must not be reported done — author the claims with write_claims (one synthesis per session; key on the SESSION id). ` + systemNote;
+    }
+
     // Lead the system line with the id disambiguation when the caller passed a synthesis id.
     if (idNote) systemNote = idNote + systemNote;
 
@@ -227,6 +234,8 @@ export const readSynthesisTool: Tool = {
       synthesis: {
         id: synthesisId,
         created_at: synth.data.created_at,
+        section_count: sectionRows.length,
+        claim_count: claimIds.length,   // ask 572e0a63 #2 — explicit, so completion can be checked structurally
         layer_1_present: !!synth.data.layer_1_synthesis_md,
         gaps_json: synth.data.gaps_json,
         convergence_points_json: synth.data.convergence_points_json,
