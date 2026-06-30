@@ -29,6 +29,7 @@
 
 import type { Tool, ToolContext } from "./types.ts";
 import { captureSource } from "../lib/captureSource.ts";
+import { resolveCaptureSession } from "../lib/resolveCaptureSession.ts";
 
 const ID_RE = /^[0-9a-f-]{4,36}$/i;
 const CLAIM_STATUS = new Set(["convergent", "divergent", "single_source", "synthesis_inference", "gap"]);
@@ -140,15 +141,12 @@ export const writeClaimsTool: Tool = {
     if (!Array.isArray(i?.claims) || i.claims.length === 0) return fail("claims must be a non-empty array.");
     const replace = i?.replace === true;
 
-    // Resolve session (prefix-tolerant; sessionRaw is ID_RE-validated).
-    const sLookup = await ctx.supabase.rpc("execute_raw_sql", {
-      query: `SELECT id FROM theo_session WHERE id::text LIKE '${sessionRaw}%' LIMIT 2`,
-    });
-    if (sLookup.error) return fail(`session lookup failed: ${sLookup.error.message}`);
-    const sRows = (sLookup.data ?? []) as Array<{ id: string }>;
-    if (sRows.length === 0) return fail(`no theo_session with id starting '${sessionRaw}'.`);
-    if (sRows.length > 1) return fail(`prefix '${sessionRaw}' matches ${sRows.length} sessions — supply more characters.`);
-    const sessionId = sRows[0].id;
+    // Resolve session (prefix-tolerant; also accepts a synthesis_id and maps it to its
+    // session — the model routinely conflates the two ids). sessionRaw is ID_RE-validated.
+    const resolved = await resolveCaptureSession(ctx.supabase, sessionRaw);
+    if ("err" in resolved) return fail(resolved.err);
+    const sessionId = resolved.sessionId;
+    const idNote = resolved.note ? ` ${resolved.note}` : "";
 
     // Synthesis must exist — claims hang off a synthesis (write_synthesis_section first).
     const synth = await ctx.supabase
@@ -172,15 +170,23 @@ export const writeClaimsTool: Tool = {
       const ids = ((sibs.data ?? []) as Array<{ id: string }>).map((r) => String(r.id));
       if (ids.length > 0) dispatchSessionIds = ids;
     }
-    const disp = await ctx.supabase.from("engine_dispatch").select("id, engine_name").in("theo_session_id", dispatchSessionIds);
+    const disp = await ctx.supabase.from("engine_dispatch")
+      .select("id, engine_name, role_in_dispatch, role_description, prompt_sent, theo_session_id")
+      .in("theo_session_id", dispatchSessionIds);
     if (disp.error) return fail(`dispatch lookup failed: ${disp.error.message}`);
     const dispatchIds = new Set<string>();
     const byEngine = new Map<string, string[]>();
-    for (const r of (disp.data ?? []) as Array<{ id: string; engine_name: string }>) {
+    const dispatchLabel = new Map<string, string>();
+    const thisSessionDispatch = new Set<string>();
+    for (const r of (disp.data ?? []) as Array<{ id: string; engine_name: string; role_in_dispatch: string | null; role_description: string | null; prompt_sent: string | null; theo_session_id: string }>) {
       dispatchIds.add(r.id);
+      if (r.theo_session_id === sessionId) thisSessionDispatch.add(r.id);
       const arr = byEngine.get(r.engine_name) ?? [];
       arr.push(r.id);
       byEngine.set(r.engine_name, arr);
+      // A short human label so an ambiguity error can name each candidate, not just count them.
+      const hint = (r.role_description || r.prompt_sent || r.role_in_dispatch || "").replace(/\s+/g, " ").trim().slice(0, 70);
+      dispatchLabel.set(r.id, `${r.id}${hint ? ` ["${hint}…"]` : ""}`);
     }
     // Resolve a source/citation reference to a real dispatch id for this session.
     // Returns {id} or {err}. dispatch_id wins; engine_name resolves iff unique.
@@ -193,7 +199,23 @@ export const writeClaimsTool: Tool = {
       if (typeof engineName === "string" && engineName.trim()) {
         const ids = byEngine.get(engineName.trim());
         if (!ids || ids.length === 0) return { id: null, err: `${where}: engine '${engineName}' did not run in this conversation — cannot source a claim to it.` };
-        if (ids.length > 1) return { id: null, err: `${where}: engine '${engineName}' ran for ${ids.length} questions in this conversation — ambiguous; supply dispatch_id.` };
+        if (ids.length > 1) {
+          // SELF-SERVICE (Angelia SC1, 30 Jun): an engine that ran multiple questions can't be
+          // disambiguated by name, and stamping question_id at enqueue is Theo's lane. So list the
+          // candidate dispatch_ids HERE — turn the dead-end into a one-step fix: pick the dispatch
+          // whose return supports THIS claim and pass it as sources[].dispatch_id / citations[].dispatch_id.
+          // The conversation-wide provenance pool (8cb99efa) can make this list long in a mature arc, so
+          // lead with THIS session's dispatches (almost always the right ones) and cap the siblings.
+          const here = ids.filter((id) => thisSessionDispatch.has(id));
+          const elsewhere = ids.filter((id) => !thisSessionDispatch.has(id));
+          const SIB_CAP = 4;
+          const lines = [
+            ...here.map((id) => `${dispatchLabel.get(id) ?? id} (this session)`),
+            ...elsewhere.slice(0, SIB_CAP).map((id) => `${dispatchLabel.get(id) ?? id} (sibling session)`),
+          ];
+          const more = elsewhere.length > SIB_CAP ? ` …and ${elsewhere.length - SIB_CAP} more in sibling capture sessions (use dispatch_id).` : "";
+          return { id: null, err: `${where}: engine '${engineName}' ran ${ids.length} dispatches in this conversation — ambiguous by name. Cite by dispatch_id instead (usually one from THIS session). Candidates: ${lines.join("; ")}.${more} Use the dispatch_id of the one whose return supports this claim.` };
+        }
         return { id: ids[0] };
       }
       if (required) return { id: null, err: `${where}: needs a dispatch_id or engine_name.` };
@@ -397,7 +419,7 @@ export const writeClaimsTool: Tool = {
       claim_ids: claimIds,        // A2 5acd06d0 — the write landed iff these come back
       citation_ids: citationIds,  // folds 6e3dbeb6 — feed straight into write_figure
       superseded: supersededPairs, // {old,new} pairs — old claim marked superseded, superseded_by=new
-      "[SYSTEM]": `PERSISTED + CONFIRMED. ${claimN} claim(s) [ids: ${claimIds.join(", ") || "none"}], ${citationN} citation(s) [ids: ${citationIds.join(", ") || "none"}], ${sourceN} source link(s)${supersededN > 0 ? `, ${supersededN} correction(s) [superseded: ${supersededPairs.map((p) => `${p.old}→${p.new}`).join(", ")}]` : ""}. These ids ARE the confirmation the write landed — read them back, and pass citation_ids into write_figure. Every count above is a committed row: a failed persist would have surfaced as an error and stopped this call, not returned a count, so silence-on-failure is not possible here. ${anchoredN} citation(s) ANCHORED to a captured source_document (frozen + hashed); ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass. Provenance intact — every source/citation resolved to a real dispatch for this conversation.${supersededN > 0 ? " Corrections are auditable: the old claim is marked claim_lifecycle='superseded' with superseded_by set to its correction, never edited in place." : ""}`,
+      "[SYSTEM]": `PERSISTED + CONFIRMED. ${claimN} claim(s) [ids: ${claimIds.join(", ") || "none"}], ${citationN} citation(s) [ids: ${citationIds.join(", ") || "none"}], ${sourceN} source link(s)${supersededN > 0 ? `, ${supersededN} correction(s) [superseded: ${supersededPairs.map((p) => `${p.old}→${p.new}`).join(", ")}]` : ""}. These ids ARE the confirmation the write landed — read them back, and pass citation_ids into write_figure. Every count above is a committed row: a failed persist would have surfaced as an error and stopped this call, not returned a count, so silence-on-failure is not possible here. ${anchoredN} citation(s) ANCHORED to a captured source_document (frozen + hashed); ${citationN - anchoredN} cited-but-not-anchored (no recoverable snapshot — a loud gap, not a silent hole). Citations are 'unchecked' until the liveness pass. Provenance intact — every source/citation resolved to a real dispatch for this conversation.${supersededN > 0 ? " Corrections are auditable: the old claim is marked claim_lifecycle='superseded' with superseded_by set to its correction, never edited in place." : ""}${idNote}`,
     });
   },
 };
