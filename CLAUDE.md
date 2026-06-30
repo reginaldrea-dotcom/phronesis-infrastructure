@@ -76,9 +76,13 @@ Wrong working dir → 400 on entrypoint. Rollback = `git revert` + redeploy.
 - **Lineage naming**: Constantinople's canonical lineage is **`constantinople`**, not `connie`
   (the nickname is only the URL). Addressing a `prime_message`/`wake_delta` to `connie` makes it
   invisible to her scoped inbox.
-- **User identity (open bug)**: `extractUserIdFromJwt` returns the JWT `sub` = **auth_user_id**, but
+- **User identity**: `extractUserIdFromJwt` returns the JWT `sub` = **auth_user_id**, but
   `conversation.user_id` and `theo_session.user_id` FK to **`app_user.id`**. Resolve
-  `app_user.id WHERE auth_user_id = sub` before using it. (Currently breaks `enqueue_dispatch`.)
+  `app_user.id WHERE auth_user_id = sub` before using it. `enqueue_dispatch` already does this
+  on a dual path — end-user (`auth_user_id` → `app_user.id`) or, for an autonomous API-Prime with
+  no end-user JWT, the `role_context='autonomous_research'` service identity. (Older note said this
+  "breaks `enqueue_dispatch`"; that's fixed. Verified: SC1 session `1f37f91a` stamped a real
+  `app_user`.) Any NEW caller still owns the same resolve.
 - **`instructions` active flip**: a partial unique index allows one active row per lineage. Flip ordered
   — set old `is_active=false` first, then new `is_active=true` — or you hit 23505.
 - **Clone-readiness**: deployed-without-repo is not allowed for new work. EF source goes in
