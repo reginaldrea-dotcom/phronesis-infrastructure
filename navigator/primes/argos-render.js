@@ -62,7 +62,7 @@ function confirmRetirement(rich) {
   const d = document.createElement('div'); d.className = 'retirement-prompt'; d.id = 'retirement-confirm-prompt';
   d.innerHTML =
     `<div class="retirement-dot"></div>` +
-    `<div class="retirement-text">Retire ${esc(PRIME_CONFIG.name)} and write the Super-T?</div>` +
+    `<div class="retirement-text">Retire ${esc(PRIME_CONFIG.name)}? No Super-T artefact is in the panel, so ${esc(PRIME_CONFIG.name)} will be asked to file it via the file_super_t tool on confirm. The session closes ONLY if a Super-T actually lands (the chain advances); otherwise it stays open.</div>` +
     `<button class="btn btn-send" id="btn-confirm-retire" style="margin-left:12px;padding:4px 14px;font-size:12px">Confirm</button>` +
     `<button class="error-dismiss" id="btn-cancel-retire" style="margin-left:6px">Cancel</button>`;
   insertBefore(d); scrollBottom();

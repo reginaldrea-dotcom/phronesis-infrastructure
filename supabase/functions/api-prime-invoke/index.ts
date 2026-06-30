@@ -548,8 +548,21 @@ Deno.serve(async (req: Request) => {
         : [];
 
     let effectiveMessage: string;
+    let retireSeqBefore = 0;
     if (retire) {
-      effectiveMessage = rich ? "bfn-R" : "bfn";
+      // Drive the model to FILE via the file_super_t tool (the created-checked, chain-read-back path),
+      // not a bare marker it can read as a goodbye — the 30 Jun Angelia failure: "bfn-R" read as a
+      // sign-off, nothing filed (msg 3651d5f2). Retirement completes only on a VERIFIED landing (below).
+      effectiveMessage =
+        (rich ? "bfn-R" : "bfn") +
+        "\n\n[RETIREMENT — REQUIRED ACTION] This turn ends your tenure. To retire you MUST file your Super-T NOW by calling the file_super_t tool: title TP_<you>_<date>_<seq>, content = the full handoff your successor inherits (durable state, lessons, open threads, and the why). Retirement does NOT complete and the session will NOT close unless that call lands and your chain head advances. Do not only say goodbye — file first.";
+      // Chain-derived verification baseline (invariant, Connie 64e92800): the head sequence BEFORE this
+      // turn, so a landing is confirmed from the CHAIN afterwards — never from the model's self-report.
+      const { data: headBefore } = await supabase
+        .from("super_t_chains").select("sequence_number")
+        .eq("lineage_name", lineage_name).is("successor_id", null)
+        .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+      retireSeqBefore = Number((headBefore as any)?.sequence_number ?? 0);
     } else if (conference_id) {
       effectiveMessage = `[CONFERENCE MODE — Conference ID: ${conference_id}]\n\n${user_message}`;
     } else {
@@ -1157,6 +1170,32 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) console.error("DB insert failed:", JSON.stringify(insertError));
 
+    // Retirement landing verification (invariant, Connie 64e92800): a session may render "closed" ONLY
+    // if a Super-T VERIFIABLY landed this turn — the chain head advanced for this lineage. Chain-derived,
+    // never the model's self-report. On a verified landing, also flip the instance to 'retired' so the
+    // bfn path is a COMPLETE retirement (matching the artefact/action path), not just a filing.
+    let superTFiled = false;
+    let superTSeq: number | null = null;
+    if (retire) {
+      const { data: headAfter } = await supabase
+        .from("super_t_chains").select("sequence_number")
+        .eq("lineage_name", lineage_name).is("successor_id", null)
+        .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+      const seqAfter = Number((headAfter as any)?.sequence_number ?? 0);
+      superTFiled = seqAfter > retireSeqBefore;
+      if (superTFiled) {
+        superTSeq = seqAfter;
+        if (instance_id) {
+          const { error: upErr } = await supabase.from("instances")
+            .update({ status: "retired", last_seen_at: new Date().toISOString() })
+            .eq("id", instance_id);
+          if (upErr) console.error("retire status flip failed (bfn path):", upErr.message);
+        }
+      } else {
+        console.warn(`retire: no Super-T landing for ${lineage_name} (head seq unchanged at ${retireSeqBefore}); session NOT closed.`);
+      }
+    }
+
     return await finalize({
       session_id: activeSessionId,
       wake: isNewSession,
@@ -1174,6 +1213,8 @@ Deno.serve(async (req: Request) => {
       },
       model: model,
       orientation_preloaded: isOrientedSession,
+      super_t_filed: retire ? superTFiled : undefined,           // invariant 64e92800: chain-derived landing THIS turn
+      super_t_sequence: (retire && superTFiled) ? superTSeq : undefined,
     }, 200);
 
   } catch (err) {

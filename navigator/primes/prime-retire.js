@@ -129,3 +129,32 @@ function retireFile() {
   if (tp) { confirmSuperTFiling(tp); return true; }
   return false;
 }
+
+/* ── Verified-close gate (SHARED core) — invariant Connie 64e92800 + Eames ruling (baton 36be494a) ──
+   This lives in the shared module ON PURPOSE so connie.html and argos.html inherit the FIX, not the
+   per-Prime false close. Render "closed" AND the "will remember" continuity promise ONLY on a
+   chain-VERIFIED Super-T landing this turn — data.super_t_filed, derived server-side from the chain head
+   advancing, never a self-report (not HTTP 200, not a timeout, not the model saying done, not an artefact
+   being present). 3-state, fail-safe (no optimistic close path):
+     filed            -> closed + will-remember + clear the persistent thread;
+     attempted, none  -> session STAYS OPEN, unmistakable, actionable next step (file then re-run Retire);
+   (no-TP-at-click is handled pre-flight in confirmRetirement, before the turn runs).
+   The per-Prime triggerRetirement delegates here; it must carry NO close logic of its own. */
+function renderRetirementOutcome(data) {
+  const filed = !!(data && data.super_t_filed);
+  const d = document.createElement('div');
+  d.className = 'retirement-confirm' + (filed ? '' : ' retire-failed');
+  if (filed) {
+    const seq = (data && data.super_t_sequence != null) ? ` (seq ${data.super_t_sequence})` : '';
+    d.textContent = `Session closed — Super-T filed${seq}, chain advanced. ${PRIME_CONFIG.name} will remember.`;
+    insertBefore(d);
+    sessionClosed = true;            // clean retirement — disarm the accidental-close guard
+    clearPersistedSession();         // the only thing that ends the persistent thread
+  } else {
+    d.textContent = `⚠ RETIREMENT NOT COMPLETE — no Super-T landed this turn (the chain head did not advance), so the session is STILL OPEN and this is NOT a clean handoff. ${PRIME_CONFIG.name} must file the Super-T (call file_super_t with the full transition) and then re-run Retire. Nothing was closed.`;
+    insertBefore(d);
+    // FAIL-SAFE: do NOT set sessionClosed, do NOT clearPersistedSession — the thread continues so the
+    // filing can be retried. There is no optimistic close path.
+  }
+  scrollBottom();
+}

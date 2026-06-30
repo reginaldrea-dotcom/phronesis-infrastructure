@@ -134,12 +134,11 @@ async function triggerRetirement(rich) {
     updateBudgetGauge(data.usage);
     updateLoadGauge(data);
   }
-  const d = document.createElement('div'); d.className = 'retirement-confirm';
-  d.textContent = `Session closed. ${PRIME_CONFIG.name} will remember.`;
-  insertBefore(d);
-  sessionClosed = true;   // clean retirement — disarm the accidental-close guard
-  clearPersistedSession();   // retirement is the only thing that ends the persistent thread
-  inputEl.disabled = false; btnSend.disabled = false;   // allow a final goodbye after close
+  // Verified-close gate lives in the SHARED core (prime-retire.js renderRetirementOutcome) so
+  // connie/argos inherit the fix, not a per-Prime false close (Eames ruling, baton 36be494a). It
+  // renders closed + "will remember" ONLY on a chain-verified landing; otherwise keeps the session open.
+  renderRetirementOutcome(data);
+  inputEl.disabled = false; btnSend.disabled = false;   // re-enable either way (retry if not filed)
   const rp = document.getElementById('retirement-prompt'); if (rp) rp.remove();
   scrollBottom();
 }
