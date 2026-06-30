@@ -30,6 +30,7 @@
 import type { Tool, ToolContext } from "./types.ts";
 import { captureSource } from "../lib/captureSource.ts";
 import { resolveCaptureSession } from "../lib/resolveCaptureSession.ts";
+import { assertCaptureTarget } from "../lib/captureTarget.ts";
 
 const ID_RE = /^[0-9a-f-]{4,36}$/i;
 const CLAIM_STATUS = new Set(["convergent", "divergent", "single_source", "synthesis_inference", "gap"]);
@@ -147,6 +148,10 @@ export const writeClaimsTool: Tool = {
     if ("err" in resolved) return fail(resolved.err);
     const sessionId = resolved.sessionId;
     const idNote = resolved.note ? ` ${resolved.note}` : "";
+
+    // Ownership-bind (a90e1410 inst 3): a run may only write claims to the synthesis it declared.
+    const own = await assertCaptureTarget(ctx.supabase, ctx.sessionId, sessionId);
+    if ("err" in own) return fail(own.err);
 
     // Synthesis must exist — claims hang off a synthesis (write_synthesis_section first).
     const synth = await ctx.supabase

@@ -14,6 +14,7 @@
 // matching open `conversation` row. Phase 1 errors if no open conversation exists.
 
 import type { Tool, ToolContext } from "./types.ts";
+import { setCaptureTarget } from "../lib/captureTarget.ts";
 
 // Mirror of theo-dispatch-worker/lib/config.ts ENGINES keys. Kept hardcoded here
 // (tool and worker are different EFs; can't import). When adding an engine to
@@ -201,6 +202,16 @@ export const enqueueDispatchTool: Tool = {
       .single();
     if (sessionInsert.error) return fail(`theo_session insert failed: ${sessionInsert.error.message}`);
     const theoSessionId = sessionInsert.data.id as string;
+
+    // Auto-declare this fresh capture session as the run's write-target if none declared yet
+    // (a90e1410 inst 3, Connie 6d3fab47): the common create-then-capture flow is guarded without an
+    // explicit declare_capture_target call. onlyIfAbsent so an explicit prior declaration (e.g. an
+    // arc-read run that adopted the arc) is never overridden. Best-effort — never breaks the dispatch.
+    if (ctx.sessionId) {
+      const dec = await setCaptureTarget(ctx.supabase, ctx.sessionId, theoSessionId, ctx.lineageName,
+        { onlyIfAbsent: true, note: "auto: created via enqueue_dispatch" });
+      if ("err" in dec) console.error("auto-declare capture target failed (6d3fab47):", dec.err);
+    }
 
     // Create engine_dispatch rows ────────────────────────────────────────
     const dispatchInsert = await ctx.supabase

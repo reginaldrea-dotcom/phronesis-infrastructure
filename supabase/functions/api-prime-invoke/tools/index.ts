@@ -12,6 +12,7 @@ import { writeSynthesisSectionTool } from "./writeSynthesisSection.ts";
 import { readSynthesisTool } from "./readSynthesis.ts";
 import { commitSynthesisTool } from "./commitSynthesis.ts";
 import { writeClaimsTool } from "./writeClaims.ts";
+import { declareCaptureTargetTool } from "./declareCaptureTarget.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
@@ -38,6 +39,7 @@ const TOOLS: Tool[] = [
   readSynthesisTool,
   commitSynthesisTool,
   writeClaimsTool,
+  declareCaptureTargetTool,
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,

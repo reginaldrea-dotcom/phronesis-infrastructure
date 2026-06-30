@@ -22,6 +22,7 @@
 
 import type { Tool, ToolContext } from "./types.ts";
 import { resolveCaptureSession } from "../lib/resolveCaptureSession.ts";
+import { assertCaptureTarget } from "../lib/captureTarget.ts";
 
 const ID_RE = /^[0-9a-f-]{4,36}$/i;
 
@@ -78,6 +79,10 @@ export const writeSynthesisSectionTool: Tool = {
     if ("err" in resolved) return fail(resolved.err);
     const theoSessionId = resolved.sessionId;
     const idNote = resolved.note ? ` (note: ${resolved.note})` : "";
+
+    // Ownership-bind (a90e1410 inst 3): a run may only write to the synthesis it declared.
+    const own = await assertCaptureTarget(ctx.supabase, ctx.sessionId, theoSessionId);
+    if ("err" in own) return fail(own.err);
 
     // Find-or-create the synthesis row for this session. Single synthesis per
     // session in Phase 1 (no explicit UNIQUE on synthesis.theo_session_id, but

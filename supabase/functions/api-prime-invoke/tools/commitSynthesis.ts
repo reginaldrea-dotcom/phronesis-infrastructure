@@ -22,6 +22,7 @@
 // are RLS-sealed; same channel the worker writes engine_dispatch on).
 
 import type { Tool, ToolContext } from "./types.ts";
+import { assertCaptureTarget } from "../lib/captureTarget.ts";
 
 const ID_RE = /^[0-9a-f-]{4,36}$/i;
 const TERMINAL_STATE = "delivered";
@@ -65,6 +66,11 @@ export const commitSynthesisTool: Tool = {
     if (sessRows.length === 0) return fail(`no theo_session with id starting '${sessionRaw}'.`);
     if (sessRows.length > 1) return fail(`prefix '${sessionRaw}' matches ${sessRows.length} sessions — supply more characters.`);
     const sessionId = sessRows[0].id;
+
+    // Ownership-bind (a90e1410 inst 3): commit terminalises a synthesis — never let a run commit
+    // (and flip to 'delivered') a synthesis other than the one it declared.
+    const own = await assertCaptureTarget(ctx.supabase, ctx.sessionId, sessionId);
+    if ("err" in own) return fail(own.err);
 
     // GUARD 1 — a synthesis row with at least one section must exist. This is the
     // ratified invariant, enforced at the transition: no terminal state without rows.
