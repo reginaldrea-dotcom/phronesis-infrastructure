@@ -158,3 +158,39 @@ function renderRetirementOutcome(data) {
   }
   scrollBottom();
 }
+
+/* ── Capture-completion surface (SHARED core) — a90e1410 instance 3 (capture) ──
+   The capture analog of renderRetirementOutcome. Renders the capture state from the
+   SERVER-DERIVED data.capture_state (row counts: claims/dispatches/questions for the
+   owned synthesis), NEVER the Prime's word. Eames render contract (cac6810c): three
+   states, fail-safe, surface-surfaces-itself —
+     incomplete  -> LOUD: the row-derived gap is shown to Reg regardless of what the
+                    Prime narrated (the actual fix for the SC1 failure: "do you have
+                    results?" answered with process-narration past 0 claims);
+     in_progress -> QUIET neutral note (a mid-flight capture is not a violation; crying
+                    wolf here is how the warning gets trained away);
+     complete    -> subtle positive confirmation (only a true predicate reaches here).
+   Fail-safe: no/unknown state renders nothing — never a false "complete". Inline styles
+   so it renders identically on every page without per-page CSS. Lives in the shared
+   module so angelia/connie/argos inherit it, same as the retire gate. */
+function renderCaptureState(data) {
+  const cs = data && data.capture_state;
+  if (!cs || !cs.state) return;
+  const d = document.createElement('div');
+  d.className = 'capture-state capture-' + cs.state;
+  const base = 'margin:6px 0;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.45;';
+  if (cs.state === 'incomplete') {
+    d.setAttribute('style', base + 'background:#3a1d1d;border:1px solid #a33;color:#f4caca;font-weight:600;');
+    d.textContent = '⚠ Capture incomplete (substrate-derived): ' + (cs.detail || 'the brief’s required outputs have not landed.');
+  } else if (cs.state === 'in_progress') {
+    d.setAttribute('style', base + 'background:#23252b;border:1px solid #444;color:#9aa3b2;');
+    d.textContent = cs.detail || 'Capture in progress — not yet complete.';
+  } else if (cs.state === 'complete') {
+    d.setAttribute('style', base + 'background:#1d2a1f;border:1px solid #3a6b46;color:#bfe4c6;');
+    d.textContent = '✓ ' + (cs.detail || 'Capture complete.');
+  } else {
+    return; // unknown / 'none' -> render nothing (fail-safe: never a false complete)
+  }
+  insertBefore(d);
+  scrollBottom();
+}

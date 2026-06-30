@@ -119,6 +119,7 @@ async function send() {
       updateBudgetGauge(data.usage);
     }
     updateLoadGauge(data);
+    renderCaptureState(data);   // a90e1410 inst 3 — surface the row-derived capture state (shared core)
   }
   scrollBottom();
 }
