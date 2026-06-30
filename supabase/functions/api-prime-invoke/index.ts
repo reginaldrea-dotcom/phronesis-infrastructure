@@ -22,6 +22,7 @@ import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
 import { digestToolCall, extractLedgerJuncture, type ToolDigest } from "./lib/provenance.ts";
 import { claimIdempotency, markDone, markDoneFromResponse, awaitDuplicateResponse } from "./lib/idempotency.ts";
+import { evaluateCaptureState, type CaptureEval } from "./lib/evaluateCaptureState.ts";
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
 
@@ -662,6 +663,10 @@ Deno.serve(async (req: Request) => {
     const directArtefacts: Artifact[] = [];
     const allToolUses: { name: string; input: unknown }[] = [];
     const toolLog: ToolDigest[] = []; // provenance ledger (WO d4501dbc) → persisted to metadata.tool_log
+    // The theo_session the Prime CAPTURED INTO this turn (a90e1410 instance 3): set when a capture tool
+    // names a session, so the capture-completion gate evaluates the right synthesis at end-of-turn.
+    let captureTargetSession: string | null = null;
+    const CAPTURE_TOOLS = new Set(["write_claims", "write_synthesis_section", "enqueue_dispatch", "commit_synthesis", "read_synthesis", "read_dispatch_results"]);
     const MAX_LOOPS = 6;
     let finishedCleanly = false; // false → loop hit the budget with tools still pending
 
@@ -905,6 +910,8 @@ Deno.serve(async (req: Request) => {
           const m = /"theo_session_id"\s*:\s*"([0-9a-f]{8}-[0-9a-f-]{27})"/i.exec(content);
           if (m) theoSessionId = m[1];
         }
+        // Remember the capture target for the end-of-turn completion gate (last capture tool wins).
+        if (theoSessionId && CAPTURE_TOOLS.has(toolUse.name)) captureTargetSession = theoSessionId;
         // Central server-side tool-call ledger (baton e5ff6f64; Aegis mandatory-write). EVERY loop
         // tool call — run OR denied — lands an execution_ledger row server-side, so figure work
         // (write_figure) satisfies the ledger-write clearance WITHOUT a Prime-side ledger grant
@@ -1056,6 +1063,26 @@ Deno.serve(async (req: Request) => {
       console.log("PROVENANCE MISMATCH: provenance tag present but tool_log empty");
     }
 
+    // CAPTURE-COMPLETION GATE (a90e1410 instance 3: capture; Connie predicate 070f74f0 + Eames render
+    // contract cac6810c). Row-derived, never the model's word. If the Prime captured into a synthesis
+    // this turn, evaluate the owned synthesis at this turn boundary into one of three states. On
+    // INCOMPLETE (predicate false AND nothing in flight) the SURFACE itself states the gap — so when
+    // Reg asks "do you have results?" the truth is on the surface, independent of what the Prime narrates
+    // (the SC1 failure: process-narration past 0 claims). IN_PROGRESS (work still arriving) stays quiet —
+    // crying wolf mid-run trains Primes to wave the warning away. Fail-safe: any error → no false
+    // "complete" (evaluateCaptureState returns null and we render nothing rather than a green light).
+    // Not evaluated on the retire turn (that gate is the Super-T landing, handled below). Best-effort.
+    let captureEval: CaptureEval | null = null;
+    if (!retire && captureTargetSession) {
+      try {
+        captureEval = await evaluateCaptureState(supabase, captureTargetSession);
+        if (captureEval && captureEval.state === "incomplete") {
+          cleanResponse +=
+            `\n\n⚠ CAPTURE INCOMPLETE (system, row-derived): ${captureEval.detail} This is the substrate state regardless of the summary above — do not report this capture complete until write_claims lands.`;
+        }
+      } catch (e) { console.error("capture-completion gate failed:", e); }
+    }
+
     if (userId && totalInputTokens > 0) {
       const bucket = new Date(); bucket.setSeconds(0, 0);
       const bucketIso = bucket.toISOString();
@@ -1182,6 +1209,7 @@ Deno.serve(async (req: Request) => {
               : undefined,
             tool_log: toolLog, // provenance ledger (WO d4501dbc) — what this turn actually did
             provenance_mismatch: provenanceMismatch, // true = claimed a tool result with no tool run
+            capture_state: captureEval ?? undefined, // a90e1410 inst 3 — row-derived capture-completion state
           },
         },
       ],
@@ -1235,6 +1263,7 @@ Deno.serve(async (req: Request) => {
       orientation_preloaded: isOrientedSession,
       super_t_filed: retire ? superTFiled : undefined,           // invariant 64e92800: chain-derived landing THIS turn
       super_t_sequence: (retire && superTFiled) ? superTSeq : undefined,
+      capture_state: captureEval ?? undefined,                   // a90e1410 inst 3 — row-derived; surface renders the 3 states from this
     }, 200);
 
   } catch (err) {
