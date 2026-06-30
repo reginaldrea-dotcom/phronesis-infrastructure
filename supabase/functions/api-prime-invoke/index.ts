@@ -519,6 +519,26 @@ Deno.serve(async (req: Request) => {
     const activeSessionId: string = session_id || crypto.randomUUID();
     const isNewSession = !session_id;
 
+    // SYMMETRIC WAKE-ACTIVATION (Connie aa221512): R1 made retire flip status active->retired; the
+    // wake path had no matching re-activation, so a retired Prime woke into a stale 'retired' row and
+    // ran its whole session claiming retired (Angelia Seq-6, 30 Jun). Same state-honesty family as the
+    // retire false-close, pointing the other way: the substrate lagging reality instead of the surface
+    // overstating it. If a turn is being processed the Prime is, by definition, awake — so on any live
+    // (non-retire) turn bump last_seen_at (real, not self-reported), and reactivate the row only when it
+    // is stale-'retired' (the filtered .eq guards against clobbering any other deliberate status).
+    // Lands in the shared core so connie/argos inherit it, same as the retire gate.
+    if (!retire && resolvedInstanceId) {
+      const nowIso = new Date().toISOString();
+      const { error: unretireErr } = await supabase.from("instances")
+        .update({ status: "active", last_seen_at: nowIso })
+        .eq("id", resolvedInstanceId).eq("status", "retired");
+      if (unretireErr) console.error("wake re-activation failed (aa221512):", unretireErr.message);
+      const { error: seenErr } = await supabase.from("instances")
+        .update({ last_seen_at: nowIso })
+        .eq("id", resolvedInstanceId);
+      if (seenErr) console.error("last_seen bump failed (aa221512):", seenErr.message);
+    }
+
     const { count } = await supabase
       .from("prime_conversations")
       .select("*", { count: "exact", head: true })
