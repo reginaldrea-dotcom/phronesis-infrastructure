@@ -46,6 +46,8 @@ interface QuestionInput {
   engine_name?: unknown;
   role?: unknown;
   role_description?: unknown;
+  question_index?: unknown;
+  question_text?: unknown;
 }
 
 interface EnqueueInput {
@@ -88,6 +90,8 @@ export const enqueueDispatchTool: Tool = {
               engine_name: { type: "string", description: "Canonical engine name. See tool description for valid values." },
               role: { type: "string", enum: ["deep_source", "deep_research", "current_web", "synthesist"], description: "Semantic role this engine plays for this question." },
               role_description: { type: "string", description: "Optional free-form clarification of the role for this specific question." },
+              question_index: { type: "integer", minimum: 0, description: "Which distinct research question this row answers (0..N). Rows sharing a question_index are the SAME question sent to different engines; each becomes one research_question, and every dispatch is stamped with that question's id so claims resolve by (engine_name, question_id). OMIT for a single-question dispatch — all rows default to question 0 (the refined_prompt)." },
+              question_text: { type: "string", description: "Optional: the text of this research question (defaults to refined_prompt for the single-question case). Give it per distinct question_index in a multi-question dispatch." },
             },
             required: ["prompt", "engine_name", "role"],
           },
@@ -121,7 +125,12 @@ export const enqueueDispatchTool: Tool = {
     if (!Array.isArray(input?.questions) || input.questions.length === 0) return fail("questions must be a non-empty array.");
 
     const questions = input.questions as QuestionInput[];
-    const rows: Array<{ prompt: string; engine_name: string; role: string; role_description: string | null }> = [];
+    const rows: Array<{ prompt: string; engine_name: string; role: string; role_description: string | null; questionIndex: number }> = [];
+    // Question grouping (MR e700ca48 / ee6eb5ec): rows sharing a question_index are ONE research
+    // question sent to K engines. If no row supplies question_index, this is a single-question
+    // dispatch → all rows are question 0 (question_text = refined_prompt). questionText[idx] holds
+    // the text for each distinct question.
+    const questionText = new Map<number, string>();
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       const prompt = typeof q?.prompt === "string" ? q.prompt.trim() : "";
@@ -133,8 +142,16 @@ export const enqueueDispatchTool: Tool = {
       if (!VALID_ENGINES.has(engine)) return fail(`questions[${i}].engine_name is not a recognised engine: '${engine}'. See tool description for valid values.`);
       if (!role) return fail(`questions[${i}].role is required.`);
       if (!VALID_ROLES.has(role)) return fail(`questions[${i}].role is not valid: '${role}'. Use deep_source, deep_research, current_web, or synthesist.`);
-      rows.push({ prompt, engine_name: engine, role, role_description: roleDesc });
+      if (q?.question_index !== undefined && !Number.isInteger(q.question_index)) return fail(`questions[${i}].question_index must be an integer.`);
+      const questionIndex = Number.isInteger(q?.question_index) ? (q.question_index as number) : 0;
+      if (questionIndex < 0) return fail(`questions[${i}].question_index must be >= 0.`);
+      const qText = typeof q?.question_text === "string" && q.question_text.trim() ? q.question_text.trim() : null;
+      if (qText && !questionText.has(questionIndex)) questionText.set(questionIndex, qText);
+      rows.push({ prompt, engine_name: engine, role, role_description: roleDesc, questionIndex });
     }
+    // Every distinct question_index gets a research_question; default its text to the refined prompt.
+    const questionIndexes = [...new Set(rows.map(r => r.questionIndex))].sort((a, b) => a - b);
+    for (const idx of questionIndexes) if (!questionText.has(idx)) questionText.set(idx, refinedPrompt);
 
     // Resolve the owning app_user.id (dual-path) ─────────────────────────
     // theo_session.user_id + conversation_id are NOT NULL, so every dispatch must attach to a
@@ -213,7 +230,28 @@ export const enqueueDispatchTool: Tool = {
       if ("err" in dec) console.error("auto-declare capture target failed (6d3fab47):", dec.err);
     }
 
-    // Create engine_dispatch rows ────────────────────────────────────────
+    // Create research_question rows (status='open') so every dispatch is question-addressable
+    // (MR e700ca48 / ee6eb5ec — question_id stamping is mandatory: the conversation stays the
+    // resolution scope, so the precise (engine_name, question_id) key is what disambiguates).
+    // status flips open -> answered/gap at synthesis (write_claims). Best-effort rollback of the
+    // session on failure (research_question.theo_session_id cascades on session delete).
+    const rqInsert = await ctx.supabase
+      .from("research_question")
+      .insert(questionIndexes.map(idx => ({
+        theo_session_id: theoSessionId,
+        question_index: idx,
+        question_text: questionText.get(idx) as string,
+        status: "open",
+      })))
+      .select("id, question_index");
+    if (rqInsert.error) {
+      await ctx.supabase.from("theo_session").delete().eq("id", theoSessionId);
+      return fail(`research_question insert failed (theo_session rolled back): ${rqInsert.error.message}`);
+    }
+    const questionIdByIndex = new Map<number, string>();
+    for (const r of (rqInsert.data ?? []) as Array<{ id: string; question_index: number }>) questionIdByIndex.set(r.question_index, r.id);
+
+    // Create engine_dispatch rows, each STAMPED with its question's id ────────
     const dispatchInsert = await ctx.supabase
       .from("engine_dispatch")
       .insert(rows.map(r => ({
@@ -223,11 +261,12 @@ export const enqueueDispatchTool: Tool = {
         role_description: r.role_description,
         prompt_sent: r.prompt,
         status: "pending",
+        question_id: questionIdByIndex.get(r.questionIndex) ?? null,
       })))
-      .select("id, engine_name, role_in_dispatch");
+      .select("id, engine_name, role_in_dispatch, question_id");
     if (dispatchInsert.error) {
-      // Best-effort rollback: delete the theo_session we just created so the
-      // worker doesn't pick up an empty session.
+      // Best-effort rollback: delete the theo_session we just created (research_question cascades)
+      // so the worker doesn't pick up an empty session.
       await ctx.supabase.from("theo_session").delete().eq("id", theoSessionId);
       return fail(`engine_dispatch insert failed (theo_session rolled back): ${dispatchInsert.error.message}`);
     }

@@ -42,8 +42,8 @@ function fail(msg: string): string {
   return `write_claims error: ${msg}\n[SYSTEM: surface to Reg, do not retry.]`;
 }
 
-interface SourceIn { dispatch_id?: unknown; engine_name?: unknown; stance?: unknown; }
-interface CitationIn { dispatch_id?: unknown; engine_name?: unknown; url?: unknown; title?: unknown; source_date?: unknown; note?: unknown; }
+interface SourceIn { dispatch_id?: unknown; engine_name?: unknown; question_id?: unknown; stance?: unknown; }
+interface CitationIn { dispatch_id?: unknown; engine_name?: unknown; question_id?: unknown; url?: unknown; title?: unknown; source_date?: unknown; note?: unknown; }
 interface ClaimIn {
   claim_text?: unknown; claim_status?: unknown; scope?: unknown;
   divergence_status?: unknown; resolution_note?: unknown;
@@ -93,12 +93,13 @@ export const writeClaimsTool: Tool = {
               supersedes_claim_id: { type: "string", description: "Optional correction: the full id of an EXISTING claim in this synthesis that this claim replaces. That claim is atomically marked claim_lifecycle='superseded' with superseded_by set to this new claim — an auditable correction, not an in-place edit. Append-only (not valid with replace=true); must be a real claim of this synthesis." },
               sources: {
                 type: "array",
-                description: "Provenance: which engine returns support/diverge on this claim. Each MUST resolve to a real dispatch in this conversation.",
+                description: "Provenance: which engine returns support/diverge on this claim. Each MUST resolve to exactly one real dispatch in this conversation, by one of: (a) dispatch_id — canonical, always unambiguous, preferred; or (b) engine_name PLUS the question_id it answers — where question_id defaults to the claim's own research_question (set the claim's question_index), so in practice you give just engine_name and link the claim to its question. engine_name ALONE is rejected (an engine runs many dispatches across a conversation; the name is an attribute, not an identity).",
                 items: {
                   type: "object",
                   properties: {
-                    dispatch_id: { type: "string", description: "The engine_dispatch id (preferred — exact provenance)." },
-                    engine_name: { type: "string", description: "Alternative to dispatch_id; resolved only if it matches exactly one dispatch in this conversation." },
+                    dispatch_id: { type: "string", description: "The engine_dispatch id — canonical, always unambiguous. Preferred, and required for cross-session citation." },
+                    engine_name: { type: "string", description: "The engine, paired with question_id (or the claim's question_index) to resolve to one dispatch. Not sufficient alone." },
+                    question_id: { type: "string", description: "Optional: the research_question id this source answers. Omit to use the claim's question_index. Needed with engine_name when the claim has no question_index." },
                     stance: { type: "string", enum: ["supports", "diverges"] },
                   },
                   required: ["stance"],
@@ -113,8 +114,9 @@ export const writeClaimsTool: Tool = {
                     url: { type: "string" },
                     title: { type: "string" },
                     source_date: { type: "string", description: "ISO date (YYYY-MM-DD) the source is dated — load-bearing for claim-date-vs-source-date checking." },
-                    dispatch_id: { type: "string", description: "Optional: the engine_dispatch this citation came from." },
-                    engine_name: { type: "string", description: "Optional alternative to dispatch_id (unique-resolve)." },
+                    dispatch_id: { type: "string", description: "Optional: the engine_dispatch this citation came from (canonical handle)." },
+                    engine_name: { type: "string", description: "Optional: the engine, paired with question_id (or the claim's question_index) to resolve one dispatch. Not sufficient alone." },
+                    question_id: { type: "string", description: "Optional: the research_question id; omit to use the claim's question_index." },
                     note: { type: "string" },
                   },
                 },
@@ -176,55 +178,77 @@ export const writeClaimsTool: Tool = {
       if (ids.length > 0) dispatchSessionIds = ids;
     }
     const disp = await ctx.supabase.from("engine_dispatch")
-      .select("id, engine_name, role_in_dispatch, role_description, prompt_sent, theo_session_id")
+      .select("id, engine_name, role_in_dispatch, role_description, prompt_sent, theo_session_id, question_id")
       .in("theo_session_id", dispatchSessionIds);
     if (disp.error) return fail(`dispatch lookup failed: ${disp.error.message}`);
     const dispatchIds = new Set<string>();
-    const byEngine = new Map<string, string[]>();
+    const byEngine = new Map<string, string[]>();                 // engine -> ids (for "did it run" / candidate lists)
+    const byEngineQuestion = new Map<string, string[]>();         // `${engine} ${question_id}` -> ids (the precise key)
     const dispatchLabel = new Map<string, string>();
     const thisSessionDispatch = new Set<string>();
-    for (const r of (disp.data ?? []) as Array<{ id: string; engine_name: string; role_in_dispatch: string | null; role_description: string | null; prompt_sent: string | null; theo_session_id: string }>) {
+    for (const r of (disp.data ?? []) as Array<{ id: string; engine_name: string; role_in_dispatch: string | null; role_description: string | null; prompt_sent: string | null; theo_session_id: string; question_id: string | null }>) {
       dispatchIds.add(r.id);
       if (r.theo_session_id === sessionId) thisSessionDispatch.add(r.id);
       const arr = byEngine.get(r.engine_name) ?? [];
       arr.push(r.id);
       byEngine.set(r.engine_name, arr);
+      if (r.question_id) {
+        const k = `${r.engine_name} ${r.question_id}`;
+        const a = byEngineQuestion.get(k) ?? [];
+        a.push(r.id);
+        byEngineQuestion.set(k, a);
+      }
       // A short human label so an ambiguity error can name each candidate, not just count them.
       const hint = (r.role_description || r.prompt_sent || r.role_in_dispatch || "").replace(/\s+/g, " ").trim().slice(0, 70);
       dispatchLabel.set(r.id, `${r.id}${hint ? ` ["${hint}…"]` : ""}`);
     }
-    // Resolve a source/citation reference to a real dispatch id for this session.
-    // Returns {id} or {err}. dispatch_id wins; engine_name resolves iff unique.
-    const resolveDispatch = (dispatchId: unknown, engineName: unknown, where: string, required: boolean): { id: string | null; err?: string } => {
+    // question_index -> research_question.id for THIS session (enqueue stamps these at 'open'), so a
+    // source can resolve via the CLAIM's question_index without carrying a raw id (MR e700ca48).
+    const questionIdByIndex = new Map<number, string>();
+    {
+      const rq = await ctx.supabase.from("research_question").select("id, question_index").eq("theo_session_id", sessionId);
+      if (rq.error) return fail(`research_question lookup failed: ${rq.error.message}`);
+      for (const r of (rq.data ?? []) as Array<{ id: string; question_index: number }>) questionIdByIndex.set(r.question_index, r.id);
+    }
+    // this-session-first candidate list for an ambiguity/not-found error.
+    const candidateList = (ids: string[]): string => {
+      const here = ids.filter((id) => thisSessionDispatch.has(id));
+      const elsewhere = ids.filter((id) => !thisSessionDispatch.has(id));
+      const SIB_CAP = 4;
+      const lines = [
+        ...here.map((id) => `${dispatchLabel.get(id) ?? id} (this session)`),
+        ...elsewhere.slice(0, SIB_CAP).map((id) => `${dispatchLabel.get(id) ?? id} (sibling session)`),
+      ];
+      const more = elsewhere.length > SIB_CAP ? ` …and ${elsewhere.length - SIB_CAP} more in sibling sessions` : "";
+      return `${lines.join("; ")}${more}`;
+    };
+    // Resolve a source/citation to exactly one real dispatch (MR e700ca48 / ee6eb5ec):
+    //   dispatch_id (canonical) wins; else (engine_name, question_id) must resolve to EXACTLY ONE —
+    //   reject-on-ambiguity, never guess. engine_name ALONE is rejected; question_id alone is rejected.
+    // questionId is the source's explicit question_id, else the CLAIM's (from its question_index).
+    const resolveDispatch = (dispatchId: unknown, engineName: unknown, questionId: string | null, where: string, required: boolean): { id: string | null; err?: string } => {
       if (typeof dispatchId === "string" && dispatchId.trim()) {
         const id = dispatchId.trim();
         if (!dispatchIds.has(id)) return { id: null, err: `${where}: dispatch_id ${id} is not an engine_dispatch in this conversation.` };
         return { id };
       }
-      if (typeof engineName === "string" && engineName.trim()) {
-        const ids = byEngine.get(engineName.trim());
-        if (!ids || ids.length === 0) return { id: null, err: `${where}: engine '${engineName}' did not run in this conversation — cannot source a claim to it.` };
-        if (ids.length > 1) {
-          // SELF-SERVICE (Angelia SC1, 30 Jun): an engine that ran multiple questions can't be
-          // disambiguated by name, and stamping question_id at enqueue is Theo's lane. So list the
-          // candidate dispatch_ids HERE — turn the dead-end into a one-step fix: pick the dispatch
-          // whose return supports THIS claim and pass it as sources[].dispatch_id / citations[].dispatch_id.
-          // The conversation-wide provenance pool (8cb99efa) can make this list long in a mature arc, so
-          // lead with THIS session's dispatches (almost always the right ones) and cap the siblings.
-          const here = ids.filter((id) => thisSessionDispatch.has(id));
-          const elsewhere = ids.filter((id) => !thisSessionDispatch.has(id));
-          const SIB_CAP = 4;
-          const lines = [
-            ...here.map((id) => `${dispatchLabel.get(id) ?? id} (this session)`),
-            ...elsewhere.slice(0, SIB_CAP).map((id) => `${dispatchLabel.get(id) ?? id} (sibling session)`),
-          ];
-          const more = elsewhere.length > SIB_CAP ? ` …and ${elsewhere.length - SIB_CAP} more in sibling capture sessions (use dispatch_id).` : "";
-          return { id: null, err: `${where}: engine '${engineName}' ran ${ids.length} dispatches in this conversation — ambiguous by name. Cite by dispatch_id instead (usually one from THIS session). Candidates: ${lines.join("; ")}.${more} Use the dispatch_id of the one whose return supports this claim.` };
-        }
-        return { id: ids[0] };
+      const eng = typeof engineName === "string" && engineName.trim() ? engineName.trim() : null;
+      const qid = typeof questionId === "string" && questionId.trim() ? questionId.trim() : null;
+      if (!eng && !qid) {
+        if (required) return { id: null, err: `${where}: provenance needs a dispatch_id (canonical), or engine_name + the question it answers. Set the claim's question_index (or pass question_id) and give engine_name; engine_name alone is not accepted.` };
+        return { id: null };
       }
-      if (required) return { id: null, err: `${where}: needs a dispatch_id or engine_name.` };
-      return { id: null };
+      if (eng && !qid) return { id: null, err: `${where}: engine_name '${eng}' alone is not a provenance handle — an engine runs many dispatches across a conversation. Add the question this claim answers (set the claim's question_index, or pass question_id), or cite by dispatch_id.` };
+      if (!eng && qid) return { id: null, err: `${where}: question_id alone is insufficient — multiple engines answer one question. Add engine_name, or cite by dispatch_id.` };
+      // both present → the precise key
+      const ids = byEngineQuestion.get(`${eng} ${qid}`) ?? [];
+      if (ids.length === 1) return { id: ids[0] };
+      if (ids.length === 0) {
+        const engIds = byEngine.get(eng!) ?? [];
+        if (engIds.length === 0) return { id: null, err: `${where}: engine '${eng}' did not run in this conversation — cannot source a claim to it.` };
+        return { id: null, err: `${where}: engine '${eng}' has no dispatch for that question_id (it may pre-date question_id stamping, or answered a different question). Cite by dispatch_id. ${eng} dispatches: ${candidateList(engIds)}.` };
+      }
+      return { id: null, err: `${where}: (engine '${eng}', that question) matches ${ids.length} dispatches — a re-dispatch of the same question to the same engine. Ambiguous; cite by dispatch_id. Candidates: ${candidateList(ids)}.` };
     };
 
     // Section index → id map (for optional claim→section links).
@@ -247,13 +271,18 @@ export const writeClaimsTool: Tool = {
       if (typeof cl?.claim_text !== "string" || !cl.claim_text.trim()) return fail(`claims[${c}].claim_text is required.`);
       if (!CLAIM_STATUS.has(String(cl?.claim_status))) return fail(`claims[${c}].claim_status invalid: '${cl?.claim_status}'. Use convergent/divergent/single_source/synthesis_inference/gap.`);
       if (cl?.divergence_status !== undefined && !DIVERGENCE_STATUS.has(String(cl.divergence_status))) return fail(`claims[${c}].divergence_status invalid: '${cl.divergence_status}'.`);
+      // The claim's own research_question (from its question_index) is the default question_id for its
+      // sources/citations — so the synthesist gives just engine_name and links the claim to its question.
+      const claimQ = Number.isInteger(cl?.question_index) ? (questionIdByIndex.get(cl.question_index as number) ?? null) : null;
       for (const [si, s] of (Array.isArray(cl?.sources) ? cl.sources as SourceIn[] : []).entries()) {
         if (!STANCE.has(String(s?.stance))) return fail(`claims[${c}].sources[${si}].stance invalid: '${s?.stance}'. Use supports/diverges.`);
-        const r = resolveDispatch(s?.dispatch_id, s?.engine_name, `claims[${c}].sources[${si}]`, true);
+        const sQ = (typeof s?.question_id === "string" && s.question_id.trim()) ? s.question_id.trim() : claimQ;
+        const r = resolveDispatch(s?.dispatch_id, s?.engine_name, sQ, `claims[${c}].sources[${si}]`, true);
         if (r.err) return fail(r.err);
       }
       for (const [ci, ct] of (Array.isArray(cl?.citations) ? cl.citations as CitationIn[] : []).entries()) {
-        const r = resolveDispatch(ct?.dispatch_id, ct?.engine_name, `claims[${c}].citations[${ci}]`, false);
+        const cQ = (typeof ct?.question_id === "string" && ct.question_id.trim()) ? ct.question_id.trim() : claimQ;
+        const r = resolveDispatch(ct?.dispatch_id, ct?.engine_name, cQ, `claims[${c}].citations[${ci}]`, false);
         if (r.err) return fail(r.err);
       }
     }
@@ -376,11 +405,14 @@ export const writeClaimsTool: Tool = {
         supersededPairs.push({ old: supersedesId, new: claimId });
       }
 
+      // The claim's research_question is the default question for its sources/citations (matches the
+      // pre-validation pass; keyed via the post-upsert questionByIndex).
+      const claimQ2 = Number.isInteger(cl.question_index) ? (questionByIndex.get(cl.question_index as number) ?? null) : null;
       const sources = Array.isArray(cl.sources) ? cl.sources as SourceIn[] : [];
       if (sources.length > 0) {
         const rows = sources.map((s) => ({
           claim_id: claimId,
-          dispatch_id: resolveDispatch(s.dispatch_id, s.engine_name, "", true).id,
+          dispatch_id: resolveDispatch(s.dispatch_id, s.engine_name, (typeof s.question_id === "string" && s.question_id.trim()) ? s.question_id.trim() : claimQ2, "", true).id,
           stance: String(s.stance),
         }));
         const insS = await ctx.supabase.from("claim_source").upsert(rows, { onConflict: "claim_id,dispatch_id" });
@@ -397,7 +429,7 @@ export const writeClaimsTool: Tool = {
           if (sourceDocId) anchoredN++;
           return {
             claim_id: claimId,
-            dispatch_id: resolveDispatch(ct.dispatch_id, ct.engine_name, "", false).id,
+            dispatch_id: resolveDispatch(ct.dispatch_id, ct.engine_name, (typeof ct.question_id === "string" && ct.question_id.trim()) ? ct.question_id.trim() : claimQ2, "", false).id,
             url,
             title: typeof ct.title === "string" ? ct.title : null,
             source_date: typeof ct.source_date === "string" && ct.source_date.trim() ? ct.source_date.trim() : null,
