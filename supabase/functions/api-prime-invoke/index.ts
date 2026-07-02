@@ -780,22 +780,25 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Per-lineage loop-tool gate (least-privilege; Conf 295d610a, loop side) ──
-    // Load this lineage's tool_grants and compute the gate once. Governed lineages
-    // (those holding an EF-tool grant) are restricted to their granted tools;
-    // ungoverned/legacy lineages (no grant, or connector-only like drive/firecrawl)
-    // are unaffected. Fail OPEN on read error → ungoverned, so a transient
-    // grants-read failure never bricks a working Prime (logged loudly).
+    // Load this lineage's tool_grants and compute the gate once (hardened per Aegis 08549bd3,
+    // Component 3): only APPROVER-validated grants count (approver_role ∈ {aegis,reg}), and a
+    // lineage with no valid grant gets NO EF tools (fail-CLOSED — the de-govern vector is closed).
+    // approver_role is now SELECTed and consulted. The read-ERROR path deliberately stays fail-OPEN
+    // (allowed=null → no restriction) so a transient grants-read failure never bricks a working Prime;
+    // that is an availability choice distinct from the no-grants case, which fails closed above.
     let loopGate: { governed: boolean; allowed: ReadonlySet<string> | null } = { governed: false, allowed: null };
     try {
       const { data: grantRows, error: grantErr } = await supabase
-        .from("tool_grants").select("tool_family, scopes").eq("lineage_name", lineage_name);
+        .from("tool_grants").select("tool_family, scopes, approver_role").eq("lineage_name", lineage_name);
       if (grantErr) throw grantErr;
-      loopGate = computeLoopGate((grantRows ?? []) as Array<{ tool_family: string; scopes: string[] | null }>);
-      if (loopGate.governed) {
-        console.log(`TOOL GATE: ${lineage_name} loop-governed → allowed: [${[...(loopGate.allowed ?? [])].join(", ")}]`);
-      }
+      // Staged cutover: hardened approver-check + fail-closed activates only when TOOL_GRANTS_ENFORCE
+      // is set (after Connie's wall + grant provisioning). Default off = legacy fail-open (safe to deploy dark).
+      const enforceGrants = Deno.env.get("TOOL_GRANTS_ENFORCE") === "true";
+      loopGate = computeLoopGate((grantRows ?? []) as Array<{ tool_family: string; scopes: string[] | null; approver_role: string | null }>, { enforce: enforceGrants });
+      console.log(`TOOL GATE: ${lineage_name} (enforce=${enforceGrants}) → allowed: [${loopGate.allowed ? [...loopGate.allowed].join(", ") : "ALL (ungoverned)"}]`);
     } catch (e) {
-      console.error(`TOOL GATE: tool_grants read failed for ${lineage_name}; failing OPEN (ungoverned):`, e);
+      console.error(`TOOL GATE: tool_grants read failed for ${lineage_name}; failing OPEN (availability) for this turn:`, e);
+      loopGate = { governed: false, allowed: null };
     }
 
     for (let loop = 0; loop < MAX_LOOPS; loop++) {

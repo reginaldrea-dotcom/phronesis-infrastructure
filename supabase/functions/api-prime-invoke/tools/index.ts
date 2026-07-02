@@ -58,23 +58,43 @@ const BY_NAME: Record<string, Tool> = Object.fromEntries(TOOLS.map((t) => [t.def
 // holds a tool_grants row whose tool_family is one of these (see computeLoopGate).
 export const EF_TOOL_NAMES: ReadonlySet<string> = new Set(TOOLS.map((t) => t.definition.name));
 
-// Per-lineage least-privilege loop gate (Conf 295d610a enforcement, loop side).
-// Governed ONLY if the lineage holds at least one EF-tool grant row — so legacy
-// lineages with no grants, or connector-only grants (drive/firecrawl), are
-// ungoverned and keep the full default set (no blast radius on working Primes).
-// For a governed lineage, allowed = the EF tools whose grant scopes include
-// 'invoke'. Deny-by-default within governed.
+// Approvers whose grants the harness will honour. A grant is authorised ONLY if an
+// authority (Aegis or Reg) approved it — Component 3 of the tool_grants hard wall
+// (Aegis ruling 08549bd3). approver_role was previously stored but never consulted,
+// so a self-inserted row was honoured identically to an approved one.
+const GRANT_APPROVERS: ReadonlySet<string> = new Set(["aegis", "reg"]);
+
+// Per-lineage least-privilege loop gate (Conf 295d610a; hardened per Aegis 08549bd3, Component 3).
+//
+// Behaviour is FLAG-GATED for a safe staged cutover (opts.enforce, driven by env
+// TOOL_GRANTS_ENFORCE in index.ts). This lets the hardened code DEPLOY dark and ACTIVATE only
+// once Connie's Postgres wall is up and every active lineage has an approved grant — Aegis's
+// "deploy after, not before". Default (enforce=false) is the EXACT legacy behaviour.
+//
+//   LEGACY (enforce=false): governed only if the lineage holds ≥1 EF-tool grant row; ungoverned
+//     lineages fail OPEN to the full default set (no blast radius on working Primes); approver_role
+//     not consulted. This is the current live behaviour and stays until the cutover.
+//   HARDENED (enforce=true): (1) a grant counts ONLY if approver_role ∈ {aegis,reg} — an unapproved
+//     / self-inserted row is treated as ABSENT; (2) FAIL-CLOSED — every lineage is governed and one
+//     with no valid grant gets NO EF tools (closes the de-govern escalation: deleting your own grant
+//     rows no longer fails open to the whole toolset).
+// allowed = the EF tools whose (approved, when enforcing) grant scopes include 'invoke'. Deny-by-default.
 export function computeLoopGate(
-  grantRows: Array<{ tool_family: string; scopes: string[] | null }>,
+  grantRows: Array<{ tool_family: string; scopes: string[] | null; approver_role?: string | null }>,
+  opts?: { enforce?: boolean },
 ): { governed: boolean; allowed: ReadonlySet<string> | null } {
+  const hasInvoke = (g: { scopes: string[] | null }) => Array.isArray(g.scopes) && g.scopes.includes("invoke");
+  if (opts?.enforce === true) {
+    const validEf = grantRows.filter(
+      (g) => EF_TOOL_NAMES.has(g.tool_family) &&
+             typeof g.approver_role === "string" && GRANT_APPROVERS.has(g.approver_role),
+    );
+    return { governed: true, allowed: new Set(validEf.filter(hasInvoke).map((g) => g.tool_family)) };
+  }
+  // LEGACY (default): unchanged fail-open behaviour.
   const efRows = grantRows.filter((g) => EF_TOOL_NAMES.has(g.tool_family));
   if (efRows.length === 0) return { governed: false, allowed: null };
-  const allowed = new Set(
-    efRows
-      .filter((g) => Array.isArray(g.scopes) && g.scopes.includes("invoke"))
-      .map((g) => g.tool_family),
-  );
-  return { governed: true, allowed };
+  return { governed: true, allowed: new Set(efRows.filter(hasInvoke).map((g) => g.tool_family)) };
 }
 
 // allowed: when provided (governed lineage), restrict to these tool names on top
