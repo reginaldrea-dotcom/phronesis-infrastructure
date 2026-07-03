@@ -794,7 +794,7 @@ Deno.serve(async (req: Request) => {
       // Staged cutover: hardened approver-check + fail-closed activates only when TOOL_GRANTS_ENFORCE
       // is set (after Connie's wall + grant provisioning). Default off = legacy fail-open (safe to deploy dark).
       const enforceGrants = Deno.env.get("TOOL_GRANTS_ENFORCE") === "true";
-      loopGate = computeLoopGate((grantRows ?? []) as Array<{ tool_family: string; scopes: string[] | null; approver_role: string | null }>, { enforce: enforceGrants });
+      loopGate = computeLoopGate((grantRows ?? []) as Array<{ tool_family: string; scopes: string[] | null; approver_role: string | null }>, { enforce: enforceGrants, lineageName: lineage_name });
       console.log(`TOOL GATE: ${lineage_name} (enforce=${enforceGrants}) → allowed: [${loopGate.allowed ? [...loopGate.allowed].join(", ") : "ALL (ungoverned)"}]`);
     } catch (e) {
       console.error(`TOOL GATE: tool_grants read failed for ${lineage_name}; failing OPEN (availability) for this turn:`, e);

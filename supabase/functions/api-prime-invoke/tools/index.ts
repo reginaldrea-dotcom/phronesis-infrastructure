@@ -74,20 +74,24 @@ const GRANT_APPROVERS: ReadonlySet<string> = new Set(["aegis", "reg"]);
 //   LEGACY (enforce=false): governed only if the lineage holds ≥1 EF-tool grant row; ungoverned
 //     lineages fail OPEN to the full default set (no blast radius on working Primes); approver_role
 //     not consulted. This is the current live behaviour and stays until the cutover.
-//   HARDENED (enforce=true): (1) a grant counts ONLY if approver_role ∈ {aegis,reg} — an unapproved
-//     / self-inserted row is treated as ABSENT; (2) FAIL-CLOSED — every lineage is governed and one
-//     with no valid grant gets NO EF tools (closes the de-govern escalation: deleting your own grant
-//     rows no longer fails open to the whole toolset).
+//   HARDENED (enforce=true): a grant counts ONLY if ALL THREE hold (Aegis 56fd9873, defence-in-depth
+//     the Postgres structural check can't do alone): (a) approver_role IS NOT NULL; (b) approver_role
+//     ∈ {aegis,reg}; (c) approver_role != the grantee lineage (self-grant rejection). Then FAIL-CLOSED —
+//     every lineage is governed and one with no valid grant gets NO EF tools (closes the de-govern
+//     escalation: deleting your own grant rows no longer fails open to the whole toolset).
 // allowed = the EF tools whose (approved, when enforcing) grant scopes include 'invoke'. Deny-by-default.
+// lineageName is the grantee (the fetch filters grantRows to this lineage) — needed for check (c).
 export function computeLoopGate(
   grantRows: Array<{ tool_family: string; scopes: string[] | null; approver_role?: string | null }>,
-  opts?: { enforce?: boolean },
+  opts?: { enforce?: boolean; lineageName?: string },
 ): { governed: boolean; allowed: ReadonlySet<string> | null } {
   const hasInvoke = (g: { scopes: string[] | null }) => Array.isArray(g.scopes) && g.scopes.includes("invoke");
   if (opts?.enforce === true) {
     const validEf = grantRows.filter(
       (g) => EF_TOOL_NAMES.has(g.tool_family) &&
-             typeof g.approver_role === "string" && GRANT_APPROVERS.has(g.approver_role),
+             typeof g.approver_role === "string" &&        // (a) not null
+             GRANT_APPROVERS.has(g.approver_role) &&        // (b) an authority
+             g.approver_role !== opts.lineageName,          // (c) not self-approved
     );
     return { governed: true, allowed: new Set(validEf.filter(hasInvoke).map((g) => g.tool_family)) };
   }
