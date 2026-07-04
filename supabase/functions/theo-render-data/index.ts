@@ -101,7 +101,10 @@ Deno.serve(async (req: Request) => {
     const claimIds = claims.map((c) => c.claim_id).filter(Boolean) as string[];
     if (claimIds.length > 0) {
       const [cit, cs] = await Promise.all([
-        supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id").in("claim_id", claimIds),
+        // source_document_id surfaces the Grade-0 anchored snapshot in the citation drawer (Eames
+        // §7 addendum / Leg 3). Scalar column on claim_citation — the frozen-capture viewer endpoint
+        // is the remaining Leg-3 piece; this makes the anchor detectable now.
+        supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id, source_document_id").in("claim_id", claimIds),
         supabase.from("claim_source").select("claim_id, dispatch_id, stance").in("claim_id", claimIds),
       ]);
       if (cit.error) return json({ error: `citations: ${cit.error.message}` }, 500);

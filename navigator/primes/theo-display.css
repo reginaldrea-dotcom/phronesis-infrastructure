@@ -401,3 +401,32 @@ body { background: var(--bg); color: var(--text); font-family: 'Lora', Georgia, 
 
 /* GAP CARD (e4869bac) — recede the text so an absence reads as an absence, not a peer claim. */
 .claim.gap .claim-text { color: var(--text-light); font-size: 14px; font-style: italic; }
+
+/* ════════════════════════════════════════════════════════════════
+   Eames render findings 7dfc95ca (4 Jul 2026) — confidence-by-area,
+   resolved-divergence pill, anchored Grade-0 marker, quiet doors.
+   Last in the file — governs.
+   ════════════════════════════════════════════════════════════════ */
+
+/* §5d CONFIDENCE BY AREA — area + chip on one head line (confidence never floats free of its
+   area); note below, muted. high = quiet-positive (.mat-high, above); moderate/others = neutral. */
+.mat-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mat-area { color: var(--text); font-size: 14px; font-weight: 500; }
+
+/* §5c DIVERGENT (resolved) — "Resolved" pill in the calm accent; not a warning, a settled note. */
+.claim.divergent .resolved-pill { background: var(--accent-dim); border-color: var(--accent-border); color: var(--text); }
+.claim.divergent .open-label { color: var(--status-amber); font-size: 11px; letter-spacing: 0.04em; }
+
+/* §7 GRADE 0 — ANCHORED. The highest truth grade: a frozen, hashed ground-truth snapshot. Quiet
+   but unmistakable, set ABOVE the live url. Accent (not amber — amber is warning; this is verified
+   ground truth). The solid dot reads as "held, frozen". */
+.cite-anchored { display: block; font-size: 12px; color: var(--accent); letter-spacing: 0.02em; margin-bottom: 3px; }
+.cite-anchored .anchor-dot { color: var(--accent); margin-right: 5px; }
+.cite-anchored .anchor-view { color: var(--text-muted); font-style: italic; margin-left: 8px; }
+
+/* §5a QUIET SECONDARY ACCESS — the doors demoted from top peer buttons to a foot row under a
+   small "Go deeper" label. */
+.cover-doors-wrap { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; }
+.cover-doors-label { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+.cover-doors-wrap .cover-doors { margin: 0; }

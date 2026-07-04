@@ -133,8 +133,10 @@
   // divergence_status always rides the chip as the qualifier; open is a warning (amber).
   function claimChip(cl) {
     var st = cl.claim_status, div = cl.divergence_status, text, accent = '';
-    if (st === 'convergent') { text = 'Convergent'; }
-    else if (st === 'divergent') { text = 'Divergent' + (div ? ' · ' + div : ''); if (div === 'open') accent = ' amber'; }
+    // Convergent is the settled register — NO pill (Eames finding 7dfc95ca §5c: pills only where
+    // they signal). Divergent is rendered structurally by renderDivergentClaim, not via a chip.
+    if (st === 'convergent') return '';
+    if (st === 'divergent') { text = 'Divergent' + (div ? ' · ' + div : ''); if (div === 'open') accent = ' amber'; }
     else if (st === 'single_source') { text = 'Single source' + (div ? ' · ' + div : ''); if (div === 'open') accent = ' amber'; }
     else if (st === 'gap') { text = 'Gap'; accent = ' gap'; }
     // Eames reopen 5992c6ea: keep the WARM "Synthesist note" voice (violet released). Keys off
@@ -147,10 +149,10 @@
   // single-category collapses to "· resolved/unchecked", dead/mismatched enumerate in amber.
   function citationLine(cl) {
     var total = cl.citations_total || 0;
-    if (total === 0) {
-      if (cl.claim_status === 'gap' || cl.claim_status === 'synthesis_inference') return '';
-      return '<span class="claim-cite-zero">no citations</span>';   // a citation-less factual claim is a finding
-    }
+    // citations_total = 0 -> NO indicator (Eames finding 7dfc95ca §5c/§7: absence is silent,
+    // amber is never used here). The provenance gap (url-attributed but no claim_citation row)
+    // is a DATA fix on the pipeline track, not a render-time warning.
+    if (total === 0) return '';
     var noun = total === 1 ? 'citation' : 'citations';
     var cats = [];
     if (cl.citations_resolved)   cats.push({ n: cl.citations_resolved,   label: 'resolved' });
@@ -198,22 +200,26 @@
     if (has.synthesis_inference) return { word: 'Inference', cls: '' };
     return { word: '', cls: '' };
   }
-  // Material status (the reader's "what can I use"): confidence_ratings_json as a first-class
-  // block — claims by confidence tier (high -> low) with their basis. Synthesis-level.
-  var CONF_ORDER = ['high', 'medium-high', 'medium', 'low-medium', 'low'];
-  function renderMaterialStatus(d) {
+  // Confidence by area (Eames finding 7dfc95ca §5d): confidence_ratings_json is an array of
+  // {area, note, confidence}. HARD RULE — a confidence value NEVER renders detached from its
+  // area (a bare list of adjectives is meaningless to the reader). high = quiet-positive;
+  // moderate / moderate-high = neutral qualifier; confidence is information, never alarm (no red).
+  // Source order preserved (the synthesist's grouping), not re-sorted.
+  function renderConfidenceByArea(d) {
     var rows = asArray(d.synthesis && d.synthesis.confidence_ratings_json);
     if (!rows.length) return '';
-    rows = rows.slice().sort(function (a, b) {
-      return CONF_ORDER.indexOf(String(a.confidence || '').toLowerCase()) - CONF_ORDER.indexOf(String(b.confidence || '').toLowerCase());
-    });
     var items = rows.map(function (r) {
+      if (!r || (!r.area && !r.note && !r.confidence)) return '';
       var conf = String(r.confidence || '').toLowerCase().replace(/[^a-z-]/g, '');
-      return '<li class="mat-row"><span class="mat-tier mat-' + esc(conf || 'unk') + '">' + esc(r.confidence || '?') + '</span>' +
-        '<span class="mat-claim">' + esc(r.claim || '') + '</span>' +
-        (r.basis ? '<div class="mat-basis">' + esc(r.basis) + '</div>' : '') + '</li>';
+      var chip = r.confidence
+        ? '<span class="mat-tier mat-' + esc(conf || 'unk') + '">' + esc(r.confidence) + '</span>' : '';
+      // area + chip live on one head line so confidence can never float free of its area.
+      return '<li class="mat-row">' +
+        '<div class="mat-head"><span class="mat-area">' + esc(r.area || '(area unlabelled)') + '</span>' + chip + '</div>' +
+        (r.note ? '<div class="mat-basis">' + esc(r.note) + '</div>' : '') + '</li>';
     }).join('');
-    return '<div class="cover-block"><div class="cover-label">Material status — what you can rely on</div><ul class="material-status">' + items + '</ul></div>';
+    if (!items) return '';
+    return '<div class="cover-block"><div class="cover-label">Confidence by area</div><ul class="material-status">' + items + '</ul></div>';
   }
 
   /* ── engine state chip (Eames §4b / §6) ──────────────────────── */
@@ -261,10 +267,20 @@
       var res = c.resolution || 'unchecked';
       var resCls = 'pill cite-resolution ' + res + ((res === 'dead' || res === 'mismatched') ? ' amber' : '');
       var resLabel = { unchecked: 'Unverified', resolved: '✓', dead: 'Link unavailable', mismatched: 'Content mismatch' }[res] || res;
+      // Grade 0 — ANCHORED (Eames §7 addendum): a frozen, hashed ground-truth snapshot exists.
+      // The highest authority grade, set ABOVE the live url — the one layer that cannot rot.
+      // Lights up when source_document_id is in the payload (Leg 3); absent otherwise (absence is
+      // information). The clickable frozen-capture VIEWER is the pending Leg-3 endpoint; for now
+      // this surfaces that the snapshot is held (the 6 anchored FCDO snapshots become visible).
+      var anchored = c.source_document_id
+        ? '<div class="cite-anchored" data-anchor="' + esc(c.source_document_id) + '">' +
+            '<span class="anchor-dot">●</span> Anchored' +
+            '<span class="anchor-view">frozen snapshot held</span></div>'
+        : '';
       var link = c.url
         ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">' + esc(c.title || c.url) + '</a>'
         : esc(c.title || '(no link)');
-      return '<div class="citation">' + link +
+      return '<div class="citation">' + anchored + link +
         (c.source_date ? ' <span class="cite-date">Published ' + esc(c.source_date) + '</span>' : '') +
         ' <span class="' + resCls + '">' + esc(resLabel) + '</span>' +
         (c.note ? '<div class="cite-note">' + esc(c.note) + '</div>' : '') + '</div>';
@@ -299,15 +315,54 @@
   // not a second design. Open divergence keeps the amber border (a warning); gap is muted;
   // synthesis_inference is a claim, not a warning, so only its chip is tinted.
   function renderClaim(cl, ctx) {
+    // Divergent is the exception to the universal card: a structural display (Eames finding
+    // 7dfc95ca item 4 / §5c) — the disagreement reads as a shape before it reads as a sentence.
+    if (cl.claim_status === 'divergent') return renderDivergentClaim(cl, ctx);
     var st = cl.claim_status, cls = 'claim ' + st;
-    if ((st === 'divergent' || st === 'single_source') && cl.divergence_status === 'open') cls += ' open';
+    if (st === 'single_source' && cl.divergence_status === 'open') cls += ' open';
     if (st === 'gap') cls += ((cl.scope || '') === 'technical-failure' ? ' technical' : ' honest');
-    var body = '<div class="claim-head">' + claimChip(cl) + '</div>' +
+    var chip = claimChip(cl);   // '' for convergent — no pill (§5c)
+    var body = (chip ? '<div class="claim-head">' + chip + '</div>' : '') +
       '<div class="claim-text">' + esc(cl.claim_text) + '</div>' +
       attribLinks(cl, ctx);
     // §2: resolution_note is the ATTACHED note (the Quantinuum pattern) — never concatenated
     // into claim_text. This is the fix for the floating-box seam on inference claims.
     if (cl.resolution_note) body += '<div class="resolution">' + esc(cl.resolution_note) + '</div>';
+    var cite = citationLine(cl);
+    if (cite) body += cite;
+    return '<div class="' + cls + '">' + body + engineExpansion(cl.claim_id, ctx) + citationDrawer(cl.claim_id, ctx) + '</div>';
+  }
+
+  // Divergent — structural display (Eames §5c). RESOLVED: the corrected/resolved claim text as the
+  // primary statement + a "Resolved" pill + the resolution note ("Resolved: …"). OPEN: amber border
+  // + "Open divergence" label; when claim_source stances exist, both positions shown as two panels,
+  // neither privileged. (FCDO's one divergent claim is resolved with no source rows -> resolved path.)
+  function renderDivergentClaim(cl, ctx) {
+    var open = cl.divergence_status === 'open';
+    var cls = 'claim divergent ' + (open ? 'open' : 'resolved');
+    var head = open
+      ? '<div class="claim-head"><span class="open-label">Open divergence</span></div>'
+      : '<div class="claim-head"><span class="pill resolved-pill">Resolved</span></div>';
+    var body = head + '<div class="claim-text">' + esc(cl.claim_text) + '</div>' + attribLinks(cl, ctx);
+    // Two-panel positions, only when the substrate carries diverging stances (open, neither privileged).
+    if (open) {
+      var srcs = (ctx && ctx.sourcesByClaim[cl.claim_id]) || [];
+      var support = [], diverge = [];
+      srcs.forEach(function (s) {
+        var e = ctx.enginesByDispatch[s.dispatch_id]; if (!e) return;
+        (s.stance === 'diverges' ? diverge : support).push(engineDisplayName(e.source_name));
+      });
+      if (support.length && diverge.length) {
+        body += '<div class="divergence">' +
+          '<div class="divergence-panel"><div class="engine">' + esc(support.join(', ')) + '</div></div>' +
+          '<div class="divergence-panel"><div class="engine">' + esc(diverge.join(', ')) + '</div></div>' +
+          '</div>';
+      }
+    }
+    // resolution note: "Resolved: …" for resolved; the plain divergence note for open.
+    if (cl.resolution_note) {
+      body += '<div class="resolution">' + (open ? '' : 'Resolved: ') + esc(cl.resolution_note) + '</div>';
+    }
     var cite = citationLine(cl);
     if (cite) body += cite;
     return '<div class="' + cls + '">' + body + engineExpansion(cl.claim_id, ctx) + citationDrawer(cl.claim_id, ctx) + '</div>';
@@ -593,7 +648,8 @@
   function renderCover(d, ctx) {
     var committed = d.synthesis && d.synthesis.layer_1_synthesis_md;
     var doors = renderDoors();
-    var html = '<div class="cover">' + renderHeader(d, committed) + doors;   // doors at TOP, under the metadata
+    // Answer-first (Eames finding 7dfc95ca §5a): NO top peer buttons — the answer leads.
+    var html = '<div class="cover">' + renderHeader(d, committed);
     var claimsByQ = groupBy(d.claims, 'question_id');
 
     function questionBlock(q, claims, label) {
@@ -623,6 +679,12 @@
       '</div>';
     }
 
+    // THE ANSWER leads (§5a), then Confidence by area (§5d) — the "what can I rely on" pair.
+    var summary = coverSummary(d);
+    if (summary) html += '<div class="cover-block"><div class="cover-label">The answer</div><div class="cover-answer synth-body">' + summary + '</div></div>';
+    html += renderConfidenceByArea(d);
+
+    // THE QUESTIONS sit below the answer (strata; expand in place to their claim cards).
     html += '<div class="cover-block"><div class="cover-label">The questions</div><div class="cover-questions">';
     var qi = 0;
     (d.questions || []).forEach(function (q) { qi++; html += questionBlock(q, claimsByQ[q.id] || [], 'Q' + qi + ')'); }); // ordinal label fixes the off-by-one
@@ -630,10 +692,10 @@
     if (unlinked.length) html += questionBlock({ question_text: 'Further claims' }, unlinked, '');
     html += '</div></div>';
 
-    var summary = coverSummary(d);
-    if (summary) html += '<div class="cover-block"><div class="cover-label">The answer</div><div class="cover-answer synth-body">' + summary + '</div></div>';
-    html += renderMaterialStatus(d);   // §"what can I use" — confidence_ratings_json, first-class
-    html += doors + '</div>';          // doors at BOTTOM too
+    // Engine returns / full synthesis demoted to QUIET secondary access at the foot (§5a) —
+    // no longer top-level peer buttons.
+    html += '<div class="cover-doors-wrap"><div class="cover-doors-label">Go deeper</div>' + doors + '</div>';
+    html += '</div>';
     return html;
   }
 
