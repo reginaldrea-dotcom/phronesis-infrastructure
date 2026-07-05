@@ -35,6 +35,7 @@
 import hashlib
 import hmac
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -134,6 +135,24 @@ def _fetch_reference(drive, file_id: str, dest: Path) -> None:
     dest.write_bytes(drive.files().get_media(fileId=file_id).execute())
 
 
+# Page-break hardening. The house page break is authored as a fenced div: `::: page-break` on its own
+# line, `:::` on the next, with blank lines around it. Authors reliably get this wrong two ways: they
+# collapse it to one line (`::: page-break :::`), or omit the surrounding blank lines. Pandoc then either
+# leaves the div unclosed or absorbs the fence (and following headings) as literal paragraph text — and
+# the docx writer SILENTLY DROPS every block after it (the PDF path survives, so the loss is easy to miss:
+# exactly the FCDO interview-prep truncation, 5 Jul). Normalise any page-break token to the canonical
+# blank-line-wrapped two-line fence. Idempotent and safe on already-correct input (verified against both
+# malformed one-line and well-formed two-line documents).
+_PB_ONELINE = re.compile(r'(?m)^[ \t]*:{3,}[ \t]*page-break[ \t]*:{3,}[ \t]*$')
+_PB_FENCE = re.compile(r'(?m)^[ \t]*:{3,}[ \t]*page-break[ \t]*\r?\n[ \t]*:{3,}[ \t]*$')
+
+
+def _normalize_pagebreaks(md: str) -> str:
+    md = _PB_ONELINE.sub('::: page-break\n:::', md)     # one-line form -> two lines
+    md = _PB_FENCE.sub('\n::: page-break\n:::\n', md)    # guarantee blank lines around the fence
+    return md
+
+
 def _pandoc(md_path: Path, out_path: Path, fmt: str, reference: Path | None) -> None:
     cmd = ["pandoc", str(md_path), "-o", str(out_path), "--standalone"]
     # Page-break filter for both formats — it only emits the OpenXML break when writing docx;
@@ -223,7 +242,7 @@ def render(req: RenderRequest, x_bridge_key: str | None = Header(default=None)):
     with tempfile.TemporaryDirectory() as tmp:
         tmpd = Path(tmp)
         md_path = tmpd / "input.md"
-        md_path.write_text(req.markdown, encoding="utf-8")
+        md_path.write_text(_normalize_pagebreaks(req.markdown), encoding="utf-8")
 
         # docx reference-doc: an explicit Drive id wins (override); otherwise the baked house doc.
         reference = None
