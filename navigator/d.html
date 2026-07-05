@@ -7,33 +7,56 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="primes/prime-core.v1.css?v=20260606d">
-  <link rel="stylesheet" href="primes/theo-display.css?v=20260606d">
+  <link rel="stylesheet" href="primes/prime-core.v1.css?v=20260705">
+  <link rel="stylesheet" href="primes/theo-display.css?v=20260705">
+  <style>
+    /* Confidentiality notice (Aegis policy 45163f69) — default-on on the public dossier viewer.
+       Amber = information in this render layer (never alarm); the notice is prominent but calm. */
+    .dossier-confidential {
+      max-width: 860px; margin: 24px auto 0; padding: 12px 16px;
+      border: 1px solid var(--status-amber); background: var(--status-amber-dim);
+      color: var(--text); font-family: 'Lora', Georgia, serif; font-size: 13.5px; line-height: 1.5;
+      border-radius: 4px;
+    }
+    .dossier-confidential strong { letter-spacing: 0.04em; }
+  </style>
 </head>
 <body>
   <!-- Public dossier viewer (capability-link share, Reg 5 Jul 2026). Served at clarev.ai/d.html?t=<token>,
        OUTSIDE Cloudflare Access (the token is the gate). Resolves the token to a single theo_session via
-       resolve_dossier_share, then hands that session to the existing renderer (theo-render.js). Viewers
-       never see raw session UUIDs; a revoked/expired token shows nothing. -->
+       resolve_dossier_share, renders that one dossier through the existing renderer, and shows a
+       confidentiality notice by DEFAULT (Aegis 45163f69) unless the share is explicitly marked suppress. -->
   <div class="render-shell">
     <div id="render-root"><div class="render-status">Loading…</div></div>
   </div>
-  <script src="primes/theo-config.js?v=20260606d"></script>
+  <script src="primes/theo-config.js?v=20260705"></script>
   <script>
     (function () {
       var root = document.getElementById('render-root');
       var token = new URLSearchParams(location.search).get('t');
       function fail(msg) { root.innerHTML = '<div class="render-error">' + msg + '</div>'; }
+      function showConfidentialNotice() {
+        var shell = document.querySelector('.render-shell');
+        if (!shell || document.querySelector('.dossier-confidential')) return;
+        var el = document.createElement('div');
+        el.className = 'dossier-confidential';
+        // First-cut wording; Aegis owns the final policy text.
+        el.innerHTML = '<strong>CONFIDENTIAL.</strong> Prepared in confidence for the intended recipient. ' +
+          'This dossier contains information that is not in the public domain. ' +
+          'Please do not forward, copy, or distribute it.';
+        shell.parentNode.insertBefore(el, shell);   // notice sits ABOVE the render, survives the renderer's DOM swaps
+      }
       if (!token) { fail('No share token in the link.'); return; }
       fetch(RENDER_CONFIG.supabaseUrl + '/rest/v1/rpc/resolve_dossier_share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
         body: JSON.stringify({ p_token: token }),
-      }).then(function (r) { return r.json(); }).then(function (sessionId) {
-        if (!sessionId || typeof sessionId !== 'string') { fail('This link is invalid or has expired.'); return; }
-        window.RENDER_SESSION_ID = sessionId;                 // theo-render.js reads this when no ?session= is present
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res || !res.session_id) { fail('This link is invalid or has expired.'); return; }
+        if (!res.suppress_notice) { showConfidentialNotice(); }   // default-on: shown unless explicitly suppressed
+        window.RENDER_SESSION_ID = res.session_id;                // theo-render.js reads this when no ?session= is present
         var s = document.createElement('script');
-        s.src = 'primes/theo-render.js?v=20260606d';
+        s.src = 'primes/theo-render.js?v=20260705';
         document.body.appendChild(s);
       }).catch(function () { fail('Could not load this dossier. Please try again later.'); });
     })();
