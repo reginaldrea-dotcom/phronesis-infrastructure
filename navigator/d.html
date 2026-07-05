@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Dossier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="primes/prime-core.v1.css?v=20260606d">
+  <link rel="stylesheet" href="primes/theo-display.css?v=20260606d">
+</head>
+<body>
+  <!-- Public dossier viewer (capability-link share, Reg 5 Jul 2026). Served at clarev.ai/d.html?t=<token>,
+       OUTSIDE Cloudflare Access (the token is the gate). Resolves the token to a single theo_session via
+       resolve_dossier_share, then hands that session to the existing renderer (theo-render.js). Viewers
+       never see raw session UUIDs; a revoked/expired token shows nothing. -->
+  <div class="render-shell">
+    <div id="render-root"><div class="render-status">Loading…</div></div>
+  </div>
+  <script src="primes/theo-config.js?v=20260606d"></script>
+  <script>
+    (function () {
+      var root = document.getElementById('render-root');
+      var token = new URLSearchParams(location.search).get('t');
+      function fail(msg) { root.innerHTML = '<div class="render-error">' + msg + '</div>'; }
+      if (!token) { fail('No share token in the link.'); return; }
+      fetch(RENDER_CONFIG.supabaseUrl + '/rest/v1/rpc/resolve_dossier_share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+        body: JSON.stringify({ p_token: token }),
+      }).then(function (r) { return r.json(); }).then(function (sessionId) {
+        if (!sessionId || typeof sessionId !== 'string') { fail('This link is invalid or has expired.'); return; }
+        window.RENDER_SESSION_ID = sessionId;                 // theo-render.js reads this when no ?session= is present
+        var s = document.createElement('script');
+        s.src = 'primes/theo-render.js?v=20260606d';
+        document.body.appendChild(s);
+      }).catch(function () { fail('Could not load this dossier. Please try again later.'); });
+    })();
+  </script>
+</body>
+</html>

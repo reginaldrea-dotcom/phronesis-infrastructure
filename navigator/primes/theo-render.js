@@ -712,7 +712,8 @@
     nav(committed ? showCover : showProduction);
   }
 
-  var sid = qs('session');
+  // session id from ?session= (internal theo.html) or an injected global (public d.html capability-link viewer).
+  var sid = qs('session') || (typeof window !== 'undefined' && window.RENDER_SESSION_ID) || '';
   if (!sid) { root.innerHTML = '<div class="render-status">No session specified — append <code>?session=&lt;uuid&gt;</code> to the URL.</div>'; return; }
   fetchRender(sid).then(render).catch(function (e) {
     root.innerHTML = '<div class="render-error">Could not load this session: ' + esc(e.message) + '</div>';
