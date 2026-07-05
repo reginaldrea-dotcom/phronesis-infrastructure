@@ -54,6 +54,18 @@ app = FastAPI(title="Markdown Bridge", version="1.1")
 SUPPORTED_FORMATS = {"docx", "pdf"}
 PDF_ENGINE = "weasyprint"
 
+# House styling assets baked into the image (Eames design of record d96dcf7b):
+#   - reference.css: the pdf/weasyprint house style (--reference-doc is docx-only, so pdf needs its own).
+#   - pagebreak.lua: expands the one authoring token (::: page-break) into a real break per format
+#     (raw OpenXML for docx; the .page-break class + reference.css handles pdf/html).
+# .exists() guards keep the service running even if an asset is absent.
+HOUSE_CSS = Path(__file__).parent / "reference.css"
+PAGEBREAK_LUA = Path(__file__).parent / "pagebreak.lua"
+# House reference.docx baked into the image (Eames, carries the four callout Word paragraph styles).
+# Used as the docx --reference-doc by DEFAULT. Baked rather than Drive-fetched because the bridge's
+# drive.file scope can't read a hand-uploaded file; a caller may still override via reference_docx_drive_id.
+HOUSE_DOCX = Path(__file__).parent / "reference.docx"
+
 DRIVE_MIME = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pdf": "application/pdf",
@@ -124,10 +136,17 @@ def _fetch_reference(drive, file_id: str, dest: Path) -> None:
 
 def _pandoc(md_path: Path, out_path: Path, fmt: str, reference: Path | None) -> None:
     cmd = ["pandoc", str(md_path), "-o", str(out_path), "--standalone"]
+    # Page-break filter for both formats — it only emits the OpenXML break when writing docx;
+    # for pdf/html the div carries the .page-break class and reference.css does the break.
+    if PAGEBREAK_LUA.exists():
+        cmd += ["--lua-filter", str(PAGEBREAK_LUA)]
     if fmt == "docx" and reference is not None:
         cmd += ["--reference-doc", str(reference)]
     if fmt == "pdf":
         cmd += [f"--pdf-engine={PDF_ENGINE}"]
+        # House CSS for the weasyprint path (callout boxes, fonts, page-break class).
+        if HOUSE_CSS.exists():
+            cmd += ["--css", str(HOUSE_CSS)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
         raise HTTPException(422, f"pandoc {fmt} failed: {proc.stderr.strip()[:500]}")
@@ -206,10 +225,14 @@ def render(req: RenderRequest, x_bridge_key: str | None = Header(default=None)):
         md_path = tmpd / "input.md"
         md_path.write_text(req.markdown, encoding="utf-8")
 
+        # docx reference-doc: an explicit Drive id wins (override); otherwise the baked house doc.
         reference = None
-        if "docx" in fmts and req.reference_docx_drive_id:
-            reference = tmpd / "reference.docx"
-            _fetch_reference(drive, req.reference_docx_drive_id, reference)
+        if "docx" in fmts:
+            if req.reference_docx_drive_id:
+                reference = tmpd / "reference.docx"
+                _fetch_reference(drive, req.reference_docx_drive_id, reference)
+            elif HOUSE_DOCX.exists():
+                reference = HOUSE_DOCX
 
         # Single render pass per format, then a SINGLE upload each (baton: single-pass, single-upload).
         for fmt in fmts:

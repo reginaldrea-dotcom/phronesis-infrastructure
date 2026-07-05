@@ -1,0 +1,20 @@
+/* reference.css — weasyprint house style for the markdown-bridge pdf path.
+ * Design of record: Eames artifact d96dcf7b (4 Jul 2026). Kept in visual lockstep with the
+ * docx reference.docx (Word styles) — this file is the pdf half of that one design.
+ * Wired via pandoc --css (pdf/weasyprint only; --reference-doc is docx-only). Amber = information,
+ * never alarm. Callouts read without colour (glyph + bold label + rule) — older-eyes / colour-blind safe.
+ */
+@page { size: A4; margin: 1in; }
+body { font-family: "Gelasio","Georgia","DejaVu Serif",serif; font-size:12pt; color:#1A1A1A; line-height:1.3; }
+h1,h2,h3,h4 { font-family:"Liberation Sans","Arial","DejaVu Sans",sans-serif; color:#1F4E5A; font-weight:bold; }
+h1 { font-size:20pt; border-bottom:1px solid #1F4E5A; padding-bottom:4pt; margin-top:0; }  /* LAYER banner */
+h2 { font-size:16pt; } h3 { font-size:13.5pt; } h4 { font-size:12pt; }
+a { color:#165A72; }
+blockquote { border-left:3px solid #1F4E5A; color:#333; padding-left:12pt; margin-left:0; }
+table { border-collapse:collapse; margin:8pt 0; } th,td { border:1px solid #C9C9C9; padding:4pt 8pt; text-align:left; } th { background:#F0F3F3; }
+.page-break { break-before: page; }
+.callout-single-source { background:#F1F1EE; border-left:3px solid #1F4E5A; padding:8pt 12pt; font-size:11pt; margin:10pt 0; }
+.callout-volatile { background:#FBF3E5; border-left:3px solid #A87820; padding:8pt 12pt; font-size:11pt; margin:10pt 0; }
+.confirm-box { background:#FBF3E5; border:0.75px solid #A87820; padding:10pt 14pt; font-size:11pt; margin:12pt 0; }
+.panel-questions { background:#F0F3F3; border-left:3px solid #1F4E5A; padding:8pt 14pt; margin:12pt 0; }
+.panel-questions h3 { font-size:12pt; margin-top:0; }
