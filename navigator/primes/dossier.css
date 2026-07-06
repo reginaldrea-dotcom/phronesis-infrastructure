@@ -1,0 +1,51 @@
+/* dossier.css — universal Dossier page layout (Eames brief c639a489 + addendum; architecture 3f322400 §8).
+ * Layout only; reuses prime-core.v1.css + theo-display.css tokens (colours, chips, claim/citation grammar).
+ * The page is UNIVERSAL and PII-free: no confidentiality notice, no "prepared for X". Personal scope
+ * (the Assets overlay) renders ONLY behind the permission gate; absent from the universal default. */
+
+.dossier-shell { max-width: 1120px; margin: 0 auto; padding: 28px 28px 96px; }
+
+/* ── full-width header band: kicker · subject · descriptor · meta (no person) ── */
+.dossier-header { border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 26px; }
+.dossier-kicker { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 2px;
+                  text-transform: uppercase; color: var(--text-muted); }
+.dossier-title  { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 30px; font-weight: 600;
+                  color: var(--text); margin: 2px 0 6px; line-height: 1.15; }
+.dossier-descriptor { font-family: 'Lora', Georgia, serif; font-size: 15px; color: var(--text); margin-bottom: 8px; }
+.dossier-meta   { font-size: 13px; color: var(--text-muted); }
+.dossier-meta .dot { opacity: 0.5; margin: 0 7px; }
+
+/* ── two-column body: left rail (~35%) + main column (~65%) ── */
+.dossier-body { display: grid; grid-template-columns: minmax(240px, 35%) 1fr; gap: 32px; align-items: start; }
+@media (max-width: 760px) { .dossier-body { grid-template-columns: 1fr; } }
+
+/* ── left rail: three stacked panels ── */
+.dossier-rail { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 20px; }
+.rail-panel { border: 1px solid var(--border-lt); border-radius: 5px; background: var(--surface); padding: 14px 16px; }
+.rail-panel.dormant { opacity: 0.6; }
+.rail-panel-label { font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+                    text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+.rail-empty { font-size: 13px; color: var(--text-light); font-style: italic; }
+
+/* Ground Facts rows (populate in Phase 2; each: fact + tier + contestability + view-frozen-capture) */
+.gf-row { padding: 8px 0; border-top: 1px solid var(--border-lt); }
+.gf-row:first-child { border-top: none; }
+.gf-title { font-size: 13.5px; color: var(--text); }
+.gf-meta  { font-size: 11px; color: var(--text-muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.gf-tier  { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+.gf-tier.t1 { color: var(--accent); }
+.gf-tier.t2 { color: var(--text-muted); }
+.gf-tier.t3 { color: var(--status-amber); }
+.gf-anchored { color: var(--accent); }              /* §7 Grade-0 "Anchored" leaf */
+.gf-view-capture { color: var(--text-muted); font-style: italic; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── main column: Executive Summary + chapters ── */
+.dossier-main { min-width: 0; }
+.dossier-section { margin-bottom: 26px; }
+.dossier-section h2 { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600;
+                      color: var(--text); margin: 0 0 8px; }
+.dossier-section h3 { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600;
+                      color: var(--text); margin: 1.2em 0 0.4em; }
+.dossier-prose { color: var(--text); font-size: 15.5px; line-height: 1.75; max-width: 70ch; }
+.dossier-prose p { margin: 0 0 1em; max-width: 70ch; }
+.exec-summary { border-left: 3px solid var(--accent-border); padding-left: 16px; }
