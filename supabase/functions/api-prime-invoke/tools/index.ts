@@ -14,6 +14,7 @@ import { commitSynthesisTool } from "./commitSynthesis.ts";
 import { writeClaimsTool } from "./writeClaims.ts";
 import { declareCaptureTargetTool } from "./declareCaptureTarget.ts";
 import { renderDocumentTool } from "./renderDocument.ts";
+import { writeGroundFactTool } from "./writeGroundFact.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
@@ -42,6 +43,7 @@ const TOOLS: Tool[] = [
   writeClaimsTool,
   declareCaptureTargetTool,
   renderDocumentTool,
+  writeGroundFactTool,
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,
