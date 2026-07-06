@@ -90,6 +90,36 @@ export const getMessageTool: Tool = {
   },
 };
 
+// read_prime_messages — your inbox reader, INCLUDING already-read messages (read_inbox is unread-only).
+// Angelia's grant is tool_family 'read_prime_messages'; this is the tool it resolves to. Reads need no
+// dedicated SECURITY DEFINER RPC (that pattern is for writes) — like read_inbox it goes through the generic
+// execute_raw_sql path, scoped to the caller's own lineage from ToolContext (never a model claim).
+export const readPrimeMessagesTool: Tool = {
+  definition: {
+    name: "read_prime_messages",
+    description: "Read prime_messages addressed to YOU (to_lineage = your lineage), most recent first — your inbox, INCLUDING already-read messages (read_inbox returns only unread). No SQL or table name needed; scoped to your own lineage. Returns id, from_lineage, subject, body, message_type, attention_level, status, created_at, acknowledged_at. Optional: limit (default 20, max 100); unread_only (only not-yet-acknowledged).",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit:       { type: "integer", description: "Max messages to return (default 20, max 100)." },
+        unread_only: { type: "boolean", description: "If true, return only messages you have not acknowledged." },
+      },
+      required: [],
+    },
+  },
+  available: ({ isNewSession }) => !isNewSession,
+  summarize: (input) => `read_prime_messages${input?.unread_only ? " (unread)" : ""}`,
+  run: async (input, ctx) => {
+    const lin = callerLineage(ctx);
+    if (!lin) return "read_prime_messages error: caller lineage unavailable.\n[SYSTEM: surface to Reg.]";
+    const limit = Math.min(100, Math.max(1, parseInt(String(input?.limit ?? 20), 10) || 20));
+    const unread = input?.unread_only === true ? " AND acknowledged_at IS NULL" : "";
+    return runSelect(ctx,
+      `SELECT id, from_lineage, subject, body, message_type, attention_level, status, created_at, acknowledged_at FROM prime_messages WHERE to_lineage = '${lin}'${unread} ORDER BY created_at DESC LIMIT ${limit}`,
+      "no messages addressed to you. This is the answer; do not retry.");
+  },
+};
+
 // send_message — the write counterpart to read_inbox/get_message. Replaces the
 // raw `INSERT INTO prime_messages …` via execute_sql, which returned no handle
 // and an ambiguous empty result (a sent message and a no-op read looked the
