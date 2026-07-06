@@ -67,16 +67,14 @@
   }
 
   /* ── header (universal, PII-free) ──────────────────────────────
-     Subject = the research topic. NOTE: a universal Dossier's subject MUST be PII-free — it is a topic,
-     not a person. The session's display_title/refined_prompt is used as the subject here; a Dossier built
-     from a personally-framed session ("X's interview prep") would leak PII, so the subject should be a
-     research topic. Subject sourcing / PII-scrub is a content concern (Theo) flagged, not hard-enforced here. */
+     Subject = the ORIGINAL SEARCH BRIEF (Reg's rule: Dossiers are named by the brief that initiated them).
+     The brief is the research topic, which must be PII-free (topic, not person) — a content concern at
+     authoring, since a personally-framed brief would carry PII into a universal page. Take a concise slice
+     of the brief for the title; fall back to display_title / refined_prompt only if there is no brief. */
   function subjectOf(d) {
     var s = d.session || {};
-    if (s.display_title && String(s.display_title).trim()) return String(s.display_title).trim();
-    var rp = (s.refined_prompt || s.original_brief || '').trim();
-    if (rp) { var first = (rp.split(/(?<=[.?!])\s/)[0] || rp).trim(); return first.length > 90 ? first.slice(0, 90).trim() + '…' : first; }
-    return 'Research subject';
+    var concise = function (t) { t = (t || '').trim(); if (!t) return ''; var f = (t.split(/(?<=[.?!])\s/)[0] || t).trim(); return f.length > 120 ? f.slice(0, 120).trim() + '…' : f; };
+    return concise(s.original_brief) || (s.display_title && String(s.display_title).trim()) || concise(s.refined_prompt) || 'Research subject';
   }
   function renderHeader(d) {
     var nQ = (d.questions || []).length;
