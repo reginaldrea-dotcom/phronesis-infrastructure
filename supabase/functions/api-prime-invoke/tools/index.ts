@@ -15,6 +15,7 @@ import { writeClaimsTool } from "./writeClaims.ts";
 import { declareCaptureTargetTool } from "./declareCaptureTarget.ts";
 import { renderDocumentTool } from "./renderDocument.ts";
 import { writeGroundFactTool } from "./writeGroundFact.ts";
+import { writeElementDependencyTool } from "./writeElementDependency.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
@@ -44,6 +45,7 @@ const TOOLS: Tool[] = [
   declareCaptureTargetTool,
   renderDocumentTool,
   writeGroundFactTool,
+  writeElementDependencyTool,
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,
