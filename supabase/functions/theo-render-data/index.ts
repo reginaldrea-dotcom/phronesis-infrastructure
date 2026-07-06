@@ -90,13 +90,24 @@ Deno.serve(async (req: Request) => {
   let claimSources: unknown[] = [];
 
   if (synthesis?.id) {
-    const [secs, clm] = await Promise.all([
+    const [secs, clm, conf] = await Promise.all([
       supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
       supabase.from("render_claim_v1").select("*").eq("session_id", sessionId),
+      // Per-section confidence (dossier L1): confidence_state from the tier-composition of the facts a
+      // section's claims rest on (synthesis_claim.section_id -> element_dependency). 'ungrounded' until edges land.
+      supabase.from("render_section_confidence_v1").select("section_id, confidence_state, claim_count, grounded_claim_count").eq("synthesis_id", synthesis.id),
     ]);
     if (secs.error) return json({ error: `sections: ${secs.error.message}` }, 500);
     if (clm.error) return json({ error: `claims: ${clm.error.message}` }, 500);
-    sections = secs.data ?? [];
+    if (conf.error) return json({ error: `section_confidence: ${conf.error.message}` }, 500);
+    const confBy = new Map((conf.data ?? []).map((r: Record<string, unknown>) => [r.section_id as string, r]));
+    sections = (secs.data ?? []).map((s: Record<string, unknown>) => {
+      const c = confBy.get(s.id as string);
+      return { ...s,
+        confidence_state: (c?.confidence_state as string) ?? "ungrounded",
+        claim_count: c?.claim_count ?? 0,
+        grounded_claim_count: c?.grounded_claim_count ?? 0 };
+    });
     claims = (clm.data ?? []) as Array<Record<string, unknown>>;
     const claimIds = claims.map((c) => c.claim_id).filter(Boolean) as string[];
     if (claimIds.length > 0) {

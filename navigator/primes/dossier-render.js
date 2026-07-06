@@ -150,11 +150,17 @@
       '<div class="callout-stack">' + items + '</div></div>';
   }
 
-  // Per-section confidence — derived from the tier-composition of the facts the section's claims rest on
-  // (element_dependency). Data-bound: shows "ungrounded" until claim_on_fact edges land AND the per-section
-  // fact-tier path is wired into the render data (a follow-on). Structural placeholder for now.
-  function renderConfidence(/* d, s */) {
-    return '<span class="confidence conf-ungrounded" title="Confidence derives from the evidence tiers of this section’s claims; shown once the section is grounded.">not yet grounded</span>';
+  // Per-section confidence — the tier-composition of the facts this section's claims rest on
+  // (render_section_confidence_v1, via synthesis_claim.section_id -> element_dependency). Live once claims
+  // are grounded with claim_on_fact edges; 'ungrounded' until then.
+  var CONF_LABEL = { ok: 'well grounded', needs_corroboration: 'needs corroboration', tier_conflict: 'sources conflict', sparse_record: 'sparse record', ungrounded: 'not yet grounded' };
+  var CONF_CLASS = { ok: 'conf-ok', needs_corroboration: 'conf-needs-corroboration', tier_conflict: 'conf-tier-conflict', sparse_record: 'conf-sparse-record', ungrounded: 'conf-ungrounded' };
+  function renderConfidence(d, s) {
+    var st = (s && s.confidence_state) || 'ungrounded';
+    var cls = CONF_CLASS[st] || 'conf-ungrounded';
+    var g = (s && s.grounded_claim_count) || 0, n = (s && s.claim_count) || 0;
+    var detail = n ? ' (' + g + '/' + n + ' claims grounded)' : '';
+    return '<span class="confidence ' + cls + '" title="Per-section confidence, derived from the evidence tiers of this section’s claims.' + esc(detail) + '">' + (CONF_LABEL[st] || st) + '</span>';
   }
 
   // L1 — the full synthesis sections, delineated, in spine order, each an anchor target for its call-out.
