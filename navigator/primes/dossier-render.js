@@ -2,11 +2,13 @@
  *
  * A Dossier is UNIVERSAL research on a subject: PII-free, broadly shareable, NO "prepared for X", NO
  * confidentiality notice (those belong only to personal Slices). Distinct object from the session render
- * (theo.html/theo-render.js) — its own module by design (the two are meant to diverge). PHASE 1 (this file):
- * the page SHELL — header, two-column body, the three rail panels, "Executive Summary" + chapter prose.
- * PHASE 2 (data-bound, held for Angelia grounding + Leg-3 + the claim->ground_fact linkage): the Ground
- * Facts panel CONTENT, tier-gated render states, and descend-to-evidence — marked TODO(phase2) below, and
- * the point at which the shared claim/citation/tier components get extracted from theo-render.js.
+ * (theo.html/theo-render.js) — its own module by design (the two are meant to diverge). The main column is
+ * a 4-LAYER progressive-disclosure descent over one spine (synthesis_section), per Eames 0515073a:
+ * L0 Executive Summary (call-out stack) -> L1 Full Synthesis (full sections) -> L2 Evidence (per-claim
+ * descent, data-bound) -> L3 Engine workings (the theo.html render, deepest). L0<->L1 mirror is structural
+ * (callout_md / content_md per section, section_index order). DATA-BOUND, pending Angelia's grounding:
+ * the Ground Facts panel content, per-section confidence (from element_dependency tiers), and the L2
+ * per-claim descent leaf — placeholders until the claim_on_fact edges + per-section fact-tier path land.
  *
  * URL: dossier.html?session=<uuid>  (a Dossier is rendered over a research session; the subject is the
  * research topic, which MUST be PII-free — see the header note).
@@ -115,34 +117,72 @@
     '</div>';
   }
 
-  /* ── main column: Executive Summary + chapters ─────────────── */
-  // Returns the exec-summary source AND the id of the section it consumed (or null if drawn from the
-  // synthesis), so renderMain can exclude that exact section from the chapters below — the repeat fix.
-  function pickExecSummary(d) {
-    var secs = d.sections || [];
-    var pick = secs.filter(function (s) { return /summary|executive|answer|overview/i.test((s.section_type || '') + ' ' + (s.title || '')); })[0]
-             || secs[0] || null;
-    if (pick) return { id: pick.id, content: pick.content_md };
-    var m = d.synthesis && d.synthesis.layer_1_synthesis_md;
-    if (m) return { id: null, content: m.split(/\n{2,}/).slice(0, 2).join('\n\n') };
-    return { id: null, content: '' };
+  /* ── main column: the 4-layer descent over one spine (Eames 0515073a / c639a489 addendum) ──────────
+     Progressive disclosure, not one long document. The mirror is STRUCTURAL: each synthesis_section carries
+     BOTH callout_md (its Exec-Summary thesis line) and content_md (its full prose), in section_index order,
+     so call-out N <-> section N is guaranteed 1:1 with no hand-maintained correspondence.
+       L0 Executive Summary = the stack of call-outs, each a door (anchor) to its L1 section.
+       L1 Full Synthesis    = the sections in full, delineated, each with a per-section confidence indicator.
+       L2 Evidence          = Ground Facts panel (rail) + per-claim descent (data-bound; TODO phase2).
+       L3 Engine workings    = the existing theo.html research render, the DEEPEST descent, not the default. */
+  function sectionsOrdered(d) {
+    return (d.sections || []).slice().sort(function (a, b) { return (a.section_index || 0) - (b.section_index || 0); });
   }
-  function renderMain(d) {
-    var ex = pickExecSummary(d);
-    var html = '<div class="dossier-main">';
-    html += '<div class="dossier-section exec-summary"><h2>Executive Summary</h2>' +
-      '<div class="dossier-prose">' + (ex.content ? md(ex.content) : '<p><em>Executive summary pending.</em></p>') + '</div></div>';
+  function sectionAnchor(s, idx) { return 'section-' + (s.section_index != null ? s.section_index : idx); }
+  function calloutOf(s) {
+    if (s.callout_md && String(s.callout_md).trim()) return String(s.callout_md).trim();
+    // Fallback until Theo authors call-outs: the section's first sentence, else its title.
+    var body = (s.content_md || '').trim();
+    if (body) { var first = (body.replace(/^#+\s+.*$/m, '').trim().split(/(?<=[.?!])\s/)[0] || '').trim(); if (first) return first; }
+    return s.title || '';
+  }
 
-    // Chapters = the remaining synthesis sections (excluding the one shown as the Executive Summary — the
-    // repeat fix). These ARE the fuller synthesis; descend-to-evidence hangs off their claims (TODO phase2).
-    var chapters = (d.sections || []).filter(function (s) { return s.id !== ex.id; });
-    chapters.forEach(function (s) {
-      html += '<div class="dossier-section">' +
-        (s.title ? '<h3>' + esc(s.title) + '</h3>' : '') +
+  // L0 — the call-out stack. Each call-out is a door to its Full Synthesis section.
+  function renderL0(secs) {
+    if (!secs.length) return '<div class="dossier-section exec-summary"><h2>Executive Summary</h2><div class="dossier-prose"><p><em>Executive summary pending — one call-out per section.</em></p></div></div>';
+    var items = secs.map(function (s, idx) {
+      return '<a class="callout" href="#' + sectionAnchor(s, idx) + '">' +
+        '<span class="callout-index">' + (idx + 1) + '</span>' +
+        '<span class="callout-text">' + mdInline(esc(calloutOf(s))) + '</span>' +
+      '</a>';
+    }).join('');
+    return '<div class="dossier-section exec-summary"><h2>Executive Summary</h2>' +
+      '<div class="callout-stack">' + items + '</div></div>';
+  }
+
+  // Per-section confidence — derived from the tier-composition of the facts the section's claims rest on
+  // (element_dependency). Data-bound: shows "ungrounded" until claim_on_fact edges land AND the per-section
+  // fact-tier path is wired into the render data (a follow-on). Structural placeholder for now.
+  function renderConfidence(/* d, s */) {
+    return '<span class="confidence conf-ungrounded" title="Confidence derives from the evidence tiers of this section’s claims; shown once the section is grounded.">not yet grounded</span>';
+  }
+
+  // L1 — the full synthesis sections, delineated, in spine order, each an anchor target for its call-out.
+  function renderL1(d, secs) {
+    if (!secs.length) return '<div class="dossier-section"><div class="dossier-prose"><p><em>Full synthesis pending.</em></p></div></div>';
+    return secs.map(function (s, idx) {
+      return '<div class="dossier-section synthesis-section" id="' + sectionAnchor(s, idx) + '">' +
+        '<div class="section-head"><h3>' + esc(s.title || ('Section ' + (idx + 1))) + '</h3>' + renderConfidence(d, s) + '</div>' +
         '<div class="dossier-prose">' + md(s.content_md) + '</div>' +
       '</div>';
-    });
-    return html + '</div>';
+    }).join('');
+  }
+
+  // L3 — the engine workings (existing session render), reachable as the deepest descent, not the default.
+  function renderL3(d) {
+    var sid = (d.session || {}).id || qs('session');
+    return '<div class="engine-workings"><a href="theo.html?session=' + encodeURIComponent(sid) + '">' +
+      'View the engine workings → the questions asked, the returns, and the sources (the deepest layer).</a></div>';
+  }
+
+  function renderMain(d) {
+    var secs = sectionsOrdered(d);
+    return '<div class="dossier-main">' +
+      renderL0(secs) +
+      '<div class="layer-divider"><span>Full synthesis</span></div>' +
+      renderL1(d, secs) +
+      renderL3(d) +
+    '</div>';
   }
 
   function render(d) {

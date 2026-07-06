@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
 
   if (synthesis?.id) {
     const [secs, clm] = await Promise.all([
-      supabase.from("synthesis_section").select("id, section_index, title, content_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
+      supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
       supabase.from("render_claim_v1").select("*").eq("session_id", sessionId),
     ]);
     if (secs.error) return json({ error: `sections: ${secs.error.message}` }, 500);

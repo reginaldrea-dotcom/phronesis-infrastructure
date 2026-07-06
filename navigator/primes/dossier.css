@@ -39,13 +39,45 @@
 .gf-anchored { color: var(--accent); }              /* §7 Grade-0 "Anchored" leaf */
 .gf-view-capture { color: var(--text-muted); font-style: italic; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
-/* ── main column: Executive Summary + chapters ── */
+/* ── main column: the 4-layer descent ── */
 .dossier-main { min-width: 0; }
 .dossier-section { margin-bottom: 26px; }
 .dossier-section h2 { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600;
                       color: var(--text); margin: 0 0 8px; }
 .dossier-section h3 { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600;
-                      color: var(--text); margin: 1.2em 0 0.4em; }
+                      color: var(--text); margin: 0; }
 .dossier-prose { color: var(--text); font-size: 15.5px; line-height: 1.75; max-width: 70ch; }
 .dossier-prose p { margin: 0 0 1em; max-width: 70ch; }
 .exec-summary { border-left: 3px solid var(--accent-border); padding-left: 16px; }
+
+/* L0 — the call-out stack (one thesis line per section; each a door to its L1 section) */
+.callout-stack { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.callout { display: flex; gap: 12px; align-items: baseline; padding: 10px 10px 10px 0; text-decoration: none;
+           color: var(--text); border-bottom: 1px solid var(--border-lt); transition: color 0.12s; }
+.callout:last-child { border-bottom: none; }
+.callout:hover { color: var(--accent); }
+.callout:hover .callout-text { text-decoration: underline; text-underline-offset: 3px; }
+.callout-index { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted);
+                 min-width: 1.4em; text-align: right; flex: none; }
+.callout-text { font-family: 'Lora', Georgia, serif; font-size: 15.5px; line-height: 1.5; }
+
+/* layer divider — quiet delineation between L0 and L1 (the "Full synthesis" band) */
+.layer-divider { display: flex; align-items: center; gap: 12px; margin: 30px 0 22px; }
+.layer-divider::before, .layer-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.layer-divider span { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 2px;
+                      text-transform: uppercase; color: var(--text-muted); }
+
+/* L1 — full sections; scroll-margin so an anchored jump clears the top */
+.synthesis-section { scroll-margin-top: 24px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 1.2em 0 0.5em; }
+.confidence { font-size: 11px; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
+.conf-ungrounded { color: var(--text-light); font-style: italic; }
+.conf-ok { color: var(--accent); }
+.conf-needs-corroboration { color: var(--status-amber); }
+.conf-tier-conflict { color: var(--status-red, #b3423a); }
+.conf-sparse-record { color: var(--text-light); }
+
+/* L3 — the deepest descent: a quiet link to the engine workings, not a default view */
+.engine-workings { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); }
+.engine-workings a { font-size: 13.5px; color: var(--text-muted); text-decoration: none; }
+.engine-workings a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
