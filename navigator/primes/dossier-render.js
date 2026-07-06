@@ -116,26 +116,26 @@
   }
 
   /* ── main column: Executive Summary + chapters ─────────────── */
+  // Returns the exec-summary source AND the id of the section it consumed (or null if drawn from the
+  // synthesis), so renderMain can exclude that exact section from the chapters below — the repeat fix.
   function pickExecSummary(d) {
     var secs = d.sections || [];
-    var pick = secs.filter(function (s) { return /summary|executive|answer|overview/i.test((s.section_type || '') + ' ' + (s.title || '')); })[0];
-    if (pick) return pick.content_md;
-    if (secs.length) return secs[0].content_md;
+    var pick = secs.filter(function (s) { return /summary|executive|answer|overview/i.test((s.section_type || '') + ' ' + (s.title || '')); })[0]
+             || secs[0] || null;
+    if (pick) return { id: pick.id, content: pick.content_md };
     var m = d.synthesis && d.synthesis.layer_1_synthesis_md;
-    if (m) return m.split(/\n{2,}/).slice(0, 2).join('\n\n');
-    return '';
+    if (m) return { id: null, content: m.split(/\n{2,}/).slice(0, 2).join('\n\n') };
+    return { id: null, content: '' };
   }
   function renderMain(d) {
-    var summarySrc = pickExecSummary(d);
+    var ex = pickExecSummary(d);
     var html = '<div class="dossier-main">';
     html += '<div class="dossier-section exec-summary"><h2>Executive Summary</h2>' +
-      '<div class="dossier-prose">' + (summarySrc ? md(summarySrc) : '<p><em>Executive summary pending.</em></p>') + '</div></div>';
+      '<div class="dossier-prose">' + (ex.content ? md(ex.content) : '<p><em>Executive summary pending.</em></p>') + '</div></div>';
 
-    // Chapters = the synthesis sections (excluding the one used as the exec summary). Descend-to-evidence
-    // from a claim is TODO(phase2): claim -> chapter -> ground_fact -> §7 Grade-0 frozen capture leaf.
-    var secs = (d.sections || []);
-    var usedTitle = (secs.filter(function (s) { return /summary|executive|answer|overview/i.test((s.section_type || '') + ' ' + (s.title || '')); })[0] || {}).id;
-    var chapters = secs.filter(function (s) { return s.id !== usedTitle; });
+    // Chapters = the remaining synthesis sections (excluding the one shown as the Executive Summary — the
+    // repeat fix). These ARE the fuller synthesis; descend-to-evidence hangs off their claims (TODO phase2).
+    var chapters = (d.sections || []).filter(function (s) { return s.id !== ex.id; });
     chapters.forEach(function (s) {
       html += '<div class="dossier-section">' +
         (s.title ? '<h3>' + esc(s.title) + '</h3>' : '') +
