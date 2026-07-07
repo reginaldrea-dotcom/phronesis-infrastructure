@@ -30,9 +30,13 @@
 /* Grounded-sources list is a SCROLL region (Eames 4ed7084a) — facts never drop off the bottom unreachable. */
 .gf-scroll { max-height: 340px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
 
-/* Ground Facts rows (populate in Phase 2; each: fact + tier + contestability + view-frozen-capture) */
-.gf-row { padding: 8px 0; border-top: 1px solid var(--border-lt); }
-.gf-row:first-child { border-top: none; }
+/* Grounded sources as discrete CARDS (Eames 84b3b3a8): each source is a bounded unit — title -> tier line
+   -> screenshot -> links — held together and set apart by WHITESPACE + a hairline border, NOT strong
+   dividers or per-source colour (the evidence layer stays quiet; per-source colour beside the coloured
+   call-outs would read as a patchwork). The tier line is the card's quiet anchor. */
+.gf-row { padding: 10px 11px; border: 1px solid var(--border-lt); border-radius: 5px;
+          background: var(--surface-2, rgba(128, 128, 128, 0.035)); margin-bottom: 10px; }
+.gf-row:last-child { margin-bottom: 0; }
 .gf-title { font-size: 13.5px; color: var(--text); }
 .gf-meta  { font-size: 11px; color: var(--text-muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 .gf-tier  { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
