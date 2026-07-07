@@ -96,9 +96,12 @@
   /* ── left rail: three panels ───────────────────────────────── */
   function renderGroundFactsPanel(d) {
     var facts = (d.ground_facts || []);
-    var head = '<div class="rail-panel"><div class="rail-panel-label">Ground facts' +
-      (facts.length ? ' <span class="gf-count">' + facts.length + '</span>' : '') + '</div>';
-    if (!facts.length) {
+    var n = facts.length;
+    // Count visible in the label ("N grounded sources"); the rows sit in a SCROLL region (below) so a
+    // long list never drops facts off the bottom unreachable (Eames refinement 4ed7084a — scroll, not slider).
+    var head = '<div class="rail-panel"><div class="rail-panel-label">' +
+      (n ? n + ' grounded source' + (n === 1 ? '' : 's') : 'Grounded sources') + '</div>';
+    if (!n) {
       return head + '<div class="rail-empty">Anchored sources appear here as the subject is grounded — each with its verification state, a frozen screenshot, and a neutral web-archive link.</div></div>';
     }
     var rows = facts.map(function (f) {
@@ -143,7 +146,7 @@
       return '<div class="gf-row gf-row-' + state + '"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
         '<div class="gf-meta">' + meta + '</div>' + thumb + linksRow + '</div>';
     }).join('');
-    return head + rows + '</div>';
+    return head + '<div class="gf-scroll">' + rows + '</div></div>';
   }
   function renderAdjustPanel(/* d */) {
     // Dormant/inert for qualitative dossiers; the live zoom for quantitative (AESSEAL).
@@ -180,14 +183,25 @@
     if (body) { var first = (body.replace(/^#+\s+.*$/m, '').trim().split(/(?<=[.?!])\s/)[0] || '').trim(); if (first) return first; }
     return s.title || '';
   }
+  // The short LABEL shared by call-out N and section N (the "§3 · <label>" identity). The section title.
+  function labelOf(s, idx) { return (s.title && String(s.title).trim()) || ('Section ' + (idx + 1)); }
+  // Per-section identity HUE — evenly spaced, applied only as a low-saturation LEFT-EDGE rule (reinforcement,
+  // never a fill). Structure never depends on it: number + label + sticky header + collapse carry it alone
+  // (Eames 4ed7084a — must survive colour-off). Same idx in L0 and L1 -> the call-out and its section match.
+  function hueFor(idx, n) { return Math.round((idx * 360) / Math.max(n, 1)); }
 
-  // L0 — the call-out stack. Each call-out is a door to its Full Synthesis section.
+  // L0 — the call-out stack. Each call-out is a door to its Full Synthesis section, carrying the shared
+  // "§N · label" identity (legible in words, not just hue) plus the section's thesis line.
   function renderL0(secs) {
     if (!secs.length) return '<div class="dossier-section exec-summary"><h2>Executive Summary</h2><div class="dossier-prose"><p><em>Executive summary pending — one call-out per section.</em></p></div></div>';
+    var n = secs.length;
     var items = secs.map(function (s, idx) {
-      return '<a class="callout" href="#' + sectionAnchor(s, idx) + '">' +
-        '<span class="callout-index">' + (idx + 1) + '</span>' +
-        '<span class="callout-text">' + mdInline(esc(calloutOf(s))) + '</span>' +
+      return '<a class="callout" data-idx="' + idx + '" href="#' + sectionAnchor(s, idx) + '" style="--sec-hue:' + hueFor(idx, n) + '">' +
+        '<span class="callout-num">§' + (idx + 1) + '</span>' +
+        '<span class="callout-body">' +
+          '<span class="callout-label">' + esc(labelOf(s, idx)) + '</span>' +
+          '<span class="callout-text">' + mdInline(esc(calloutOf(s))) + '</span>' +
+        '</span>' +
       '</a>';
     }).join('');
     return '<div class="dossier-section exec-summary"><h2>Executive Summary</h2>' +
@@ -207,14 +221,22 @@
     return '<span class="confidence ' + cls + '" title="Per-section confidence, derived from the evidence tiers of this section’s claims.' + esc(detail) + '">' + (CONF_LABEL[st] || st) + '</span>';
   }
 
-  // L1 — the full synthesis sections, delineated, in spine order, each an anchor target for its call-out.
+  // L1 — the full synthesis sections. Each is COLLAPSIBLE and opens headers-only on first load, so the
+  // synthesis reads as a scannable stack of §N · label headers (structure undeniable) rather than one
+  // undifferentiated scroll. The header is a STICKY button (stays pinned while scrolling a long section,
+  // so you always know which section you are in) carrying the shared identity + per-section confidence.
   function renderL1(d, secs) {
     if (!secs.length) return '<div class="dossier-section"><div class="dossier-prose"><p><em>Full synthesis pending.</em></p></div></div>';
+    var n = secs.length;
     return secs.map(function (s, idx) {
-      return '<div class="dossier-section synthesis-section" id="' + sectionAnchor(s, idx) + '">' +
-        '<div class="section-head"><h3>' + esc(s.title || ('Section ' + (idx + 1))) + '</h3>' + renderConfidence(d, s) + '</div>' +
-        '<div class="dossier-prose">' + md(s.content_md) + '</div>' +
-      '</div>';
+      return '<section class="dossier-section synthesis-section collapsed" id="' + sectionAnchor(s, idx) + '" data-idx="' + idx + '" style="--sec-hue:' + hueFor(idx, n) + '">' +
+        '<button type="button" class="section-head" aria-expanded="false">' +
+          '<span class="section-caret" aria-hidden="true"></span>' +
+          '<span class="section-id">§' + (idx + 1) + ' · ' + esc(labelOf(s, idx)) + '</span>' +
+          renderConfidence(d, s) +
+        '</button>' +
+        '<div class="section-body"><div class="dossier-prose">' + md(s.content_md) + '</div></div>' +
+      '</section>';
     }).join('');
   }
 
@@ -229,10 +251,59 @@
     var secs = sectionsOrdered(d);
     return '<div class="dossier-main">' +
       renderL0(secs) +
-      '<div class="layer-divider"><span>Full synthesis</span></div>' +
+      '<div class="layer-divider"><span>Full synthesis</span>' +
+        (secs.length ? '<button type="button" class="expand-all" data-mode="expand">Expand all</button>' : '') +
+      '</div>' +
       renderL1(d, secs) +
       renderL3(d) +
     '</div>';
+  }
+
+  // Post-render wiring: collapse toggles, expand/collapse-all, call-out-opens-target, and a scroll-spy that
+  // marks the active section (and its matching call-out). All progressive-enhancement — the page is fully
+  // legible with JS off (sections just render open) and with colour off (identity is number + label).
+  function wireInteractions() {
+    var main = root.querySelector('.dossier-main');
+    if (!main) return;
+    function setExpanded(sec, open) {
+      sec.classList.toggle('collapsed', !open);
+      var h = sec.querySelector('.section-head'); if (h) h.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    // Toggle a section by clicking its header.
+    main.addEventListener('click', function (e) {
+      var head = e.target.closest && e.target.closest('.section-head');
+      if (head && main.contains(head)) { var sec = head.parentNode; setExpanded(sec, sec.classList.contains('collapsed')); }
+    });
+    // Expand all / collapse all.
+    var btn = main.querySelector('.expand-all');
+    if (btn) btn.addEventListener('click', function () {
+      var expand = btn.getAttribute('data-mode') === 'expand';
+      main.querySelectorAll('.synthesis-section').forEach(function (sec) { setExpanded(sec, expand); });
+      btn.setAttribute('data-mode', expand ? 'collapse' : 'expand');
+      btn.textContent = expand ? 'Collapse all' : 'Expand all';
+    });
+    // A call-out opens its target section before the anchor jump lands (so you don't land on a closed header).
+    root.addEventListener('click', function (e) {
+      var call = e.target.closest && e.target.closest('.callout');
+      if (!call) return;
+      var sec = main.querySelector('.synthesis-section[data-idx="' + call.getAttribute('data-idx') + '"]');
+      if (sec) setExpanded(sec, true);
+    });
+    // Scroll-spy: mark the section nearest the top as active (neutral shading, distinct from identity hue),
+    // and mirror it onto the matching call-out. Bonus cue; structure does not depend on it.
+    var secs = Array.prototype.slice.call(main.querySelectorAll('.synthesis-section'));
+    if (secs.length && 'IntersectionObserver' in window) {
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) { if (en.isIntersecting) setActive(en.target.getAttribute('data-idx')); });
+      }, { rootMargin: '0px 0px -75% 0px', threshold: 0 });
+      secs.forEach(function (s) { obs.observe(s); });
+    }
+    function setActive(idx) {
+      main.querySelectorAll('.synthesis-section.is-active').forEach(function (s) { s.classList.remove('is-active'); });
+      root.querySelectorAll('.callout.is-active').forEach(function (c) { c.classList.remove('is-active'); });
+      var sec = main.querySelector('.synthesis-section[data-idx="' + idx + '"]'); if (sec) sec.classList.add('is-active');
+      var call = root.querySelector('.callout[data-idx="' + idx + '"]'); if (call) call.classList.add('is-active');
+    }
   }
 
   function render(d) {
@@ -243,6 +314,7 @@
     html += renderMain(d);
     html += '</div></div>';
     root.innerHTML = html;
+    wireInteractions();
   }
 
   var sid = qs('session');

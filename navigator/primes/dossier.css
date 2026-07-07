@@ -27,6 +27,9 @@
                     text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
 .rail-empty { font-size: 13px; color: var(--text-light); font-style: italic; }
 
+/* Grounded-sources list is a SCROLL region (Eames 4ed7084a) — facts never drop off the bottom unreachable. */
+.gf-scroll { max-height: 340px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+
 /* Ground Facts rows (populate in Phase 2; each: fact + tier + contestability + view-frozen-capture) */
 .gf-row { padding: 8px 0; border-top: 1px solid var(--border-lt); }
 .gf-row:first-child { border-top: none; }
@@ -76,26 +79,51 @@
 .dossier-prose p { margin: 0 0 1em; max-width: 70ch; }
 .exec-summary { border-left: 3px solid var(--accent-border); padding-left: 16px; }
 
-/* L0 — the call-out stack (one thesis line per section; each a door to its L1 section) */
+/* L0 — the call-out stack. Each call-out carries the shared "§N · label" identity + the section thesis,
+   and a low-saturation LEFT-EDGE hue matching its section (reinforcement only; structure is the number+label). */
 .callout-stack { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-.callout { display: flex; gap: 12px; align-items: baseline; padding: 10px 10px 10px 0; text-decoration: none;
-           color: var(--text); border-bottom: 1px solid var(--border-lt); transition: color 0.12s; }
+.callout { display: flex; gap: 12px; align-items: baseline; padding: 10px 10px 10px 12px; text-decoration: none;
+           color: var(--text); border-bottom: 1px solid var(--border-lt);
+           border-left: 3px solid hsla(var(--sec-hue, 0), 45%, 55%, 0.55); transition: color 0.12s, background 0.12s; }
 .callout:last-child { border-bottom: none; }
 .callout:hover { color: var(--accent); }
-.callout:hover .callout-text { text-decoration: underline; text-underline-offset: 3px; }
-.callout-index { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted);
-                 min-width: 1.4em; text-align: right; flex: none; }
-.callout-text { font-family: 'Lora', Georgia, serif; font-size: 15.5px; line-height: 1.5; }
+.callout:hover .callout-label { text-decoration: underline; text-underline-offset: 3px; }
+.callout.is-active { background: var(--surface-2, rgba(128, 128, 128, 0.10)); }  /* mirrors the active section */
+.callout-num { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted);
+               min-width: 1.8em; text-align: right; flex: none; }
+.callout-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.callout-label { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 600; color: var(--text); }
+.callout-text { font-family: 'Lora', Georgia, serif; font-size: 14.5px; line-height: 1.5; color: var(--text-muted); }
 
 /* layer divider — quiet delineation between L0 and L1 (the "Full synthesis" band) */
 .layer-divider { display: flex; align-items: center; gap: 12px; margin: 30px 0 22px; }
 .layer-divider::before, .layer-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 .layer-divider span { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 2px;
                       text-transform: uppercase; color: var(--text-muted); }
+.expand-all { flex: none; font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1px;
+              text-transform: uppercase; color: var(--text-muted); background: none; border: 1px solid var(--border);
+              border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.expand-all:hover { color: var(--accent); border-color: var(--accent-border); }
 
-/* L1 — full sections; scroll-margin so an anchored jump clears the top */
-.synthesis-section { scroll-margin-top: 24px; }
-.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 1.2em 0 0.5em; }
+/* L1 — collapsible sections with a STICKY header and a per-section identity hue as a LEFT-EDGE rule.
+   Default headers-only (collapsed) so the synthesis opens as a scannable stack of §N · label headers.
+   Identity is number + label + sticky header + collapse — the hue is pure reinforcement (survives colour-off). */
+.synthesis-section { scroll-margin-top: 8px; margin-bottom: 10px;
+                     border-left: 3px solid hsla(var(--sec-hue, 0), 45%, 55%, 0.55); }
+.synthesis-section.is-active { background: var(--surface-2, rgba(128, 128, 128, 0.06)); } /* active = neutral wash, distinct from the identity hue */
+.section-head { display: flex; align-items: baseline; gap: 10px; width: 100%; box-sizing: border-box;
+                position: sticky; top: 0; z-index: 2; background: var(--surface, #fff);
+                border: none; border-bottom: 1px solid var(--border-lt); text-align: left; cursor: pointer;
+                padding: 10px 12px; margin: 0; font: inherit; }
+.section-head:hover { color: var(--accent); }
+.section-caret { flex: none; width: 0; height: 0; border-left: 5px solid currentColor;
+                 border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+                 opacity: 0.55; transition: transform 0.15s; }
+.synthesis-section:not(.collapsed) .section-caret { transform: rotate(90deg); }
+.section-id { flex: 1 1 auto; min-width: 0; font-family: 'Cormorant Garamond', serif; font-size: 18px;
+              font-weight: 600; color: var(--text); }
+.section-body { padding: 6px 12px 10px; }
+.synthesis-section.collapsed .section-body { display: none; }
 .confidence { font-size: 11px; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
 .conf-ungrounded { color: var(--text-light); font-style: italic; }
 .conf-ok { color: var(--accent); }
