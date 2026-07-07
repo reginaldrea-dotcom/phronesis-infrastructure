@@ -88,18 +88,27 @@ Deno.serve(async (req: Request) => {
   let claims: Array<Record<string, unknown>> = [];
   let citations: unknown[] = [];
   let claimSources: unknown[] = [];
+  let groundFacts: unknown[] = [];
 
   if (synthesis?.id) {
-    const [secs, clm, conf] = await Promise.all([
+    const [secs, clm, conf, gfacts] = await Promise.all([
       supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
       supabase.from("render_claim_v1").select("*").eq("session_id", sessionId),
       // Per-section confidence (dossier L1): confidence_state from the tier-composition of the facts a
       // section's claims rest on (synthesis_claim.section_id -> element_dependency). 'ungrounded' until edges land.
       supabase.from("render_section_confidence_v1").select("section_id, confidence_state, claim_count, grounded_claim_count").eq("synthesis_id", synthesis.id),
+      // Ground Facts panel: the distinct anchored sources this dossier stands on (claim_on_fact edges),
+      // strongest tier first. Empty until Angelia grounds.
+      supabase.from("render_dossier_fact_v1")
+        .select("ground_fact_id, title, authority_tier, contestability, freshness_status, source_url, content_hash, source_document_id, definition_scope, period_label, in_conflict, supporting_claim_count")
+        .eq("synthesis_id", synthesis.id)
+        .order("authority_tier", { ascending: true }).order("supporting_claim_count", { ascending: false }),
     ]);
     if (secs.error) return json({ error: `sections: ${secs.error.message}` }, 500);
     if (clm.error) return json({ error: `claims: ${clm.error.message}` }, 500);
     if (conf.error) return json({ error: `section_confidence: ${conf.error.message}` }, 500);
+    if (gfacts.error) return json({ error: `ground_facts: ${gfacts.error.message}` }, 500);
+    groundFacts = gfacts.data ?? [];
     const confBy = new Map((conf.data ?? []).map((r: Record<string, unknown>) => [r.section_id as string, r]));
     sections = (secs.data ?? []).map((s: Record<string, unknown>) => {
       const c = confBy.get(s.id as string);
@@ -137,6 +146,7 @@ Deno.serve(async (req: Request) => {
     claims,
     citations,
     claim_sources: claimSources,
+    ground_facts: groundFacts,
     generated_at: new Date().toISOString(),
   });
 });

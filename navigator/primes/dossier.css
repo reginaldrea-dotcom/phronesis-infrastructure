@@ -37,7 +37,10 @@
 .gf-tier.t2 { color: var(--text-muted); }
 .gf-tier.t3 { color: var(--status-amber); }
 .gf-anchored { color: var(--accent); }              /* §7 Grade-0 "Anchored" leaf */
-.gf-view-capture { color: var(--text-muted); font-style: italic; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.gf-view-capture { color: var(--text-muted); font-style: italic; text-decoration: underline; text-underline-offset: 2px; }
+.gf-count { color: var(--text-muted); font-weight: 400; }
+.gf-conflict { color: var(--status-red, #b3423a); font-weight: 500; }
+.gf-stale { color: var(--status-amber); }
 
 /* ── main column: the 4-layer descent ── */
 .dossier-main { min-width: 0; }

@@ -94,12 +94,27 @@
   }
 
   /* ── left rail: three panels ───────────────────────────────── */
-  function renderGroundFactsPanel(/* d */) {
-    // TODO(phase2): populate from ground_fact (via the derivation views + the dossier EF carrying
-    // ground_fact rows + source_document_id for the §7 Grade-0 "view frozen capture" leaf). Quiet when empty.
-    return '<div class="rail-panel"><div class="rail-panel-label">Ground facts</div>' +
-      '<div class="rail-empty">Anchored sources appear here as the subject is grounded (tier, contestability, and a link to the frozen capture).</div>' +
-    '</div>';
+  function renderGroundFactsPanel(d) {
+    var facts = (d.ground_facts || []);
+    var head = '<div class="rail-panel"><div class="rail-panel-label">Ground facts' +
+      (facts.length ? ' <span class="gf-count">' + facts.length + '</span>' : '') + '</div>';
+    if (!facts.length) {
+      return head + '<div class="rail-empty">Anchored sources appear here as the subject is grounded (tier, contestability, and a link to the frozen capture).</div></div>';
+    }
+    var rows = facts.map(function (f) {
+      var tier = String(f.authority_tier || '').toLowerCase();
+      var capture = f.source_url
+        ? '<a class="gf-view-capture" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">view source' + (f.source_document_id ? ' · frozen' : '') + '</a>'
+        : '';
+      var meta = '<span class="gf-tier ' + esc(tier) + '">' + esc(f.authority_tier || '?') + '</span>' +
+        (f.contestability ? '<span>' + esc(f.contestability) + '</span>' : '') +
+        (f.in_conflict ? '<span class="gf-conflict">conflict</span>' : '') +
+        (f.freshness_status && f.freshness_status !== 'current' && f.freshness_status !== 'still_valid' ? '<span class="gf-stale">' + esc(f.freshness_status) + '</span>' : '') +
+        capture;
+      return '<div class="gf-row"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
+        '<div class="gf-meta">' + meta + '</div></div>';
+    }).join('');
+    return head + rows + '</div>';
   }
   function renderAdjustPanel(/* d */) {
     // Dormant/inert for qualitative dossiers; the live zoom for quantitative (AESSEAL).
