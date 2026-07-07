@@ -41,6 +41,9 @@
 .gf-count { color: var(--text-muted); font-weight: 400; }
 .gf-conflict { color: var(--status-red, #b3423a); font-weight: 500; }
 .gf-stale { color: var(--status-amber); }
+.gf-unverified { color: var(--status-amber); font-style: italic; }
+.gf-row-unverified { opacity: 0.82; }
+.gf-row-unverified .gf-title::before { content: "⚠ "; color: var(--status-amber); }
 
 /* ── main column: the 4-layer descent ── */
 .dossier-main { min-width: 0; }

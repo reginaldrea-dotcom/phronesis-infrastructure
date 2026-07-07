@@ -103,15 +103,23 @@
     }
     var rows = facts.map(function (f) {
       var tier = String(f.authority_tier || '').toLowerCase();
+      // Anchor strength: a fact is only truly "anchored" if its source was fetched + frozen
+      // (source_document_id). Without it, it's a bare URL citation — shown as unverified so a guessed
+      // or dead link never reads as solid (Grade-0 §7: the weakness shows on the face of the document).
+      var anchored = !!f.source_document_id;
+      var anchorBadge = anchored
+        ? '<span class="gf-anchored">anchored</span>'
+        : '<span class="gf-unverified" title="Source was not fetched and frozen — the URL is unverified and may not resolve.">unverified source</span>';
       var capture = f.source_url
-        ? '<a class="gf-view-capture" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">view source' + (f.source_document_id ? ' · frozen' : '') + '</a>'
+        ? '<a class="gf-view-capture" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">' + (anchored ? 'view frozen capture' : 'view source') + '</a>'
         : '';
       var meta = '<span class="gf-tier ' + esc(tier) + '">' + esc(f.authority_tier || '?') + '</span>' +
+        anchorBadge +
         (f.contestability ? '<span>' + esc(f.contestability) + '</span>' : '') +
         (f.in_conflict ? '<span class="gf-conflict">conflict</span>' : '') +
         (f.freshness_status && f.freshness_status !== 'current' && f.freshness_status !== 'still_valid' ? '<span class="gf-stale">' + esc(f.freshness_status) + '</span>' : '') +
         capture;
-      return '<div class="gf-row"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
+      return '<div class="gf-row' + (anchored ? '' : ' gf-row-unverified') + '"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
         '<div class="gf-meta">' + meta + '</div></div>';
     }).join('');
     return head + rows + '</div>';
