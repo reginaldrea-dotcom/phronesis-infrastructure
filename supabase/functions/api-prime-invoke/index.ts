@@ -17,6 +17,7 @@ import { getAction } from "./actions/index.ts";
 import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
+import { isCreditError, raiseCreditAlert, CREDIT_EXHAUSTED_MESSAGE } from "./lib/creditAlert.ts";
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
@@ -853,14 +854,19 @@ Deno.serve(async (req: Request) => {
         const errText = await anthropicResponse.text();
         console.log("ANTHROPIC ERROR:", anthropicResponse.status, errText);
         let errType = "api_error";
+        let message = "Something went wrong. Please try again.";
         if (anthropicResponse.status === 400 && errText.includes("context_length_exceeded")) {
           errType = "context_exceeded";
+          message = "This session has grown too long. Please start a new session to continue.";
+        } else if (isCreditError(anthropicResponse.status, errText)) {
+          // Credit-balance guard: a billing rejection blocks EVERY Prime. Surface it legibly (not the
+          // generic message that hid the 6 Jul outage) and raise a durable, deduplicated FLAG alert.
+          errType = "credit_exhausted";
+          message = CREDIT_EXHAUSTED_MESSAGE;
+          await raiseCreditAlert(supabase, resolvedInstanceId, lineage_name, errText);
         }
         return await finalize({
-          error: true, error_type: errType,
-          message: errType === "context_exceeded"
-            ? "This session has grown too long. Please start a new session to continue."
-            : "Something went wrong. Please try again.",
+          error: true, error_type: errType, message,
           request_id: anthropicResponse.headers.get("request-id") ?? undefined,
         }, 502);
       }
