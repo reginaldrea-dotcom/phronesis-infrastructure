@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
       // Ground Facts panel: the distinct anchored sources this dossier stands on (claim_on_fact edges),
       // strongest tier first. Empty until Angelia grounds.
       supabase.from("render_dossier_fact_v1")
-        .select("ground_fact_id, title, authority_tier, contestability, freshness_status, source_url, content_hash, source_document_id, definition_scope, period_label, in_conflict, supporting_claim_count")
+        .select("ground_fact_id, title, authority_tier, contestability, freshness_status, source_url, content_hash, source_document_id, definition_scope, period_label, in_conflict, supporting_claim_count, fact_kind, verification_state, review_state, screenshot_url, archive_url")
         .eq("synthesis_id", synthesis.id)
         .order("authority_tier", { ascending: true }).order("supporting_claim_count", { ascending: false }),
     ]);

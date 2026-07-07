@@ -99,28 +99,49 @@
     var head = '<div class="rail-panel"><div class="rail-panel-label">Ground facts' +
       (facts.length ? ' <span class="gf-count">' + facts.length + '</span>' : '') + '</div>';
     if (!facts.length) {
-      return head + '<div class="rail-empty">Anchored sources appear here as the subject is grounded (tier, contestability, and a link to the frozen capture).</div></div>';
+      return head + '<div class="rail-empty">Anchored sources appear here as the subject is grounded — each with its verification state, a frozen screenshot, and a neutral web-archive link.</div></div>';
     }
     var rows = facts.map(function (f) {
       var tier = String(f.authority_tier || '').toLowerCase();
-      // Anchor strength: a fact is only truly "anchored" if its source was fetched + frozen
-      // (source_document_id). Without it, it's a bare URL citation — shown as unverified so a guessed
-      // or dead link never reads as solid (Grade-0 §7: the weakness shows on the face of the document).
-      var anchored = !!f.source_document_id;
-      var anchorBadge = anchored
-        ? '<span class="gf-anchored">anchored</span>'
-        : '<span class="gf-unverified" title="Source was not fetched and frozen — the URL is unverified and may not resolve.">unverified source</span>';
-      var capture = f.source_url
-        ? '<a class="gf-view-capture" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">' + (anchored ? 'view frozen capture' : 'view source') + '</a>'
+      // Two-badge verification (design a656ff1d). "anchored" is EARNED, not assumed-from-a-URL:
+      //   anchored          — numeric fact whose figure was found on the rendered page.
+      //   screenshot_review — qualitative fact, screenshot frozen, a human confirms it supports the claim.
+      //   cited_not_verified— capture failed or the figure was not on the page. Never reads as solid.
+      var state = f.verification_state || 'cited_not_verified';
+      var stateCls, stateLabel, stateTitle;
+      if (state === 'anchored') {
+        stateCls = 'gf-anchored'; stateLabel = 'anchored';
+        stateTitle = 'The stated figure was found on the rendered, frozen page.';
+      } else if (state === 'screenshot_review') {
+        stateCls = 'gf-review'; stateLabel = 'needs review';
+        stateTitle = 'A full-page screenshot is frozen; a human confirms it supports the claim.';
+      } else {
+        stateCls = 'gf-unverified'; stateLabel = 'unverified';
+        stateTitle = 'The source could not be verified — figure not found on the page, or the page could not be captured.';
+      }
+      var stateBadge = '<span class="' + stateCls + '" title="' + esc(stateTitle) + '">' + stateLabel + '</span>';
+
+      // Evidence links: the frozen screenshot (our permanent capture), the Wayback archive (neutral
+      // third party), and the live source. Show whichever exist.
+      var links = [];
+      if (f.screenshot_url) links.push('<a class="gf-link" href="' + esc(f.screenshot_url) + '" target="_blank" rel="noopener">frozen screenshot</a>');
+      if (f.archive_url)    links.push('<a class="gf-link" href="' + esc(f.archive_url) + '" target="_blank" rel="noopener">web archive</a>');
+      if (f.source_url)     links.push('<a class="gf-link gf-link-src" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">source</a>');
+      var linksRow = links.length ? '<div class="gf-links">' + links.join('<span class="gf-link-sep">·</span>') + '</div>' : '';
+
+      // Inline screenshot thumbnail — the visible proof, click to open the full frozen capture.
+      var thumb = f.screenshot_url
+        ? '<a class="gf-shot" href="' + esc(f.screenshot_url) + '" target="_blank" rel="noopener" title="Open the full frozen capture"><img loading="lazy" alt="Frozen screenshot of the source" src="' + esc(f.screenshot_url) + '"></a>'
         : '';
+
       var meta = '<span class="gf-tier ' + esc(tier) + '">' + esc(f.authority_tier || '?') + '</span>' +
-        anchorBadge +
+        stateBadge +
+        (f.review_state === 'pending' ? '<span class="gf-review-pill" title="Awaiting Argos/Reg review">review</span>' : '') +
         (f.contestability ? '<span>' + esc(f.contestability) + '</span>' : '') +
         (f.in_conflict ? '<span class="gf-conflict">conflict</span>' : '') +
-        (f.freshness_status && f.freshness_status !== 'current' && f.freshness_status !== 'still_valid' ? '<span class="gf-stale">' + esc(f.freshness_status) + '</span>' : '') +
-        capture;
-      return '<div class="gf-row' + (anchored ? '' : ' gf-row-unverified') + '"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
-        '<div class="gf-meta">' + meta + '</div></div>';
+        (f.freshness_status && f.freshness_status !== 'current' && f.freshness_status !== 'still_valid' ? '<span class="gf-stale">' + esc(f.freshness_status) + '</span>' : '');
+      return '<div class="gf-row gf-row-' + state + '"><div class="gf-title">' + esc(f.title || '(untitled fact)') + '</div>' +
+        '<div class="gf-meta">' + meta + '</div>' + thumb + linksRow + '</div>';
     }).join('');
     return head + rows + '</div>';
   }

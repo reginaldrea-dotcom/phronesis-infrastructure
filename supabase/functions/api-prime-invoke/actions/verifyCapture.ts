@@ -19,23 +19,35 @@ async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Mirror of write_ground_fact's numeric gate normaliser — lets the probe prove the figure match too.
+function figurePresent(hayRaw: string, needleRaw: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[,\s£$€%]/g, "");
+  const hay = norm(hayRaw), needle = norm(needleRaw);
+  if (needle.length < 2) return false;
+  return hay.includes(needle);
+}
+
 export const verifyCaptureAction: Action = {
   name: "verify_capture",
   handle: async ({ supabase, body }) => {
     const url = (typeof body?.url === "string" && body.url.trim()) ? body.url.trim() : "https://example.com/";
     const sessionId = (typeof body?.session_id === "string" && body.session_id.trim()) ? body.session_id.trim() : "verify-capture";
+    // Opt-in: exercise the RENDERED-EVIDENCE path (Firecrawl render + full-page screenshot -> Storage +
+    // Wayback), and optionally test the numeric figure gate against the rendered text.
+    const wantShot = body?.screenshot === true || body?.screenshot === "true";
+    const figure = (typeof body?.figure === "string" && body.figure.trim()) ? body.figure.trim() : null;
     try {
-      const id = await captureSource(supabase, { url, title: "verify_capture probe", sessionId });
+      const id = await captureSource(supabase, { url, title: "verify_capture probe", sessionId, captureScreenshot: wantShot });
       if (!id) {
         return new Response(
-          JSON.stringify({ ok: false, captured: false, url, reason: "captureSource returned null — fetch failed / non-text / non-web. Capture path ran but anchored nothing (see EF logs)." }, null, 2),
+          JSON.stringify({ ok: false, captured: false, url, screenshot_requested: wantShot, reason: "captureSource returned null — fetch/render failed / non-text / non-web. Capture path ran but anchored nothing (see EF logs)." }, null, 2),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       // Read the held row back and re-hash the stored content — proves recoverability + integrity.
       const row = await supabase
         .from("source_document")
-        .select("id, content_hash, content, payload_state, origin, captured_at, forgetting_exempt")
+        .select("id, content_hash, content, payload_state, origin, captured_at, forgetting_exempt, attestation")
         .eq("id", id)
         .single();
       if (row.error || !row.data) {
@@ -47,10 +59,13 @@ export const verifyCaptureAction: Action = {
       const d = row.data as Record<string, unknown>;
       const rehash = await sha256Hex(typeof d.content === "string" ? d.content : "");
       const hashMatch = rehash === d.content_hash;
+      const att = (d.attestation ?? {}) as Record<string, unknown>;
+      const figureFound = figure ? figurePresent(typeof d.content === "string" ? d.content : "", figure) : null;
       return new Response(
         JSON.stringify({
           ok: hashMatch,
-          chain: "fetch -> hash -> source_document insert -> read-back -> re-hash",
+          chain: wantShot ? "render -> markdown+screenshot -> storage upload -> wayback -> source_document -> read-back -> re-hash"
+                          : "fetch -> hash -> source_document insert -> read-back -> re-hash",
           url,
           source_document_id: id,
           payload_state: d.payload_state,
@@ -59,6 +74,15 @@ export const verifyCaptureAction: Action = {
           content_hash: d.content_hash,
           rehash_matches: hashMatch,
           captured_at: d.captured_at,
+          // rendered-evidence surface
+          captured_via: att.captured_via,
+          http_status: att.http_status,
+          screenshot_url: att.screenshot_url ?? null,
+          archive_url: att.archive_url ?? null,
+          content_bytes: att.bytes,
+          // numeric gate probe (only when a figure was supplied)
+          figure: figure,
+          figure_found: figureFound,
         }, null, 2),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );

@@ -36,14 +36,34 @@
 .gf-tier.t1 { color: var(--accent); }
 .gf-tier.t2 { color: var(--text-muted); }
 .gf-tier.t3 { color: var(--status-amber); }
-.gf-anchored { color: var(--accent); }              /* §7 Grade-0 "Anchored" leaf */
-.gf-view-capture { color: var(--text-muted); font-style: italic; text-decoration: underline; text-underline-offset: 2px; }
+/* Two-badge verification (design a656ff1d): earned states, not assumed-from-a-URL. */
+.gf-anchored { color: var(--accent); }               /* numeric: figure found on the rendered page */
+.gf-review   { color: var(--status-amber); }          /* qualitative: screenshot frozen, awaiting human */
+.gf-unverified { color: var(--status-red, #b3423a); font-style: italic; }  /* not verified — a real weakness */
 .gf-count { color: var(--text-muted); font-weight: 400; }
 .gf-conflict { color: var(--status-red, #b3423a); font-weight: 500; }
 .gf-stale { color: var(--status-amber); }
-.gf-unverified { color: var(--status-amber); font-style: italic; }
-.gf-row-unverified { opacity: 0.82; }
-.gf-row-unverified .gf-title::before { content: "⚠ "; color: var(--status-amber); }
+
+/* review pill — visible flag that a human (Argos/Reg) still has to confirm the screenshot */
+.gf-review-pill { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em;
+                  text-transform: uppercase; color: var(--status-amber); border: 1px solid var(--status-amber);
+                  border-radius: 3px; padding: 0 4px; opacity: 0.85; }
+
+/* inline frozen screenshot — the visible proof; click to open the full capture */
+.gf-shot { display: block; margin-top: 8px; border: 1px solid var(--border-lt); border-radius: 4px;
+           overflow: hidden; max-height: 140px; }
+.gf-shot img { display: block; width: 100%; height: auto; }
+.gf-shot:hover { border-color: var(--accent-border); }
+
+/* evidence links row: frozen screenshot · web archive · source */
+.gf-links { margin-top: 6px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 3px 4px; align-items: baseline; }
+.gf-link { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.gf-link:hover { color: var(--accent); }
+.gf-link-src { font-style: italic; }
+.gf-link-sep { color: var(--text-light); opacity: 0.5; }
+
+.gf-row-cited_not_verified { opacity: 0.82; }
+.gf-row-cited_not_verified .gf-title::before { content: "⚠ "; color: var(--status-red, #b3423a); }
 
 /* ── main column: the 4-layer descent ── */
 .dossier-main { min-width: 0; }

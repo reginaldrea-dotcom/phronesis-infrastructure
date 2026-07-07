@@ -3,13 +3,16 @@
 // public.write_ground_fact() (message 2e517533): SECURITY DEFINER, validates authority_tier {T1,T2,T3} and
 // contestability {settled,contested}, logs to execution_ledger.
 //
-// CAPTURE-AND-FREEZE (7 Jul, after the UK-Migration grounding shipped 31 URL-only facts, many with guessed
-// URLs that 404): the tool now FETCHES the source_url and freezes an immutable source_document at write
-// time (reusing captureSource — the same evidence-locker path claims use), and the content_hash is computed
-// from the FETCHED BYTES, not asserted by the model. A URL that can't be fetched (dead / blocked / guessed)
-// yields NO frozen capture: the fact is written cited-NOT-anchored with content_hash 'unverified' and the
-// result says so LOUDLY — so a bad URL is caught at mint, never presented as a solid T1 anchor. This is why
-// authority_tier alone was misleading: a tier is only as good as a source that actually resolves + is held.
+// CAPTURE-AND-VERIFY (7 Jul, design 1a9f0797 / a656ff1d, after the re-ground gave citations not proof).
+// The tool RENDERS the source_url (Firecrawl, executing JS so dynamic figures like the ONS 171,000 appear),
+// freezes a FULL-PAGE SCREENSHOT + rendered markdown + a Wayback archive, and derives content_hash from the
+// fetched bytes. It then decides ONE of two HONEST states per fact kind (never one dishonest "anchored"):
+//   • numeric      → strict gate: ANCHORED only if HTTP 200 AND the canonical figure string is present in
+//                    the rendered capture; otherwise CITED_NOT_VERIFIED (figure not found on the page).
+//   • qualitative  → no string gate (a legal proposition has no grep-able proof): SCREENSHOT_REVIEW with a
+//                    stored PNG + canonical quote, flagged REQUIRES-HUMAN-REVIEW (Argos/Reg for load-bearing
+//                    claims). A capture with no screenshot falls to CITED_NOT_VERIFIED.
+// content_hash and the verification decision come from the FETCHED BYTES, not from the model's assertion.
 
 import type { Tool, ToolContext } from "./types.ts";
 import { captureSource } from "../lib/captureSource.ts";
@@ -18,39 +21,62 @@ function fail(msg: string): string {
   return `write_ground_fact error: ${msg}\n[SYSTEM: surface to Reg, do not retry.]`;
 }
 
-async function hashOfDoc(ctx: ToolContext, docId: string): Promise<string | null> {
-  const doc = await ctx.supabase.from("source_document").select("content_hash").eq("id", docId).maybeSingle();
-  return (doc.data as { content_hash?: string } | null)?.content_hash ?? null;
+// Read back what we froze: rendered text (for the numeric string match), the screenshot/archive URLs,
+// the content_hash, and the http status recorded in attestation.
+async function readCapture(ctx: ToolContext, docId: string): Promise<{
+  renderedText: string; contentHash: string | null; screenshotUrl: string | null; archiveUrl: string | null; httpStatus: number;
+}> {
+  const doc = await ctx.supabase.from("source_document")
+    .select("content, content_hash, attestation").eq("id", docId).maybeSingle();
+  const d = doc.data as { content?: string; content_hash?: string; attestation?: Record<string, unknown> } | null;
+  const att = (d?.attestation ?? {}) as { screenshot_url?: string; archive_url?: string; http_status?: number };
+  return {
+    renderedText: d?.content ?? "",
+    contentHash: d?.content_hash ?? null,
+    screenshotUrl: att.screenshot_url ?? null,
+    archiveUrl: att.archive_url ?? null,
+    httpStatus: typeof att.http_status === "number" ? att.http_status : 0,
+  };
+}
+
+// Normalise for the numeric gate: lower-case, strip commas/whitespace/currency so "171,000" matches
+// "171000" / "171 000" / "£171,000" as rendered. Substring test on the normalised forms.
+function figurePresent(renderedText: string, canonical: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[,\s£$€%]/g, "");
+  const hay = norm(renderedText), needle = norm(canonical);
+  if (needle.length < 2) return false; // too short to be meaningful evidence
+  return hay.includes(needle);
 }
 
 export const writeGroundFactTool: Tool = {
   definition: {
     name: "write_ground_fact",
     description:
-      "Write a qualitative, evidence-anchored ground fact to the element store. The tool FETCHES the source_url and freezes an immutable snapshot at write time, and derives content_hash from the fetched bytes — so you do NOT supply a hash, and you must give a source_url that actually resolves. If the URL can't be fetched (dead / blocked / guessed), the fact is still written but CITED-NOT-ANCHORED (no frozen capture, hash 'unverified') and the result says so — fix the URL and re-mint rather than leaving a load-bearing claim on an unfetchable source. REQUIRED: title, content, source_url, authority_tier (T1/T2/T3, set at capture; 'noise' is rejected). OPTIONAL: definition_scope; period_start / period_end (ISO) / period_label; contestability (settled [default] / contested); source_document_id (only if you already froze the source yourself). Returns the created ground_fact row and whether it anchored. Then link it to the claim(s) it supports via write_element_dependency (edge_kind claim_on_fact).",
+      "Write an evidence-anchored ground fact to the element store. The tool RENDERS the source_url (executing page JS so dynamic figures appear), freezes a FULL-PAGE SCREENSHOT + rendered text + a Wayback archive, and derives content_hash from the fetched bytes — so you do NOT supply a hash, and the source_url must actually resolve. It then decides the verification state from the FETCHED PAGE, by fact_kind: for a NUMERIC fact, give canonical_string = the exact figure (e.g. '171,000') and the fact is ANCHORED only if that figure is present on the rendered page (else CITED_NOT_VERIFIED — figure not found); for a QUALITATIVE fact, give canonical_string = the shortest quote that makes the claim, and the fact is SCREENSHOT_REVIEW (a human — Argos/Reg — confirms the screenshot supports the claim). REQUIRED: title, content, source_url, authority_tier (T1/T2/T3), fact_kind (numeric/qualitative), canonical_string. OPTIONAL: definition_scope; period_start/period_end (ISO)/period_label; contestability (settled [default]/contested). Returns the created ground_fact row and its verification_state. Then link it to the claim(s) it supports via write_element_dependency (edge_kind claim_on_fact).",
     input_schema: {
       type: "object",
       properties: {
         title:            { type: "string", description: "Short title of the fact." },
-        content:          { type: "string", description: "The fact itself — the qualitative statement." },
-        source_url:       { type: "string", description: "The source URL — MUST resolve; it is fetched and frozen at write time." },
+        content:          { type: "string", description: "The fact itself — the qualitative statement or the figure in context." },
+        source_url:       { type: "string", description: "The source URL — MUST resolve; it is rendered, screenshotted and frozen at write time." },
         authority_tier:   { type: "string", enum: ["T1", "T2", "T3"], description: "Source authority tier, set at capture (T1 highest). 'noise' is never persisted." },
+        fact_kind:        { type: "string", enum: ["numeric", "qualitative"], description: "numeric = a figure that must be present on the page (strict gate); qualitative = a proposition a human confirms from the screenshot." },
+        canonical_string: { type: "string", description: "For numeric: the exact figure to find on the page (e.g. '171,000'). For qualitative: the shortest quote that makes the claim — what a reviewer looks for in the screenshot." },
         definition_scope: { type: "string", description: "Optional: scope / definition qualifier." },
         period_start:     { type: "string", description: "Optional: ISO date (YYYY-MM-DD) the fact's period starts." },
         period_end:       { type: "string", description: "Optional: ISO date the fact's period ends." },
         period_label:     { type: "string", description: "Optional: human label for the period." },
-        source_document_id: { type: "string", description: "Optional: id of an already-frozen source_document (skip capture). Normally leave unset — the tool captures for you." },
         contestability:   { type: "string", enum: ["settled", "contested"], description: "Optional: settled (default) or contested." },
       },
-      required: ["title", "content", "source_url", "authority_tier"],
+      required: ["title", "content", "source_url", "authority_tier", "fact_kind", "canonical_string"],
     },
   },
 
   available: ({ isNewSession }) => !isNewSession,
 
   summarize: (input) => {
-    const i = input as { title?: unknown; authority_tier?: unknown };
-    return `write_ground_fact: ${String(i?.title ?? "").slice(0, 50)} [${String(i?.authority_tier ?? "")}]`;
+    const i = input as { title?: unknown; authority_tier?: unknown; fact_kind?: unknown };
+    return `write_ground_fact: ${String(i?.title ?? "").slice(0, 50)} [${String(i?.authority_tier ?? "")}/${String(i?.fact_kind ?? "")}]`;
   },
 
   run: async (input, ctx: ToolContext) => {
@@ -62,39 +88,58 @@ export const writeGroundFactTool: Tool = {
     if (!content)   return fail("content is required.");
     if (!sourceUrl) return fail("source_url is required.");
     if (!tier)      return fail("authority_tier is required (T1 / T2 / T3).");
+    const factKind = (s("fact_kind") === "numeric") ? "numeric" : "qualitative"; // default qualitative — never auto-anchor without explicit numeric intent
+    const canonical = s("canonical_string");
+    if (!canonical) return fail("canonical_string is required — the figure (numeric) or the shortest quote (qualitative) that the capture is checked against.");
 
-    // IDEMPOTENCY GUARD: if a fact with the same source_url + TITLE already exists, reuse it rather than
-    // minting a duplicate. The re-ground was re-minting the same fact with slightly reworded content, so an
-    // exact-content match missed it; title is the fact's identity. Genuinely distinct facts from one source
-    // carry distinct titles (e.g. "ECHR Article 3" vs "ECHR Article 5"), so this preserves them.
+    // IDEMPOTENCY GUARD: reuse a fact with the same source_url + TITLE rather than minting a duplicate
+    // (the re-ground was re-minting with reworded content, so an exact-content match missed it; title is
+    // the fact's identity). Genuinely distinct facts from one source carry distinct titles.
     try {
       const dup = await ctx.supabase.from("ground_fact")
-        .select("id, authority_tier, contestability, source_document_id")
+        .select("id, authority_tier, contestability, source_document_id, verification_state, review_state")
         .eq("source_url", sourceUrl).eq("title", title).limit(1).maybeSingle();
-      const d = dup.data as { id?: string; authority_tier?: string; contestability?: string; source_document_id?: string } | null;
+      const d = dup.data as { id?: string; authority_tier?: string; contestability?: string; source_document_id?: string; verification_state?: string; review_state?: string } | null;
       if (d?.id) {
         return JSON.stringify({
-          ok: true, ground_fact_id: d.id, anchored: !!d.source_document_id, deduped: true,
+          ok: true, ground_fact_id: d.id, anchored: d.verification_state === "anchored", deduped: true,
+          verification_state: d.verification_state, review_state: d.review_state,
           authority_tier: d.authority_tier, contestability: d.contestability,
-          "[SYSTEM]": `ALREADY GROUNDED — reused, NOT duplicated. ground_fact ${d.id} already exists for this source_url + title${d.source_document_id ? " (anchored)" : ""}. Link claims to THIS id via write_element_dependency. Do NOT re-mint facts you have already grounded this pass; give genuinely different facts from the same source distinct titles.`,
+          "[SYSTEM]": `ALREADY GROUNDED — reused, NOT duplicated. ground_fact ${d.id} already exists for this source_url + title (state: ${d.verification_state}). Link claims to THIS id via write_element_dependency. Give genuinely different facts from the same source distinct titles.`,
         });
       }
     } catch (_e) { /* dedup is best-effort; on error fall through and mint normally */ }
 
-    // Capture + freeze NOW. A caller-supplied source_document_id (rare) is trusted; otherwise fetch+freeze
-    // the URL. captureSource returns null on a dead/blocked/non-text URL → cited-not-anchored.
-    let sourceDocId = s("source_document_id");
-    let anchored = false;
-    if (sourceDocId) {
-      anchored = true;
-    } else {
-      const capturedId = await captureSource(ctx.supabase, { url: sourceUrl, title, sessionId: ctx.sessionId ?? "ground_fact_capture" });
-      if (capturedId) { sourceDocId = capturedId; anchored = true; }
-    }
-    // content_hash is of the FROZEN bytes when anchored; 'unverified' when the source couldn't be captured.
+    // Capture + verify NOW: render, screenshot, archive, freeze (captureScreenshot:true).
+    const sourceDocId = await captureSource(ctx.supabase, {
+      url: sourceUrl, title, sessionId: ctx.sessionId ?? "ground_fact_capture", captureScreenshot: true,
+    });
+
+    // Decide the honest verification state from what we actually froze.
+    let renderedText = "", screenshotUrl: string | null = null, archiveUrl: string | null = null, httpStatus = 0;
     let contentHash: string | null = null;
-    if (sourceDocId) contentHash = await hashOfDoc(ctx, sourceDocId);
-    if (!contentHash) { contentHash = "unverified"; anchored = false; }
+    if (sourceDocId) {
+      const cap = await readCapture(ctx, sourceDocId);
+      renderedText = cap.renderedText; screenshotUrl = cap.screenshotUrl; archiveUrl = cap.archiveUrl;
+      httpStatus = cap.httpStatus; contentHash = cap.contentHash;
+    }
+    if (!contentHash) contentHash = "unverified";
+
+    const ok200 = httpStatus === 0 ? !!sourceDocId : (httpStatus >= 200 && httpStatus < 300);
+    let verificationState: "anchored" | "screenshot_review" | "cited_not_verified";
+    let reviewState: "not_required" | "pending";
+    let figureFound = false;
+    if (!sourceDocId || !ok200) {
+      verificationState = "cited_not_verified"; reviewState = factKind === "qualitative" ? "pending" : "not_required";
+    } else if (factKind === "numeric") {
+      figureFound = figurePresent(renderedText, canonical);
+      verificationState = figureFound ? "anchored" : "cited_not_verified";
+      reviewState = "not_required";
+    } else {
+      // qualitative: needs a screenshot for a human to review; without one there is no visible proof
+      verificationState = screenshotUrl ? "screenshot_review" : "cited_not_verified";
+      reviewState = "pending";
+    }
 
     const args = {
       p_title: title,
@@ -118,10 +163,32 @@ export const writeGroundFactTool: Tool = {
         { id?: string; authority_tier?: string; contestability?: string } | null;
       if (!row?.id) return fail("write returned no row id — treat as NOT persisted.");
 
-      const sys = anchored
-        ? `PERSISTED + ANCHORED. ground_fact ${row.id} (tier ${row.authority_tier}, ${row.contestability}) written with a FROZEN capture (source_document ${sourceDocId}); content_hash is of the fetched bytes. Next: link it to the claim(s) it supports via write_element_dependency (edge_kind claim_on_fact).`
-        : `PERSISTED but CITED-NOT-ANCHORED. ground_fact ${row.id} written, BUT source_url '${sourceUrl}' could not be fetched/frozen (dead, blocked, or a guessed URL) — no frozen capture, content_hash 'unverified'. The dossier will show this as an unverified source. STRONGLY prefer to verify the real URL resolves and re-mint; do not leave a load-bearing claim resting only on an unfetchable link.`;
-      return JSON.stringify({ ok: true, ground_fact_id: row.id, anchored, source_document_id: sourceDocId, authority_tier: row.authority_tier, contestability: row.contestability, "[SYSTEM]": sys });
+      // Annotate the freshly-minted row with the per-fact verification (Connie's RPC owns the mint; the
+      // capture-verification fields are Heph's capture lane — set post-insert with service role).
+      try {
+        await ctx.supabase.from("ground_fact")
+          .update({ fact_kind: factKind, canonical_string: canonical, verification_state: verificationState, review_state: reviewState })
+          .eq("id", row.id);
+      } catch (e) {
+        console.error(`write_ground_fact: verification annotate failed for ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      let sys: string;
+      if (verificationState === "anchored") {
+        sys = `PERSISTED + ANCHORED. ground_fact ${row.id} (numeric) — the figure '${canonical}' WAS found on the rendered page (HTTP ${httpStatus}); screenshot + rendered text frozen${archiveUrl ? ", Wayback archived" : ""}. Next: link it to the claim(s) via write_element_dependency (edge_kind claim_on_fact).`;
+      } else if (verificationState === "screenshot_review") {
+        sys = `PERSISTED + SCREENSHOT_REVIEW. ground_fact ${row.id} (qualitative) — a full-page screenshot is frozen${archiveUrl ? " and Wayback archived" : ""}, flagged REQUIRES-HUMAN-REVIEW (Argos/Reg confirm the page supports the claim: '${canonical}'). This is NOT a fake anchor; it is honestly awaiting review. Link it to the claim(s) via write_element_dependency.`;
+      } else if (factKind === "numeric") {
+        sys = `PERSISTED but CITED_NOT_VERIFIED. ground_fact ${row.id} (numeric) — the figure '${canonical}' was NOT found on the rendered page${sourceDocId ? ` (HTTP ${httpStatus})` : " (source could not be fetched/rendered)"}. Either the URL is wrong/dead, the figure is served in a way the render missed, or the number differs. Fix the URL/figure and re-mint; do NOT leave a load-bearing numeric claim on an unverified source.`;
+      } else {
+        sys = `PERSISTED but CITED_NOT_VERIFIED. ground_fact ${row.id} (qualitative) — source_url '${sourceUrl}' could not be rendered/screenshotted (dead, blocked, or a guessed URL), so there is no visible proof to review. Verify the real URL resolves and re-mint.`;
+      }
+      return JSON.stringify({
+        ok: true, ground_fact_id: row.id, verification_state: verificationState, review_state: reviewState,
+        fact_kind: factKind, figure_found: factKind === "numeric" ? figureFound : undefined,
+        source_document_id: sourceDocId, screenshot_url: screenshotUrl, archive_url: archiveUrl,
+        http_status: httpStatus, authority_tier: row.authority_tier, contestability: row.contestability, "[SYSTEM]": sys,
+      });
     } catch (err) {
       return fail(`write_ground_fact call failed: ${err instanceof Error ? err.message : String(err)}`);
     }
