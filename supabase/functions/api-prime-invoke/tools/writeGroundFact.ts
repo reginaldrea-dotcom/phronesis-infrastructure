@@ -63,6 +63,24 @@ export const writeGroundFactTool: Tool = {
     if (!sourceUrl) return fail("source_url is required.");
     if (!tier)      return fail("authority_tier is required (T1 / T2 / T3).");
 
+    // IDEMPOTENCY GUARD: if a fact with the same source_url + TITLE already exists, reuse it rather than
+    // minting a duplicate. The re-ground was re-minting the same fact with slightly reworded content, so an
+    // exact-content match missed it; title is the fact's identity. Genuinely distinct facts from one source
+    // carry distinct titles (e.g. "ECHR Article 3" vs "ECHR Article 5"), so this preserves them.
+    try {
+      const dup = await ctx.supabase.from("ground_fact")
+        .select("id, authority_tier, contestability, source_document_id")
+        .eq("source_url", sourceUrl).eq("title", title).limit(1).maybeSingle();
+      const d = dup.data as { id?: string; authority_tier?: string; contestability?: string; source_document_id?: string } | null;
+      if (d?.id) {
+        return JSON.stringify({
+          ok: true, ground_fact_id: d.id, anchored: !!d.source_document_id, deduped: true,
+          authority_tier: d.authority_tier, contestability: d.contestability,
+          "[SYSTEM]": `ALREADY GROUNDED — reused, NOT duplicated. ground_fact ${d.id} already exists for this source_url + title${d.source_document_id ? " (anchored)" : ""}. Link claims to THIS id via write_element_dependency. Do NOT re-mint facts you have already grounded this pass; give genuinely different facts from the same source distinct titles.`,
+        });
+      }
+    } catch (_e) { /* dedup is best-effort; on error fall through and mint normally */ }
+
     // Capture + freeze NOW. A caller-supplied source_document_id (rare) is trusted; otherwise fetch+freeze
     // the URL. captureSource returns null on a dead/blocked/non-text URL → cited-not-anchored.
     let sourceDocId = s("source_document_id");
