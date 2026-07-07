@@ -161,12 +161,17 @@
 .sl-support-note { color: var(--text-light); font-style: italic; font-size: 11.5px; }
 /* Review affordances (Theo b63ec6d5): quiet inline accept/reject on unreviewed links; accepted shows a
    small confirmed dot and no buttons. Understated — a curation control on a quiet zone, not a CTA. */
-.sl-curate { display: inline-flex; gap: 4px; margin-left: auto; flex: none; }
-.sl-acc, .sl-rej { border: 1px solid var(--border); background: transparent; cursor: pointer;
+.sl-curate { display: inline-flex; gap: 4px; margin-left: auto; flex: none; align-items: center; }
+.sl-keep, .sl-rej, .sl-reason { border: 1px solid var(--border); background: transparent; cursor: pointer;
                    font-size: 11px; line-height: 1; padding: 2px 6px; border-radius: 3px; color: var(--text-muted); }
-.sl-acc:hover { border-color: var(--accent); color: var(--accent); }
-.sl-rej:hover { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
-.sl-acc:disabled, .sl-rej:disabled { opacity: 0.4; cursor: default; }
+.sl-keep:hover { border-color: var(--accent); color: var(--accent); }
+.sl-rej:hover, .sl-reason:hover { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
+.sl-keep:disabled, .sl-rej:disabled, .sl-reason:disabled { opacity: 0.4; cursor: default; }
+/* Reason chooser (dead|wrong|irrelevant) — the rejection_class the schema requires. Hidden until Remove
+   is clicked, which sets .reasons-open on the row. */
+.sl-reasons { display: none; gap: 4px; }
+.sl-support-row.reasons-open .sl-reasons { display: inline-flex; }
+.sl-support-row.reasons-open .sl-rej { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
 .sl-accepted-dot { color: var(--accent); font-size: 9px; flex: none; line-height: 1.4; }
 .confidence { font-size: 11px; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
 .conf-ungrounded { color: var(--text-light); font-style: italic; }

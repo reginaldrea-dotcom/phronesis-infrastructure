@@ -70,7 +70,8 @@
     return fetch(RENDER_CONFIG.renderDataUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
-      body: JSON.stringify({ session_id: sessionId }),
+      // include_unreviewed only on the internal editor page — the external share gets kept-only links.
+      body: JSON.stringify({ session_id: sessionId, include_unreviewed: isEditor() }),
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || ('HTTP ' + r.status)); });
       return r.json();
@@ -239,17 +240,18 @@
   // Supporting always reads lighter than Grounded.
   function renderSectionFootLinks(s) {
     var grounded = s.grounded_sources || [];
-    // Supporting links carry a review status (Theo b63ec6d5): pending | accepted | rejected (absent ===
-    // pending). Rejected are NEVER shown; pending shows to an editor only; external readers see accepted
-    // only — so no unreviewed/dead link leaks onto a shared dossier. Accepted sort first.
+    // Supporting links carry Connie's review_state (supporting_link table): unreviewed | kept | removed.
+    // The render EF already drops 'removed' and only sends 'unreviewed' to an editor; we filter again
+    // defensively. kept = shown to everyone (the reviewed-good links); unreviewed = editor-only, with the
+    // keep / remove controls; removed = never shown. kept sort first.
     var editor = isEditor();
     var supporting = (s.support_links || []).filter(function (l) {
-      var st = (l && l.status) || 'pending';
-      if (st === 'rejected') return false;
-      if (st === 'accepted') return true;
+      var st = (l && l.review_state) || 'unreviewed';
+      if (st === 'removed') return false;
+      if (st === 'kept') return true;
       return editor;
     }).slice().sort(function (a, b) {
-      return (((a && a.status) === 'accepted') ? 0 : 1) - (((b && b.status) === 'accepted') ? 0 : 1);
+      return (((a && a.review_state) === 'kept') ? 0 : 1) - (((b && b.review_state) === 'kept') ? 0 : 1);
     });
     if (!grounded.length && !supporting.length) return '';
     var html = '<div class="section-links">';
@@ -281,23 +283,30 @@
         var dom = (l.domain && String(l.domain)) || domainOf(url);
         var title = (l.title && String(l.title)) || '';
         var note = (l.note && String(l.note)) || '';
-        var accepted = ((l && l.status) === 'accepted');
-        // Buttons render for an editor on unreviewed (pending) links only; accepted links show a confirmed
-        // dot and no buttons. The write is auth-gated server-side (dossier-curate-link) — buttons are UX.
-        var btns = (editor && !accepted)
+        var kept = ((l && l.review_state) === 'kept');
+        var lid = (l && l.id) ? String(l.id) : '';
+        // Editor controls on unreviewed links: Keep, or Remove -> a reason chooser (dead | wrong | irrelevant,
+        // the rejection_class Connie's schema requires on removal). Kept links show a confirmed dot, no
+        // controls. Writes are auth-gated server-side (dossier-curate-link) — controls are UX only.
+        var curate = (editor && !kept && lid)
           ? '<span class="sl-curate">' +
-              '<button type="button" class="sl-acc" data-url="' + esc(url) + '" data-act="accepted" title="Accept" aria-label="Accept link">&#10003;</button>' +
-              '<button type="button" class="sl-rej" data-url="' + esc(url) + '" data-act="rejected" title="Reject" aria-label="Reject link">&#10007;</button>' +
+              '<button type="button" class="sl-keep" data-id="' + esc(lid) + '" title="Keep" aria-label="Keep link">&#10003;</button>' +
+              '<button type="button" class="sl-rej" title="Remove" aria-label="Remove link">&#10007;</button>' +
+              '<span class="sl-reasons">' +
+                '<button type="button" class="sl-reason" data-id="' + esc(lid) + '" data-class="dead">dead</button>' +
+                '<button type="button" class="sl-reason" data-id="' + esc(lid) + '" data-class="wrong">wrong</button>' +
+                '<button type="button" class="sl-reason" data-id="' + esc(lid) + '" data-class="irrelevant">irrelevant</button>' +
+              '</span>' +
             '</span>'
           : '';
-        return '<div class="sl-support-row' + (accepted ? ' is-accepted' : '') + '" data-url="' + esc(url) + '">' +
-          (accepted ? '<span class="sl-accepted-dot" title="Accepted" aria-label="Accepted">&#9679;</span>' : '') +
+        return '<div class="sl-support-row' + (kept ? ' is-accepted' : '') + '" data-id="' + esc(lid) + '">' +
+          (kept ? '<span class="sl-accepted-dot" title="Kept" aria-label="Kept">&#9679;</span>' : '') +
           '<a class="sl-support-link" href="' + esc(url) + '" target="_blank" rel="noopener">' +
             '<span class="sl-domain">' + esc(dom) + '</span>' +
             (title ? '<span class="sl-support-title">' + esc(title) + '</span>' : '') +
           '</a>' +
           (note ? '<span class="sl-support-note">' + esc(note) + '</span>' : '') +
-          btns +
+          curate +
         '</div>';
       }).join('');
       html += '<div class="sl-supporting" data-section="' + esc(s.id) + '"><div class="sl-head sl-support-head">Supporting links' + valid + '</div>' + srows + '</div>';
@@ -339,35 +348,37 @@
     '</div>';
   }
 
-  // Post a support-link accept/reject. Optimistic: the row is already updated in the DOM by the caller-side
-  // change here; on write failure we revert and surface the error. Matches only by (section, url).
-  function curateSupportLink(sectionId, url, act, row) {
+  // Write a support-link review to Connie's supporting_link table via dossier-curate-link, keyed by link id.
+  // state is 'kept' or 'removed'; rejectionClass (dead|wrong|irrelevant) is required by the schema on removal.
+  // Optimistic: the row updates here immediately; on write failure we revert and surface the error.
+  function curateSupportLink(linkId, state, rejectionClass, row) {
     var ep = curateEndpoint();
-    if (!ep || !row) return;
+    if (!ep || !row || !linkId) return;
     var parent = row.parentNode;
     var nextSibling = row.nextSibling;
     var prevClass = row.className;
     var btnBar = row.querySelector('.sl-curate');
-    row.querySelectorAll('.sl-acc, .sl-rej').forEach(function (x) { x.disabled = true; });
+    row.querySelectorAll('.sl-keep, .sl-rej, .sl-reason').forEach(function (x) { x.disabled = true; });
+    row.classList.remove('reasons-open');
     // Optimistic UI.
-    if (act === 'rejected') {
+    if (state === 'removed') {
       row.style.display = 'none';
     } else {
       if (btnBar) btnBar.remove();
       if (!row.querySelector('.sl-accepted-dot')) {
         var dot = document.createElement('span');
-        dot.className = 'sl-accepted-dot'; dot.title = 'Accepted'; dot.setAttribute('aria-label', 'Accepted');
+        dot.className = 'sl-accepted-dot'; dot.title = 'Kept'; dot.setAttribute('aria-label', 'Kept');
         dot.innerHTML = '&#9679;';
         row.insertBefore(dot, row.firstChild);
       }
       row.classList.add('is-accepted');
-      var head = parent && parent.querySelector('.sl-head');           // hoist accepted to the top of the list
+      var head = parent && parent.querySelector('.sl-head');           // hoist kept to the top of the list
       if (parent && head && head.nextSibling !== row) parent.insertBefore(row, head.nextSibling);
     }
     fetch(ep, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
-      body: JSON.stringify({ section_id: sectionId, url: url, action: act }),
+      body: JSON.stringify({ link_id: linkId, action: state, rejection_class: rejectionClass || null }),
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || ('HTTP ' + r.status)); });
       return r.json();
@@ -375,17 +386,22 @@
       // Revert to the pre-click state.
       row.style.display = '';
       row.className = prevClass;
-      var d = row.querySelector('.sl-accepted-dot'); if (d && act === 'accepted') d.remove();
+      var d = row.querySelector('.sl-accepted-dot'); if (d && state === 'kept') d.remove();
       if (parent) { if (nextSibling) parent.insertBefore(row, nextSibling); else parent.appendChild(row); }
-      if (act === 'accepted' && !row.querySelector('.sl-curate')) {
-        var u = esc(url);
+      if (state === 'kept' && !row.querySelector('.sl-curate')) {
+        var id = esc(linkId);
         var span = document.createElement('span');
         span.className = 'sl-curate';
-        span.innerHTML = '<button type="button" class="sl-acc" data-url="' + u + '" data-act="accepted" title="Accept" aria-label="Accept link">&#10003;</button>' +
-                         '<button type="button" class="sl-rej" data-url="' + u + '" data-act="rejected" title="Reject" aria-label="Reject link">&#10007;</button>';
+        span.innerHTML = '<button type="button" class="sl-keep" data-id="' + id + '" title="Keep" aria-label="Keep link">&#10003;</button>' +
+                         '<button type="button" class="sl-rej" title="Remove" aria-label="Remove link">&#10007;</button>' +
+                         '<span class="sl-reasons">' +
+                           '<button type="button" class="sl-reason" data-id="' + id + '" data-class="dead">dead</button>' +
+                           '<button type="button" class="sl-reason" data-id="' + id + '" data-class="wrong">wrong</button>' +
+                           '<button type="button" class="sl-reason" data-id="' + id + '" data-class="irrelevant">irrelevant</button>' +
+                         '</span>';
         row.appendChild(span);
       } else {
-        row.querySelectorAll('.sl-acc, .sl-rej').forEach(function (x) { x.disabled = false; });
+        row.querySelectorAll('.sl-keep, .sl-rej, .sl-reason').forEach(function (x) { x.disabled = false; });
       }
       if (typeof console !== 'undefined') console.error('curate failed', err);
       alert('Could not save that change: ' + (err && err.message ? err.message : 'unknown error'));
@@ -422,19 +438,24 @@
       var sec = main.querySelector('.synthesis-section[data-idx="' + call.getAttribute('data-idx') + '"]');
       if (sec) setExpanded(sec, true);
     });
-    // Supporting-link accept/reject (editor only; buttons only exist when isEditor()). Optimistic UI: the
-    // row updates immediately, then the write is posted. On write failure we revert and surface it.
+    // Supporting-link review (editor only; controls exist only when isEditor()). Keep writes immediately;
+    // Remove reveals the reason chooser (dead|wrong|irrelevant), and picking a reason writes the removal.
     main.addEventListener('click', function (e) {
-      var b = e.target.closest && e.target.closest('.sl-acc, .sl-rej');
-      if (!b || b.disabled) return;
-      e.preventDefault();
-      var wrap = b.closest('.sl-supporting');
-      var row = b.closest('.sl-support-row');
-      var sectionId = wrap && wrap.getAttribute('data-section');
-      var url = b.getAttribute('data-url');
-      var act = b.getAttribute('data-act');
-      if (!sectionId || !url) return;
-      curateSupportLink(sectionId, url, act, row);
+      if (!e.target.closest) return;
+      var keep = e.target.closest('.sl-keep');
+      var rej = e.target.closest('.sl-rej');
+      var reason = e.target.closest('.sl-reason');
+      var row = e.target.closest('.sl-support-row');
+      if (keep && !keep.disabled) {
+        e.preventDefault();
+        curateSupportLink(keep.getAttribute('data-id'), 'kept', null, row);
+      } else if (rej && !rej.disabled) {
+        e.preventDefault();
+        if (row) row.classList.toggle('reasons-open');   // reveal dead|wrong|irrelevant
+      } else if (reason && !reason.disabled) {
+        e.preventDefault();
+        curateSupportLink(reason.getAttribute('data-id'), 'removed', reason.getAttribute('data-class'), row);
+      }
     });
     // Scroll-spy: mark the section nearest the top as active (neutral shading, distinct from identity hue),
     // and mirror it onto the matching call-out. Bonus cue; structure does not depend on it.

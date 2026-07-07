@@ -49,6 +49,10 @@ Deno.serve(async (req: Request) => {
   }
   let sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
   if (!ID_RE.test(sessionId)) return json({ error: "session_id must be a UUID or hex prefix" }, 400);
+  // Supporting links (Connie's supporting_link table). SAFE BY DEFAULT: only 'kept' links are returned, so
+  // an external share never receives unreviewed/removed rows in the payload. The internal editor page opts
+  // into seeing 'unreviewed' (to review them) by sending include_unreviewed:true. 'removed' is never sent.
+  const includeUnreviewed = body?.include_unreviewed === true;
 
   const supabase = createClient(env("SUPABASE_URL"), env("THEO_DISPATCH_SECRET_KEY"));
 
@@ -95,7 +99,7 @@ Deno.serve(async (req: Request) => {
 
   if (synthesis?.id) {
     const [secs, clm, conf, gfacts, sfacts] = await Promise.all([
-      supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note, support_links, support_links_valid_as_of").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
+      supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
       supabase.from("render_claim_v1").select("*").eq("session_id", sessionId),
       // Per-section confidence (dossier L1): confidence_state from the tier-composition of the facts a
       // section's claims rest on (synthesis_claim.section_id -> element_dependency). 'ungrounded' until edges land.
@@ -126,13 +130,38 @@ Deno.serve(async (req: Request) => {
       if (!factsBySection.has(k)) factsBySection.set(k, []);
       factsBySection.get(k)!.push(f);
     }
+
+    // Per-section SUPPORTING LINKS from Connie's supporting_link table (the JSON->rows model). Kept always;
+    // unreviewed only for the internal editor (include_unreviewed). Removed never returned.
+    const linksBySection = new Map<string, Array<Record<string, unknown>>>();
+    const sectionIds = (secs.data ?? []).map((s: Record<string, unknown>) => s.id as string);
+    if (sectionIds.length > 0) {
+      const states = includeUnreviewed ? ["kept", "unreviewed"] : ["kept"];
+      const sl = await supabase.from("supporting_link")
+        .select("id, section_id, title, url, note, returned_by_engine, valid_as_of, review_state")
+        .in("section_id", sectionIds)
+        .in("review_state", states)
+        .order("valid_as_of", { ascending: false });
+      if (sl.error) return json({ error: `supporting_links: ${sl.error.message}` }, 500);
+      for (const l of (sl.data ?? []) as Array<Record<string, unknown>>) {
+        const k = l.section_id as string;
+        if (!linksBySection.has(k)) linksBySection.set(k, []);
+        linksBySection.get(k)!.push(l);
+      }
+    }
+
     sections = (secs.data ?? []).map((s: Record<string, unknown>) => {
       const c = confBy.get(s.id as string);
+      const links = linksBySection.get(s.id as string) ?? [];
+      // Section-level "(valid: DATE)" = the freshest valid_as_of among the section's links.
+      const validDates = links.map((l) => l.valid_as_of as string).filter(Boolean).sort();
       return { ...s,
         confidence_state: (c?.confidence_state as string) ?? "ungrounded",
         claim_count: c?.claim_count ?? 0,
         grounded_claim_count: c?.grounded_claim_count ?? 0,
-        grounded_sources: factsBySection.get(s.id as string) ?? [] };
+        grounded_sources: factsBySection.get(s.id as string) ?? [],
+        support_links: links,
+        support_links_valid_as_of: validDates.length ? validDates[validDates.length - 1] : null };
     });
     claims = (clm.data ?? []) as Array<Record<string, unknown>>;
     const claimIds = claims.map((c) => c.claim_id).filter(Boolean) as string[];
