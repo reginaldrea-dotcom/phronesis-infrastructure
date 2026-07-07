@@ -20,6 +20,8 @@ cp navigator/primes/theo-render.js \
    navigator/primes/theo-display.css \
    navigator/primes/theo-config.js \
    navigator/primes/prime-core.v1.css \
+   navigator/primes/dossier-render.js \
+   navigator/primes/dossier.css \
    share-viewer/dist/primes/
 
 echo "built share-viewer/dist:"

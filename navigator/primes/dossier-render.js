@@ -317,7 +317,9 @@
     wireInteractions();
   }
 
-  var sid = qs('session');
+  // Session id from ?session= (page behind Cloudflare Access) OR window.RENDER_SESSION_ID (set by the
+  // token-gated public share page d.html after resolve_dossier_share — the capability-link path).
+  var sid = qs('session') || (typeof window !== 'undefined' ? window.RENDER_SESSION_ID : null);
   if (!sid) { root.innerHTML = '<div class="render-status">No dossier specified — append <code>?session=&lt;uuid&gt;</code>.</div>'; return; }
   fetchDossier(sid).then(render).catch(function (e) {
     root.innerHTML = '<div class="render-error">Could not load this dossier: ' + esc(e.message) + '</div>';

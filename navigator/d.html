@@ -54,10 +54,24 @@
       }).then(function (r) { return r.json(); }).then(function (res) {
         if (!res || !res.session_id) { fail('This link is invalid or has expired.'); return; }
         if (!res.suppress_notice) { showConfidentialNotice(); }   // default-on: shown unless explicitly suppressed
-        window.RENDER_SESSION_ID = res.session_id;                // theo-render.js reads this when no ?session= is present
-        var s = document.createElement('script');
-        s.src = 'primes/theo-render.js?v=20260705';
-        document.body.appendChild(s);
+        window.RENDER_SESSION_ID = res.session_id;                // both renderers read this when no ?session= is present
+        // Renderer choice. DEFAULT = the legacy research-session render (theo-render.js) — this keeps every
+        // already-distributed share link (e.g. the ECHR interview-prep slice) rendering exactly as before.
+        // A DOSSIER share opts in with &view=dossier to get the universal Dossier page (§-section descent,
+        // grounded-source cards) — the new view. Opt-in, not default, so no existing link changes underfoot.
+        if (new URLSearchParams(location.search).get('view') === 'dossier') {
+          var css = document.createElement('link');
+          css.rel = 'stylesheet'; css.href = 'primes/dossier.css?v=20260707g';
+          document.head.appendChild(css);
+          var host = document.getElementById('render-root'); if (host) host.id = 'dossier-root'; // dossier-render.js renders into #dossier-root
+          var ds = document.createElement('script');
+          ds.src = 'primes/dossier-render.js?v=20260707h';
+          document.body.appendChild(ds);
+        } else {
+          var s = document.createElement('script');
+          s.src = 'primes/theo-render.js?v=20260705';
+          document.body.appendChild(s);
+        }
       }).catch(function () { fail('Could not load this dossier. Please try again later.'); });
     })();
   </script>

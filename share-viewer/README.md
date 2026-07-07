@@ -32,14 +32,19 @@ the gated site.
 ```
 share-viewer/dist/
   d.html                    (from navigator/d.html)
-  primes/theo-render.js
+  primes/theo-render.js       (legacy research-session view — default)
   primes/theo-display.css
   primes/theo-config.js
   primes/prime-core.v1.css
+  primes/dossier-render.js    (universal Dossier view — served with &view=dossier)
+  primes/dossier.css
 ```
 
 `d.html` uses relative asset paths, so it works unchanged on any hostname. Share links become
-`https://share.clarev.ai/d.html?t=<token>`. The confidentiality notice, resolve/mint RPCs, and the
+`https://share.clarev.ai/d.html?t=<token>` for the legacy session view, or
+`https://share.clarev.ai/d.html?t=<token>&view=dossier` for the universal Dossier page
+(§-section descent + grounded-source cards). The `view=dossier` opt-in keeps every already-distributed
+link (e.g. the ECHR interview-prep slice) rendering unchanged on the default theo-render.js path. The confidentiality notice, resolve/mint RPCs, and the
 render EF are all unchanged and hostname-agnostic.
 
 Do NOT weaken the `clarev.ai` gate. This project adds a public surface for the viewer only; everything
