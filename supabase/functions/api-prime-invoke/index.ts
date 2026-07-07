@@ -18,7 +18,6 @@ import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
 import { isCreditError, raiseCreditAlert, CREDIT_EXHAUSTED_MESSAGE } from "./lib/creditAlert.ts";
-import { notifyTeams } from "./lib/notifyTeams.ts";
 import { notifyEmail } from "./lib/notifyEmail.ts";
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
@@ -464,13 +463,11 @@ Deno.serve(async (req: Request) => {
     // Test hook for the Teams credit-alert notifier: POST { lineage_name, action: "test_credit_alert" }
     // to verify TEAMS_WEBHOOK_URL end-to-end without a real outage. Pure — no model call, no wake.
     if (action === "test_credit_alert") {
-      const testText = "This is a test of the Phronesis credit-exhaustion alert. If you receive this, the real alert will reach you the same way. No action needed.";
-      const [email, teams] = await Promise.all([
-        notifyEmail("Test — Phronesis credit-balance alert", testText),
-        notifyTeams("Test — Phronesis credit-balance alert", testText,
-          { facts: { "Triggered via": lineage_name || "(none)", "Source": "api-prime-invoke test hook" } }),
-      ]);
-      return await finalize({ ok: true, email, teams }, 200);
+      const email = await notifyEmail(
+        "Test — Phronesis credit-balance alert",
+        "This is a test of the Phronesis credit-exhaustion alert. If you receive this, the real alert will reach you the same way. No action needed.",
+      );
+      return await finalize({ ok: true, email }, 200);
     }
 
     if (action) {
