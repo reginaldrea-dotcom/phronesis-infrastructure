@@ -13,6 +13,7 @@
 // pre-emptive guard would need spend-velocity accounting against a configured budget (a follow-on).
 
 import { notifyTeams } from "./notifyTeams.ts";
+import { notifyEmail } from "./notifyEmail.ts";
 
 const ALERT_KIND = "anthropic_credit_exhausted";
 const DEDUP_WINDOW_MS = 30 * 60 * 1000; // one FLAG per 30-min window, not one per blocked call
@@ -60,11 +61,20 @@ export async function raiseCreditAlert(
       metadata: { alert_kind: ALERT_KIND, detected_via_lineage: lineage, severity: "critical" },
     });
     console.log("CREDIT ALERT raised (FLAG artifact) — Anthropic credit exhausted, first via", lineage);
-    // External push so it reaches a human even when no one is watching a Prime (no-op if unconfigured).
+    // External push so it reaches a human even when no one is watching a Prime. Both channels are no-ops
+    // if unconfigured; fire whichever secrets are present (email via Resend is the active one for Reg).
+    const when = new Date().toISOString();
+    await notifyEmail(
+      "Phronesis ALERT — Anthropic credit balance exhausted (all Primes blocked)",
+      "Every Prime invocation is failing until the Anthropic account is topped up:\n"
+        + "console.anthropic.com -> Plans & Billing.\n\n"
+        + `First detected via lineage '${lineage}' at ${when} (UTC).\n`
+        + "This is an account-level block, not a fault in any session.",
+    );
     await notifyTeams(
       "Anthropic credit balance exhausted — all Primes blocked",
       "Every Prime invocation is failing until the Anthropic account is topped up: console.anthropic.com -> Plans & Billing.",
-      { attention: true, facts: { "First seen via": lineage, "Detected (UTC)": new Date().toISOString() } },
+      { attention: true, facts: { "First seen via": lineage, "Detected (UTC)": when } },
     );
   } catch (e) {
     console.error("raiseCreditAlert failed (non-fatal):", e);

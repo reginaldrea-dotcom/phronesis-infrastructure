@@ -10,9 +10,9 @@ export async function notifyTeams(
   title: string,
   text: string,
   opts?: { attention?: boolean; facts?: Record<string, string> },
-): Promise<boolean> {
+): Promise<{ ok: boolean; detail?: string }> {
   const url = Deno.env.get("TEAMS_WEBHOOK_URL");
-  if (!url) return false; // notifier not configured — silently skip
+  if (!url) return { ok: false, detail: "TEAMS_WEBHOOK_URL not set" }; // notifier not configured — skip
 
   const body = {
     type: "message",
@@ -51,13 +51,14 @@ export async function notifyTeams(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    const respText = (await res.text()).slice(0, 300);
     if (!res.ok) {
-      console.error("notifyTeams non-OK:", res.status, (await res.text()).slice(0, 200));
-      return false;
+      console.error("notifyTeams non-OK:", res.status, respText);
+      return { ok: false, detail: `HTTP ${res.status}: ${respText}` };
     }
-    return true;
+    return { ok: true };
   } catch (e) {
     console.error("notifyTeams failed (non-fatal):", e);
-    return false;
+    return { ok: false, detail: String(e) };
   }
 }
