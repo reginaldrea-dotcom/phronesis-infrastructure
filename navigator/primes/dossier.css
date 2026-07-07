@@ -128,6 +128,34 @@
               font-weight: 600; color: var(--text); }
 .section-body { padding: 6px 12px 10px; }
 .synthesis-section.collapsed .section-body { display: none; }
+
+/* Section-foot links (Eames c639a489): two epistemic zones. Grounded = the solid, verified spine;
+   Supporting = quieter, perishable context. Hierarchy is FIRM — Supporting must always read lighter. */
+.section-links { margin-top: 20px; }
+.sl-head { font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+           text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+
+/* GROUNDED SOURCES — weighted: tier + verification badges, evidence links, title in full text colour. */
+.sl-grounded { border-top: 1px solid var(--border); padding-top: 12px; }
+.sl-grounded-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; padding: 5px 0; }
+.sl-grounded-row + .sl-grounded-row { border-top: 1px solid var(--border-lt); }
+.sl-g-title { color: var(--text); }
+.sl-g-links { font-size: 11px; display: inline-flex; flex-wrap: wrap; gap: 3px 4px; align-items: baseline; }
+
+/* SUPPORTING LINKS — the category boundary is a quiet neutral left-rule + faint tint (NOT per-link colour,
+   and in a neutral hue distinct from the section's identity colour). Lighter than Grounded in every way:
+   smaller, muted, no badges. Rhythm (one per line + domain) beats the grey-blob, not colour. */
+.sl-supporting { margin-top: 16px; padding: 8px 0 4px 12px; border-left: 2px solid var(--border);
+                 background: var(--surface-2, rgba(128, 128, 128, 0.03)); border-radius: 0 4px 4px 0; }
+.sl-support-head { color: var(--text-light); }
+.sl-valid { text-transform: none; letter-spacing: 0; font-style: italic; color: var(--text-light); }
+.sl-support-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 8px 4px 0;
+                  text-decoration: none; color: var(--text-muted); font-size: 12.5px; }
+.sl-support-row + .sl-support-row { border-top: 1px solid var(--border-lt); }
+.sl-support-row:hover .sl-support-title { text-decoration: underline; text-underline-offset: 2px; }
+.sl-support-row:hover .sl-domain { color: var(--accent); }
+.sl-domain { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text-muted); flex: none; }
+.sl-support-title { color: var(--text-light); }
 .confidence { font-size: 11px; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
 .conf-ungrounded { color: var(--text-light); font-style: italic; }
 .conf-ok { color: var(--accent); }

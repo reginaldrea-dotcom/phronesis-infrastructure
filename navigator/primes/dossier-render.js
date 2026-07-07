@@ -220,6 +220,56 @@
     return '<span class="confidence ' + cls + '" title="Per-section confidence, derived from the evidence tiers of this section’s claims.' + esc(detail) + '">' + (CONF_LABEL[st] || st) + '</span>';
   }
 
+  function domainOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } }
+
+  // Section-foot links (Eames c639a489 / 190f3512): TWO epistemic zones, which must never blur.
+  //   GROUNDED SOURCES  — the section's anchored facts (verified, tier-badged, frozen). The solid spine.
+  //   SUPPORTING LINKS  — ~6 curated engine links, NOT verified, perishable; domain shown, quieter than
+  //                       grounded, with a "(valid: DATE)" zone header. A promotion "waiting room".
+  // Colour marks the category boundary (a quiet neutral tint/left-rule on Supporting), never per-link;
+  // Supporting always reads lighter than Grounded.
+  function renderSectionFootLinks(s) {
+    var grounded = s.grounded_sources || [];
+    var supporting = s.support_links || [];
+    if (!grounded.length && !supporting.length) return '';
+    var html = '<div class="section-links">';
+    if (grounded.length) {
+      var grows = grounded.map(function (f) {
+        var tier = String(f.authority_tier || '').toLowerCase();
+        var st = f.verification_state || 'cited_not_verified';
+        var cls = st === 'anchored' ? 'gf-anchored' : (st === 'screenshot_review' ? 'gf-review' : 'gf-unverified');
+        var lbl = st === 'anchored' ? 'anchored' : (st === 'screenshot_review' ? 'needs review' : 'unverified');
+        var links = [];
+        if (f.screenshot_url) links.push('<a class="gf-link" href="' + esc(f.screenshot_url) + '" target="_blank" rel="noopener">frozen screenshot</a>');
+        if (f.archive_url)    links.push('<a class="gf-link" href="' + esc(f.archive_url) + '" target="_blank" rel="noopener">web archive</a>');
+        if (f.source_url)     links.push('<a class="gf-link gf-link-src" href="' + esc(f.source_url) + '" target="_blank" rel="noopener">source</a>');
+        return '<div class="sl-grounded-row">' +
+          '<span class="gf-tier ' + esc(tier) + '">' + esc(f.authority_tier || '?') + '</span>' +
+          '<span class="' + cls + '">' + lbl + '</span>' +
+          '<span class="sl-g-title">' + esc(f.title || '(untitled)') + '</span>' +
+          (links.length ? '<span class="sl-g-links">' + links.join('<span class="gf-link-sep">·</span>') + '</span>' : '') +
+        '</div>';
+      }).join('');
+      html += '<div class="sl-grounded"><div class="sl-head">Grounded sources</div>' + grows + '</div>';
+    }
+    if (supporting.length) {
+      var v = s.support_links_valid_as_of;
+      var valid = v ? ' <span class="sl-valid">(valid: ' + esc(fmtDate(v) || v) + ')</span>' : '';
+      var srows = supporting.map(function (l) {
+        var url = (l && l.url) ? String(l.url) : '';
+        if (!url) return '';
+        var dom = (l.domain && String(l.domain)) || domainOf(url);
+        var title = (l.title && String(l.title)) || '';
+        return '<a class="sl-support-row" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+          '<span class="sl-domain">' + esc(dom) + '</span>' +
+          (title ? '<span class="sl-support-title">' + esc(title) + '</span>' : '') +
+        '</a>';
+      }).join('');
+      html += '<div class="sl-supporting"><div class="sl-head sl-support-head">Supporting links' + valid + '</div>' + srows + '</div>';
+    }
+    return html + '</div>';
+  }
+
   // L1 — the full synthesis sections. Each is COLLAPSIBLE and opens headers-only on first load, so the
   // synthesis reads as a scannable stack of §N · label headers (structure undeniable) rather than one
   // undifferentiated scroll. The header is a STICKY button (stays pinned while scrolling a long section,
@@ -234,7 +284,7 @@
           '<span class="section-id">§' + (idx + 1) + ' · ' + esc(labelOf(s, idx)) + '</span>' +
           renderConfidence(d, s) +
         '</button>' +
-        '<div class="section-body"><div class="dossier-prose">' + md(s.content_md) + '</div></div>' +
+        '<div class="section-body"><div class="dossier-prose">' + md(s.content_md) + '</div>' + renderSectionFootLinks(s) + '</div>' +
       '</section>';
     }).join('');
   }
