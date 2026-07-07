@@ -31,3 +31,11 @@ verify_jwt = false
 # the publishable key and no JWT. MUST deploy with --no-verify-jwt.
 [functions.relay-iti-promote]
 verify_jwt = false
+
+# dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
+# (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
+# dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the
+# service-role credential. Buttons are suppressed on the external token share. MUST deploy with
+# --no-verify-jwt. HARDENING (Aegis): move to a same-origin Access-verified proxy for provable Reg-only.
+[functions.dossier-curate-link]
+verify_jwt = false

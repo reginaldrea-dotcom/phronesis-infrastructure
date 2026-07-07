@@ -28,6 +28,15 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // Supporting-link curation (Theo b63ec6d5). The accept/reject affordances exist ONLY on the internal
+  // Access-gated page, which sets window.DOSSIER_EDIT === true. The external token share (d.html) never
+  // sets it, so a share reader gets no buttons and (see renderSectionFootLinks) sees accepted links only.
+  function isEditor() { return typeof window !== 'undefined' && window.DOSSIER_EDIT === true; }
+  function curateEndpoint() {
+    return (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.supabaseUrl)
+      ? RENDER_CONFIG.supabaseUrl + '/functions/v1/dossier-curate-link' : '';
+  }
+
   /* Minimal GFM-subset prose renderer (headings, bold/italic/code, links, lists). Kept small and local for
      the Phase-1 shell; consolidates with theo-render.js's md() into a shared module in Phase 2. */
   function mdInline(s) {
@@ -230,7 +239,18 @@
   // Supporting always reads lighter than Grounded.
   function renderSectionFootLinks(s) {
     var grounded = s.grounded_sources || [];
-    var supporting = s.support_links || [];
+    // Supporting links carry a review status (Theo b63ec6d5): pending | accepted | rejected (absent ===
+    // pending). Rejected are NEVER shown; pending shows to an editor only; external readers see accepted
+    // only — so no unreviewed/dead link leaks onto a shared dossier. Accepted sort first.
+    var editor = isEditor();
+    var supporting = (s.support_links || []).filter(function (l) {
+      var st = (l && l.status) || 'pending';
+      if (st === 'rejected') return false;
+      if (st === 'accepted') return true;
+      return editor;
+    }).slice().sort(function (a, b) {
+      return (((a && a.status) === 'accepted') ? 0 : 1) - (((b && b.status) === 'accepted') ? 0 : 1);
+    });
     if (!grounded.length && !supporting.length) return '';
     var html = '<div class="section-links">';
     if (grounded.length) {
@@ -260,12 +280,27 @@
         if (!url) return '';
         var dom = (l.domain && String(l.domain)) || domainOf(url);
         var title = (l.title && String(l.title)) || '';
-        return '<a class="sl-support-row" href="' + esc(url) + '" target="_blank" rel="noopener">' +
-          '<span class="sl-domain">' + esc(dom) + '</span>' +
-          (title ? '<span class="sl-support-title">' + esc(title) + '</span>' : '') +
-        '</a>';
+        var note = (l.note && String(l.note)) || '';
+        var accepted = ((l && l.status) === 'accepted');
+        // Buttons render for an editor on unreviewed (pending) links only; accepted links show a confirmed
+        // dot and no buttons. The write is auth-gated server-side (dossier-curate-link) — buttons are UX.
+        var btns = (editor && !accepted)
+          ? '<span class="sl-curate">' +
+              '<button type="button" class="sl-acc" data-url="' + esc(url) + '" data-act="accepted" title="Accept" aria-label="Accept link">&#10003;</button>' +
+              '<button type="button" class="sl-rej" data-url="' + esc(url) + '" data-act="rejected" title="Reject" aria-label="Reject link">&#10007;</button>' +
+            '</span>'
+          : '';
+        return '<div class="sl-support-row' + (accepted ? ' is-accepted' : '') + '" data-url="' + esc(url) + '">' +
+          (accepted ? '<span class="sl-accepted-dot" title="Accepted" aria-label="Accepted">&#9679;</span>' : '') +
+          '<a class="sl-support-link" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+            '<span class="sl-domain">' + esc(dom) + '</span>' +
+            (title ? '<span class="sl-support-title">' + esc(title) + '</span>' : '') +
+          '</a>' +
+          (note ? '<span class="sl-support-note">' + esc(note) + '</span>' : '') +
+          btns +
+        '</div>';
       }).join('');
-      html += '<div class="sl-supporting"><div class="sl-head sl-support-head">Supporting links' + valid + '</div>' + srows + '</div>';
+      html += '<div class="sl-supporting" data-section="' + esc(s.id) + '"><div class="sl-head sl-support-head">Supporting links' + valid + '</div>' + srows + '</div>';
     }
     return html + '</div>';
   }
@@ -304,6 +339,59 @@
     '</div>';
   }
 
+  // Post a support-link accept/reject. Optimistic: the row is already updated in the DOM by the caller-side
+  // change here; on write failure we revert and surface the error. Matches only by (section, url).
+  function curateSupportLink(sectionId, url, act, row) {
+    var ep = curateEndpoint();
+    if (!ep || !row) return;
+    var parent = row.parentNode;
+    var nextSibling = row.nextSibling;
+    var prevClass = row.className;
+    var btnBar = row.querySelector('.sl-curate');
+    row.querySelectorAll('.sl-acc, .sl-rej').forEach(function (x) { x.disabled = true; });
+    // Optimistic UI.
+    if (act === 'rejected') {
+      row.style.display = 'none';
+    } else {
+      if (btnBar) btnBar.remove();
+      if (!row.querySelector('.sl-accepted-dot')) {
+        var dot = document.createElement('span');
+        dot.className = 'sl-accepted-dot'; dot.title = 'Accepted'; dot.setAttribute('aria-label', 'Accepted');
+        dot.innerHTML = '&#9679;';
+        row.insertBefore(dot, row.firstChild);
+      }
+      row.classList.add('is-accepted');
+      var head = parent && parent.querySelector('.sl-head');           // hoist accepted to the top of the list
+      if (parent && head && head.nextSibling !== row) parent.insertBefore(row, head.nextSibling);
+    }
+    fetch(ep, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+      body: JSON.stringify({ section_id: sectionId, url: url, action: act }),
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || ('HTTP ' + r.status)); });
+      return r.json();
+    }).catch(function (err) {
+      // Revert to the pre-click state.
+      row.style.display = '';
+      row.className = prevClass;
+      var d = row.querySelector('.sl-accepted-dot'); if (d && act === 'accepted') d.remove();
+      if (parent) { if (nextSibling) parent.insertBefore(row, nextSibling); else parent.appendChild(row); }
+      if (act === 'accepted' && !row.querySelector('.sl-curate')) {
+        var u = esc(url);
+        var span = document.createElement('span');
+        span.className = 'sl-curate';
+        span.innerHTML = '<button type="button" class="sl-acc" data-url="' + u + '" data-act="accepted" title="Accept" aria-label="Accept link">&#10003;</button>' +
+                         '<button type="button" class="sl-rej" data-url="' + u + '" data-act="rejected" title="Reject" aria-label="Reject link">&#10007;</button>';
+        row.appendChild(span);
+      } else {
+        row.querySelectorAll('.sl-acc, .sl-rej').forEach(function (x) { x.disabled = false; });
+      }
+      if (typeof console !== 'undefined') console.error('curate failed', err);
+      alert('Could not save that change: ' + (err && err.message ? err.message : 'unknown error'));
+    });
+  }
+
   // Post-render wiring: collapse toggles, expand/collapse-all, call-out-opens-target, and a scroll-spy that
   // marks the active section (and its matching call-out). All progressive-enhancement — the page is fully
   // legible with JS off (sections just render open) and with colour off (identity is number + label).
@@ -333,6 +421,20 @@
       if (!call) return;
       var sec = main.querySelector('.synthesis-section[data-idx="' + call.getAttribute('data-idx') + '"]');
       if (sec) setExpanded(sec, true);
+    });
+    // Supporting-link accept/reject (editor only; buttons only exist when isEditor()). Optimistic UI: the
+    // row updates immediately, then the write is posted. On write failure we revert and surface it.
+    main.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('.sl-acc, .sl-rej');
+      if (!b || b.disabled) return;
+      e.preventDefault();
+      var wrap = b.closest('.sl-supporting');
+      var row = b.closest('.sl-support-row');
+      var sectionId = wrap && wrap.getAttribute('data-section');
+      var url = b.getAttribute('data-url');
+      var act = b.getAttribute('data-act');
+      if (!sectionId || !url) return;
+      curateSupportLink(sectionId, url, act, row);
     });
     // Scroll-spy: mark the section nearest the top as active (neutral shading, distinct from identity hue),
     // and mirror it onto the matching call-out. Bonus cue; structure does not depend on it.
