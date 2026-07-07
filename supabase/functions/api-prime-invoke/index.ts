@@ -18,6 +18,7 @@ import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
 import { AnthropicRateLimitError, fetchAnthropicWithRetry } from "./lib/anthropic.ts";
 import { isCreditError, raiseCreditAlert, CREDIT_EXHAUSTED_MESSAGE } from "./lib/creditAlert.ts";
+import { notifyTeams } from "./lib/notifyTeams.ts";
 import { loadBoundedHistory } from "./lib/history.ts";
 import { modelForLineage } from "./lib/models.ts";
 import { SCHEMA_REFERENCE } from "./lib/schema.ts";
@@ -457,6 +458,21 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: true });
       if (thErr) return await finalize({ error: true, error_type: "api_error", message: thErr.message }, 500);
       return await finalize({ session_id, turns: turns ?? [] }, 200);
+    }
+
+    // Test hook for the Teams credit-alert notifier: POST { lineage_name, action: "test_credit_alert" }
+    // to verify TEAMS_WEBHOOK_URL end-to-end without a real outage. Pure — no model call, no wake.
+    if (action === "test_credit_alert") {
+      const ok = await notifyTeams(
+        "Test — Phronesis credit-balance alert",
+        "This is a test of the Teams notifier. If you can read this, the real credit-exhaustion alert will reach you here. No action needed.",
+        { facts: { "Triggered via": lineage_name || "(none)", "Source": "api-prime-invoke test hook" } },
+      );
+      return await finalize({
+        ok: true,
+        teams_notified: ok,
+        note: ok ? "Posted to Teams — check the channel." : "TEAMS_WEBHOOK_URL not set, or the post failed — see function logs.",
+      }, 200);
     }
 
     if (action) {

@@ -12,6 +12,8 @@
 // This is reactive-but-instant: Anthropic exposes no "remaining balance" endpoint, so a truly proactive
 // pre-emptive guard would need spend-velocity accounting against a configured budget (a follow-on).
 
+import { notifyTeams } from "./notifyTeams.ts";
+
 const ALERT_KIND = "anthropic_credit_exhausted";
 const DEDUP_WINDOW_MS = 30 * 60 * 1000; // one FLAG per 30-min window, not one per blocked call
 
@@ -58,6 +60,12 @@ export async function raiseCreditAlert(
       metadata: { alert_kind: ALERT_KIND, detected_via_lineage: lineage, severity: "critical" },
     });
     console.log("CREDIT ALERT raised (FLAG artifact) — Anthropic credit exhausted, first via", lineage);
+    // External push so it reaches a human even when no one is watching a Prime (no-op if unconfigured).
+    await notifyTeams(
+      "Anthropic credit balance exhausted — all Primes blocked",
+      "Every Prime invocation is failing until the Anthropic account is topped up: console.anthropic.com -> Plans & Billing.",
+      { attention: true, facts: { "First seen via": lineage, "Detected (UTC)": new Date().toISOString() } },
+    );
   } catch (e) {
     console.error("raiseCreditAlert failed (non-fatal):", e);
   }
