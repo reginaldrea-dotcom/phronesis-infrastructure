@@ -150,6 +150,7 @@ function newSession() {
   const carried = serializeUserPins();
   inputEl.disabled = false; // re-enable input if a retirement left it disabled
   sessionId = null;
+  clearPersistedSession(); // drop the stored id NOW: a fresh wake writes a new one only on success, so without this a heavy/failed wake lets auto-resume resurrect the old (possibly stuck) session on reload
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
   retirementShown = false; retirementPending = false; turnSequence = 0; sessionClosed = false;
@@ -167,6 +168,7 @@ function continueSession() {
   const carried = serializeUserPins();
   inputEl.disabled = false; // re-enable input if a retirement left it disabled
   sessionId = null;
+  clearPersistedSession(); // as newSession: clear the stored id immediately so a reload can't resurrect a stuck session
   pinnedTurns = []; pinnedList.innerHTML = '';
   artefacts = []; pendingImage = null;
   retirementShown = false; retirementPending = false; turnSequence = 0; sessionClosed = false;
