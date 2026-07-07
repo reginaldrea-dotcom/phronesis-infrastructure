@@ -67,7 +67,10 @@ Deno.serve(async (req: Request) => {
   // Session row (full id now). Access control is the Cloudflare edge.
   const sess = await supabase
     .from("theo_session")
-    .select("id, state, display_title, original_brief, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
+    // original_brief is deliberately NOT selected: it is the raw research instruction and carries PII
+    // (e.g. a named individual's situation). It must never reach the render payload — the universal Dossier
+    // page is PII-free (architecture §4/§8), and this page is shared externally. Title comes from display_title.
+    .select("id, state, display_title, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
     .eq("id", sessionId)
     .maybeSingle();
   if (sess.error) return json({ error: `session lookup: ${sess.error.message}` }, 500);

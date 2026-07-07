@@ -69,14 +69,13 @@
   }
 
   /* ── header (universal, PII-free) ──────────────────────────────
-     Subject = the ORIGINAL SEARCH BRIEF (Reg's rule: Dossiers are named by the brief that initiated them).
-     The brief is the research topic, which must be PII-free (topic, not person) — a content concern at
-     authoring, since a personally-framed brief would carry PII into a universal page. Take a concise slice
-     of the brief for the title; fall back to display_title / refined_prompt only if there is no brief. */
+     Subject = theo_session.display_title (Eames 7f1156f6): a clean, curated title field. We do NOT read
+     original_brief — it is the raw research instruction and carries PII (e.g. a named individual's
+     situation), which must never reach the universal Dossier page (architecture §4/§8). The EF no longer
+     ships original_brief at all; display_title is the single source for the header. */
   function subjectOf(d) {
     var s = d.session || {};
-    var concise = function (t) { t = (t || '').trim(); if (!t) return ''; var f = (t.split(/(?<=[.?!])\s/)[0] || t).trim(); return f.length > 120 ? f.slice(0, 120).trim() + '…' : f; };
-    return concise(s.original_brief) || (s.display_title && String(s.display_title).trim()) || concise(s.refined_prompt) || 'Research subject';
+    return (s.display_title && String(s.display_title).trim()) || 'Research dossier';
   }
   function renderHeader(d) {
     var nQ = (d.questions || []).length;
@@ -240,13 +239,10 @@
     }).join('');
   }
 
-  // L3 — the engine workings (existing session render), reachable as the deepest descent, not the default.
-  function renderL3(d) {
-    var sid = (d.session || {}).id || qs('session');
-    return '<div class="engine-workings"><a href="theo.html?session=' + encodeURIComponent(sid) + '">' +
-      'View the engine workings → the questions asked, the returns, and the sources (the deepest layer).</a></div>';
-  }
-
+  // L3 (engine workings) is deliberately NOT rendered. The link pointed at theo.html — which is not on the
+  // public share host, so it could never be viewed there — and, more importantly, the engine workings expose
+  // the underlying dispatches (here, an individual's job search) which must NOT be shared. Removed until a
+  // reviewed way to surface workings safely exists (Reg, 7 Jul).
   function renderMain(d) {
     var secs = sectionsOrdered(d);
     return '<div class="dossier-main">' +
@@ -255,7 +251,6 @@
         (secs.length ? '<button type="button" class="expand-all" data-mode="expand">Expand all</button>' : '') +
       '</div>' +
       renderL1(d, secs) +
-      renderL3(d) +
     '</div>';
   }
 
