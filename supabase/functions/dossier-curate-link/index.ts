@@ -43,6 +43,38 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Resilience against intermittent Supabase Edge->PostgREST stalls (see theo-render-data, 7 Jul 2026): a
+// call that hangs past DB_TIMEOUT_MS is abandoned and retried, so a bad Edge isolate self-recovers instead
+// of failing the click. Safe here because the write is idempotent (re-applying the same review_state is a
+// no-op). Deterministic DB errors carry an `error` field and are surfaced immediately — only stalls retry.
+const DB_TIMEOUT_MS = 6000;
+const DB_TRIES = 3;
+
+function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: stalled >${ms}ms`)), ms);
+    Promise.resolve(p).then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+// `make` must return a FRESH builder each call (supabase-js builders are single-use thenables).
+async function run<T extends { error: unknown }>(label: string, make: () => PromiseLike<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= DB_TRIES; attempt++) {
+    try {
+      const res = await withTimeout(make(), DB_TIMEOUT_MS, label);
+      if ((res as { error: unknown }).error) return res;  // deterministic DB error — surface, do not retry
+      return res;
+    } catch (e) {
+      lastErr = e;  // stall (our timeout) or network throw — retry
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`${label}: failed after ${DB_TRIES} attempts`);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -75,12 +107,12 @@ Deno.serve(async (req: Request) => {
     rejection_class: action === "removed" ? rejectionClass : null,
   };
 
-  const upd = await supabase
+  const upd = await run("curate", () => supabase
     .from("supporting_link")
     .update(patch)
     .eq("id", linkId)
     .select("id, review_state, rejection_class")
-    .maybeSingle();
+    .maybeSingle());
   if (upd.error) return json({ error: `update: ${upd.error.message}` }, 500);
   if (!upd.data) return json({ error: "supporting link not found" }, 404);
 
