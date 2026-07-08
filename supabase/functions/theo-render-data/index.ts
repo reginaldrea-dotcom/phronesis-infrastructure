@@ -37,6 +37,40 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Resilience against intermittent Supabase Edge->PostgREST hangs (observed 7 Jul 2026: a bad Edge isolate
+// intermittently stalled DB calls ~20s then failed with a Cloudflare gateway page, while the DB itself,
+// the REST gateway, and direct queries were all healthy in <1ms). Every DB call is fail-fast + retried:
+// a call that stalls past DB_TIMEOUT_MS is abandoned and retried, so a bad isolate self-recovers in a
+// couple of seconds instead of erroring. DETERMINISTIC DB errors (e.g. a missing column) carry an `error`
+// field and are surfaced immediately — only stalls / network throws are retried.
+const DB_TIMEOUT_MS = 6000;
+const DB_TRIES = 3;
+
+function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: stalled >${ms}ms`)), ms);
+    Promise.resolve(p).then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+// `make` must return a FRESH builder each call (supabase-js builders are single-use thenables).
+async function run<T extends { error: unknown }>(label: string, make: () => PromiseLike<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= DB_TRIES; attempt++) {
+    try {
+      const res = await withTimeout(make(), DB_TIMEOUT_MS, label);
+      if ((res as { error: unknown }).error) return res;  // deterministic DB error — surface, do not retry
+      return res;
+    } catch (e) {
+      lastErr = e;  // stall (our timeout) or network throw — retry
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`${label}: failed after ${DB_TRIES} attempts`);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -59,9 +93,9 @@ Deno.serve(async (req: Request) => {
   // Prefix-tolerant resolve (sessionId is ID_RE-validated hex, safe to interpolate). Access
   // control is at the Cloudflare edge (see header) — no per-user scoping; the id/prefix is
   // the capability.
-  const resolved = await supabase.rpc("execute_raw_sql", {
+  const resolved = await run("resolve", () => supabase.rpc("execute_raw_sql", {
     query: `SELECT id FROM theo_session WHERE id::text LIKE '${sessionId}%' LIMIT 2`,
-  });
+  }));
   if (resolved.error) return json({ error: `resolve: ${resolved.error.message}` }, 500);
   const matches = (resolved.data ?? []) as Array<{ id: string }>;
   if (matches.length === 0) return json({ error: `no session with id/prefix '${sessionId}'` }, 404);
@@ -69,23 +103,23 @@ Deno.serve(async (req: Request) => {
   sessionId = matches[0].id;
 
   // Session row (full id now). Access control is the Cloudflare edge.
-  const sess = await supabase
+  const sess = await run("session", () => supabase
     .from("theo_session")
     // original_brief is deliberately NOT selected: it is the raw research instruction and carries PII
     // (e.g. a named individual's situation). It must never reach the render payload — the universal Dossier
     // page is PII-free (architecture §4/§8), and this page is shared externally. Title comes from display_title.
     .select("id, state, display_title, refined_prompt, engine_selection_rationale, anonymisation_mode, created_at, delivered_at, user_id")
     .eq("id", sessionId)
-    .maybeSingle();
+    .maybeSingle());
   if (sess.error) return json({ error: `session lookup: ${sess.error.message}` }, 500);
   if (!sess.data?.id) return json({ error: "session not found for this caller" }, 404);
   const session = sess.data;
 
   // Engine grid, questions (navigation spine), latest synthesis.
   const [engines, questions, synthRow] = await Promise.all([
-    supabase.from("render_source_v1").select("*").eq("session_id", sessionId),
-    supabase.from("research_question").select("id, question_index, question_text, status").eq("theo_session_id", sessionId).order("question_index", { ascending: true }),
-    supabase.from("synthesis").select("id, layer_1_synthesis_md, created_at, divergence_points_json, convergence_points_json, confidence_ratings_json").eq("theo_session_id", sessionId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    run("engines", () => supabase.from("render_source_v1").select("*").eq("session_id", sessionId)),
+    run("questions", () => supabase.from("research_question").select("id, question_index, question_text, status").eq("theo_session_id", sessionId).order("question_index", { ascending: true })),
+    run("synthesis", () => supabase.from("synthesis").select("id, layer_1_synthesis_md, created_at, divergence_points_json, convergence_points_json, confidence_ratings_json").eq("theo_session_id", sessionId).order("created_at", { ascending: false }).limit(1).maybeSingle()),
   ]);
   if (engines.error) return json({ error: `engines: ${engines.error.message}` }, 500);
   if (questions.error) return json({ error: `questions: ${questions.error.message}` }, 500);
@@ -99,23 +133,23 @@ Deno.serve(async (req: Request) => {
 
   if (synthesis?.id) {
     const [secs, clm, conf, gfacts, sfacts] = await Promise.all([
-      supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true }),
-      supabase.from("render_claim_v1").select("*").eq("session_id", sessionId),
+      run("sections", () => supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true })),
+      run("claims", () => supabase.from("render_claim_v1").select("*").eq("session_id", sessionId)),
       // Per-section confidence (dossier L1): confidence_state from the tier-composition of the facts a
       // section's claims rest on (synthesis_claim.section_id -> element_dependency). 'ungrounded' until edges land.
-      supabase.from("render_section_confidence_v1").select("section_id, confidence_state, claim_count, grounded_claim_count").eq("synthesis_id", synthesis.id),
+      run("section_confidence", () => supabase.from("render_section_confidence_v1").select("section_id, confidence_state, claim_count, grounded_claim_count").eq("synthesis_id", synthesis.id)),
       // Ground Facts panel: the distinct anchored sources this dossier stands on (claim_on_fact edges),
       // strongest tier first. Empty until Angelia grounds.
-      supabase.from("render_dossier_fact_v1")
+      run("ground_facts", () => supabase.from("render_dossier_fact_v1")
         .select("ground_fact_id, title, authority_tier, contestability, freshness_status, source_url, content_hash, source_document_id, definition_scope, period_label, in_conflict, supporting_claim_count, fact_kind, verification_state, review_state, screenshot_url, archive_url")
         .eq("synthesis_id", synthesis.id)
-        .order("authority_tier", { ascending: true }).order("supporting_claim_count", { ascending: false }),
+        .order("authority_tier", { ascending: true }).order("supporting_claim_count", { ascending: false })),
       // Per-SECTION grounded sources for the section-foot "Grounded sources" zone (Eames c639a489):
       // the anchored facts each section's own claims rest on.
-      supabase.from("render_section_fact_v1")
+      run("section_facts", () => supabase.from("render_section_fact_v1")
         .select("section_id, ground_fact_id, title, authority_tier, contestability, verification_state, review_state, screenshot_url, archive_url, source_url, content_hash, in_conflict")
         .eq("synthesis_id", synthesis.id)
-        .order("authority_tier", { ascending: true }),
+        .order("authority_tier", { ascending: true })),
     ]);
     if (secs.error) return json({ error: `sections: ${secs.error.message}` }, 500);
     if (clm.error) return json({ error: `claims: ${clm.error.message}` }, 500);
@@ -137,11 +171,11 @@ Deno.serve(async (req: Request) => {
     const sectionIds = (secs.data ?? []).map((s: Record<string, unknown>) => s.id as string);
     if (sectionIds.length > 0) {
       const states = includeUnreviewed ? ["kept", "unreviewed"] : ["kept"];
-      const sl = await supabase.from("supporting_link")
+      const sl = await run("supporting_links", () => supabase.from("supporting_link")
         .select("id, section_id, title, url, note, returned_by_engine, valid_as_of, review_state")
         .in("section_id", sectionIds)
         .in("review_state", states)
-        .order("valid_as_of", { ascending: false });
+        .order("valid_as_of", { ascending: false }));
       if (sl.error) return json({ error: `supporting_links: ${sl.error.message}` }, 500);
       for (const l of (sl.data ?? []) as Array<Record<string, unknown>>) {
         const k = l.section_id as string;
@@ -170,8 +204,8 @@ Deno.serve(async (req: Request) => {
         // source_document_id surfaces the Grade-0 anchored snapshot in the citation drawer (Eames
         // §7 addendum / Leg 3). Scalar column on claim_citation — the frozen-capture viewer endpoint
         // is the remaining Leg-3 piece; this makes the anchor detectable now.
-        supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id, source_document_id").in("claim_id", claimIds),
-        supabase.from("claim_source").select("claim_id, dispatch_id, stance").in("claim_id", claimIds),
+        run("citations", () => supabase.from("claim_citation").select("id, claim_id, url, title, source_date, resolution, note, dispatch_id, source_document_id").in("claim_id", claimIds)),
+        run("claim_sources", () => supabase.from("claim_source").select("claim_id, dispatch_id, stance").in("claim_id", claimIds)),
       ]);
       if (cit.error) return json({ error: `citations: ${cit.error.message}` }, 500);
       if (cs.error) return json({ error: `claim_sources: ${cs.error.message}` }, 500);
