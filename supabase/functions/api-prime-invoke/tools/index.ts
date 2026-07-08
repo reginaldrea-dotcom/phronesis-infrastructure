@@ -5,6 +5,7 @@ import { executeSqlTool } from "./executeSql.ts";
 import { deliverArtefactTool } from "./deliverArtefact.ts";
 import { readGithubFileTool, writeGithubFileTool, listGithubDirectoryTool } from "./github.ts";
 import { getConferenceResultTool } from "./getConferenceResult.ts";
+import { readConferencesTool, readConferenceResponsesTool, postConferenceResponseTool } from "./conference.ts";
 import { readWakeDeltasTool, readInboxTool, getMessageTool, readPrimeMessagesTool, sendMessageTool, consumeWakeDeltasTool } from "./messaging.ts";
 import { enqueueDispatchTool } from "./enqueueDispatch.ts";
 import { readDispatchResultsTool } from "./readDispatchResults.ts";
@@ -31,6 +32,9 @@ const TOOLS: Tool[] = [
   executeSqlTool,
   deliverArtefactTool,
   getConferenceResultTool,
+  readConferencesTool,
+  readConferenceResponsesTool,
+  postConferenceResponseTool,
   readWakeDeltasTool,
   readInboxTool,
   getMessageTool,
