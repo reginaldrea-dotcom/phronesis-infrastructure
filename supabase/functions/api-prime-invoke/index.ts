@@ -813,6 +813,32 @@ Deno.serve(async (req: Request) => {
       loopGate = { governed: false, allowed: null };
     }
 
+    // ── Sealed sibling grant (Delphia; conf 75d90356 / baton cdb7693c) ──────────────────────────────
+    // The spawner-sealed per-invocation permit + cargo, read BELOW THE MODEL by (session, lineage) — never
+    // from the request body, so the reasoner it governs cannot forge or widen it. Threaded into every tool
+    // context; the execution-layer grant check (requireGrant) in the privileged tools reads it. null for a
+    // standing Prime (no row) → those tools are unrestricted, exactly as before (additive, non-breaking).
+    // Best-effort: a read failure leaves it null (a standing Prime is never a sibling, so this cannot
+    // silently widen one — a real Delphia with an unreadable seal simply cannot act on privileged tools,
+    // which is the safe direction).
+    let siblingGrant: { permit: string[]; cargo: Record<string, unknown> } | null = null;
+    try {
+      const { data: sg } = await supabase
+        .from("sibling_grant")
+        .select("permit, cargo")
+        .eq("session_id", activeSessionId)
+        .eq("lineage_name", lineage_name)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (sg) {
+        siblingGrant = {
+          permit: Array.isArray((sg as any).permit) ? (sg as any).permit : [],
+          cargo: ((sg as any).cargo ?? {}) as Record<string, unknown>,
+        };
+        console.log(`SIBLING GRANT: ${lineage_name}/${activeSessionId} → permit [${siblingGrant.permit.join(", ")}]`);
+      }
+    } catch (e) { console.error("sibling_grant load failed:", e); }
+
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
 
@@ -913,7 +939,7 @@ Deno.serve(async (req: Request) => {
           // Defense in depth: an ungranted tool was not offered, but never run one.
           content = `[SYSTEM: '${toolUse.name}' is not granted to lineage '${lineage_name}'. It was not offered and will not run; it needs a tool_grant (Connie + Aegis).]`;
         } else {
-          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: resolvedInstanceId });
+          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: resolvedInstanceId, siblingGrant });
         }
         const dg = digestToolCall(toolUse.name, toolUse.input, content);
         toolLog.push(dg);

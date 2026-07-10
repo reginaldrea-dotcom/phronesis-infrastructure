@@ -14,6 +14,7 @@
 // matching open `conversation` row. Phase 1 errors if no open conversation exists.
 
 import type { Tool, ToolContext } from "./types.ts";
+import { requireGrant } from "./types.ts";
 import { setCaptureTarget } from "../lib/captureTarget.ts";
 
 // Mirror of theo-dispatch-worker/lib/config.ts ENGINES keys. Kept hardcoded here
@@ -109,6 +110,16 @@ export const enqueueDispatchTool: Tool = {
   },
 
   run: async (input: EnqueueInput, ctx: ToolContext) => {
+    // ── Execution-layer belt (conf 75d90356 / baton cdb7693c) ──────────────────────────────────────
+    // Dispatching to the multi-engine road (raw-web-capable) is a privileged capability a grant-scoped
+    // Sibling (Delphia) may LACK. If her SEALED permit excludes 'raw_web_dispatch', it is refused HERE,
+    // below the model — the dispatch never runs. No-op for standing Primes (no sealed grant). This is the
+    // durable, TOOL_GRANTS_ENFORCE-independent half. (Capability name provisional; the full capability->tool
+    // map is being finalised with Napoleon/Eames — this first wired gate is safe: only a sealed sibling
+    // lacking the capability is affected, and none is spawned yet.)
+    const denied = requireGrant(ctx, "raw_web_dispatch");
+    if (denied) return denied;
+
     // Identity is resolved AFTER validation, dual-path: an end-user JWT resolves to their
     // app_user (the human-mediated path); NO end-user (an autonomous API researcher such as
     // Angelia, woken with no browser user) resolves to the designated autonomous-research
