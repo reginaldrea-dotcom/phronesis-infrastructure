@@ -50,3 +50,39 @@ export async function withCut2<T>(lineage: string, fn: (tx: unknown) => Promise<
     client.release();
   }
 }
+
+// Run `fn` under CARGO SCOPE for a sealed Sibling (Delphia enforcement lane, piece 3; baton cdb7693c).
+// Same direct connection (prime_runner login, NOINHERIT), but assumes the restricted `cargo_scope` role
+// and sets the two scope GUCs the dossier_slice RLS policy reads. The scope MUST come from the SEALED
+// grant's cargo, never from model input — that is what makes another consumer's / another Dossier's cargo
+// physically unaddressable (RLS returns zero rows). GUCs + role are tx-local: they reset on commit, so no
+// scope leaks between invocations. Throws if the cargo is missing a key (deny-by-default: no half-scoped read).
+export async function withCargoScope<T>(
+  cargo: { identity_key?: unknown; dossier_instance_id?: unknown } | null | undefined,
+  fn: (tx: unknown) => Promise<T>,
+): Promise<T> {
+  const identityKey = typeof cargo?.identity_key === "string" ? cargo!.identity_key as string : "";
+  const dossierInstanceId = typeof cargo?.dossier_instance_id === "string" ? cargo!.dossier_instance_id as string : "";
+  if (!identityKey || !dossierInstanceId) {
+    throw new Error("withCargoScope: sealed cargo must carry both identity_key and dossier_instance_id — refusing an unscoped cargo read");
+  }
+  const client = await getPool().connect();
+  try {
+    const tx = client.createTransaction(`cargo_${Date.now()}_${++txSeq}`);
+    await tx.begin();
+    try {
+      // Scope from the SEALED grant, set tx-local. The RLS policy dossier_slice_cargo_scope keys on these.
+      await tx.queryArray`SELECT set_config('app.identity_key', ${identityKey}, true)`;
+      await tx.queryArray`SELECT set_config('app.dossier_instance_id', ${dossierInstanceId}, true)`;
+      await tx.queryArray("SET LOCAL ROLE cargo_scope");
+      const out = await fn(tx);
+      await tx.commit();
+      return out;
+    } catch (e) {
+      try { await tx.rollback(); } catch (_) { /* connection may already be unusable */ }
+      throw e;
+    }
+  } finally {
+    client.release();
+  }
+}

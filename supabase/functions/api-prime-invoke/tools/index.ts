@@ -17,6 +17,10 @@ import { declareCaptureTargetTool } from "./declareCaptureTarget.ts";
 import { renderDocumentTool } from "./renderDocument.ts";
 import { writeGroundFactTool } from "./writeGroundFact.ts";
 import { writeElementDependencyTool } from "./writeElementDependency.ts";
+import { traceInterrogationTool } from "./traceInterrogation.ts";
+import { readCargoSlicesTool } from "./readCargo.ts";
+import { pinDossierSliceTool } from "./pinDossierSlice.ts";
+import { foldSessionTool } from "./foldSession.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
@@ -51,6 +55,10 @@ const TOOLS: Tool[] = [
   renderDocumentTool,
   writeGroundFactTool,
   writeElementDependencyTool,
+  traceInterrogationTool,
+  readCargoSlicesTool,
+  pinDossierSliceTool,
+  foldSessionTool,
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,
