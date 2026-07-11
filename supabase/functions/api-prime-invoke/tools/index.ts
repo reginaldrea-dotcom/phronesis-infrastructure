@@ -21,6 +21,8 @@ import { traceInterrogationTool } from "./traceInterrogation.ts";
 import { readCargoSlicesTool } from "./readCargo.ts";
 import { pinDossierSliceTool } from "./pinDossierSlice.ts";
 import { foldSessionTool } from "./foldSession.ts";
+import { verifyFigureTool } from "./verifyFigure.ts";
+import { enforceCapability } from "./capabilityMap.ts";
 import { writeFigureTool } from "./writeFigure.ts";
 import { fileSuperTTool } from "./fileSuperT.ts";
 import { readSuperTTool } from "./readSuperT.ts";
@@ -59,6 +61,7 @@ const TOOLS: Tool[] = [
   readCargoSlicesTool,
   pinDossierSliceTool,
   foldSessionTool,
+  verifyFigureTool,
   writeFigureTool,
   fileSuperTTool,
   readSuperTTool,
@@ -137,6 +140,10 @@ export function summarizeToolUse(name: string, input: any): string {
 export async function runTool(name: string, input: any, ctx: ToolContext): Promise<string> {
   const t = BY_NAME[name];
   if (!t) return `Unknown tool: ${name}`;
+  // Execution-layer capability gate (baton b28d6e36 / SP 67b43866): for a SEALED sibling (Delphia), refuse
+  // below the model any tool its permit does not map to (deny-by-default). No-op for standing Primes.
+  const denial = enforceCapability(name, ctx);
+  if (denial) return denial;
   return await t.run(input, ctx);
 }
 

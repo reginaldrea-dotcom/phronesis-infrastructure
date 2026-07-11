@@ -13,6 +13,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { corsHeaders } from "./lib/http.ts";
 import { availableToolDefinitions, computeLoopGate, summarizeToolUse, runTool, EF_TOOL_NAMES } from "./tools/index.ts";
+import { assertPermitClean } from "./tools/capabilityMap.ts";
 import { getAction } from "./actions/index.ts";
 import type { Artifact, FileAttachment } from "./lib/types.ts";
 import { extractUserIdFromJwt } from "./lib/jwt.ts";
@@ -831,8 +832,13 @@ Deno.serve(async (req: Request) => {
         .is("revoked_at", null)
         .maybeSingle();
       if (sg) {
+        const rawPermit = Array.isArray((sg as any).permit) ? (sg as any).permit as string[] : [];
+        // Structural invariant (baton b28d6e36 / SP 67b43866): free_write + assign_tier are NEVER granted.
+        // Even a mis-sealed grant cannot carry one into a live permit — strip + log loudly if it does.
+        const { clean, offending } = assertPermitClean(rawPermit);
+        if (!clean) console.error(`SIBLING GRANT INVARIANT VIOLATION: ${lineage_name}/${activeSessionId} sealed with never-granted [${offending.join(", ")}] — STRIPPED.`);
         siblingGrant = {
-          permit: Array.isArray((sg as any).permit) ? (sg as any).permit : [],
+          permit: rawPermit.filter((c) => !offending.includes(c)),
           cargo: ((sg as any).cargo ?? {}) as Record<string, unknown>,
         };
         console.log(`SIBLING GRANT: ${lineage_name}/${activeSessionId} → permit [${siblingGrant.permit.join(", ")}]`);
