@@ -13,6 +13,12 @@ verify_jwt = false
 [functions.theo-dispatch-worker]
 verify_jwt = false
 
+# grounding-worker is the cron-ticked drainer of grounding_queue. Like theo-dispatch-worker it is
+# platform-ungated (verify_jwt=false) and self-guards via the apikey secret (WORKER_INVOKE_KEY). It calls
+# api-prime-invoke per claim to keep Angelia's judgment in the loop. MUST deploy with --no-verify-jwt.
+[functions.grounding-worker]
+verify_jwt = false
+
 # live-report is the recompute endpoint for the live AESSEAL report. Like
 # theo-render-data it is Cloudflare-gated and UUID-addressed (session_id is the
 # capability), called from the surface with the publishable key and no JWT, so
