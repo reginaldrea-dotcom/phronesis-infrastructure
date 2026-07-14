@@ -12,6 +12,7 @@
 // descend-to-evidence (claim -> fact -> frozen capture) and its tier-gated render states.
 
 import type { Tool, ToolContext } from "./types.ts";
+import { runCoLocationGate } from "../lib/coLocationGate.ts";
 
 const DEPENDENT_COL: Record<string, string> = {
   synthesis_claim: "p_dependent_synthesis_claim_id",
@@ -33,7 +34,7 @@ export const writeElementDependencyTool: Tool = {
   definition: {
     name: "write_element_dependency",
     description:
-      "Link one element-store node to another — the general edge-writer for the unified dependency graph. Records that a DEPENDENT node rests on a DEPENDS_ON node. Primary use: at grounding, link a synthesis_claim to the ground_fact(s) that support it (edge_kind 'claim_on_fact'), from Theo's per-claim instructions — this is what makes the dossier descend claim -> fact -> frozen capture and compute tier-gated states. Facts are REUSABLE: to rest a claim on an already-existing fact, link to it with this same tool (no new fact is minted; do not re-run write_ground_fact). REQUIRED: edge_kind; dependent_type + dependent_id; depends_on_type + depends_on_id. Returns the created edge (its id is the persisted confirmation).",
+      "Link one element-store node to another — the general edge-writer for the unified dependency graph. Records that a DEPENDENT node rests on a DEPENDS_ON node. Primary use: at grounding, link a synthesis_claim to the ground_fact(s) that support it (edge_kind 'claim_on_fact'), from Theo's per-claim instructions — this is what makes the dossier descend claim -> fact -> frozen capture and compute tier-gated states. Facts are REUSABLE: to rest a claim on an already-existing fact, link to it with this same tool (no new fact is minted; do not re-run write_ground_fact). ANCHORING IS EARNED PER EDGE: for a claim_on_fact edge onto a ground_fact, pass anchor_quote (a VERBATIM span of the fact's rendered page) and, for a numeric claim, claim_canonical_string (the claim's figure). The edge is ANCHORED only if that span is present on the page AND the claim's figure and its subject co-locate INSIDE the span; otherwise it is cited_not_verified (honestly sourced, a human may review). Figure-match alone is NOT enough. REQUIRED: edge_kind; dependent_type + dependent_id; depends_on_type + depends_on_id. Returns the created edge (its id is the persisted confirmation) plus its verification_state.",
     input_schema: {
       type: "object",
       properties: {
@@ -54,6 +55,14 @@ export const writeElementDependencyTool: Tool = {
           description: "Kind of the node depended upon (the evidence): ground_fact (qualitative) or claim_figure (quantitative).",
         },
         depends_on_id:  { type: "string", description: "Id of the depended-on node (the supporting fact/figure)." },
+        anchor_quote: {
+          type: "string",
+          description: "For a claim_on_fact edge onto a ground_fact: a short VERBATIM span copied from the fact's rendered page that contains BOTH the claim's figure and its subject. The gate checks the span is present on the page and that the figure + the claim's (clause-scoped) subject terms co-locate inside it. Supply it to ANCHOR a numeric claim; omit for a qualitative claim (the edge then goes to screenshot_review for human confirmation).",
+        },
+        claim_canonical_string: {
+          type: "string",
+          description: "For a NUMERIC claim: the claim's load-bearing figure this edge anchors (e.g. '8,164'), exactly as written in the claim being grounded — the gate confirms it against the claim text, the quote, and (clause-scoped) the claim's subject. Omit for a qualitative claim.",
+        },
       },
       required: ["edge_kind", "dependent_type", "dependent_id", "depends_on_type", "depends_on_id"],
     },
@@ -87,11 +96,65 @@ export const writeElementDependencyTool: Tool = {
       if (res.error) return fail(`write contract rejected: ${res.error.message}`);
       const row = (Array.isArray(res.data) ? res.data[0] : res.data) as { id?: string } | null;
       if (!row?.id) return fail("write returned no row id — treat as NOT persisted.");
+
+      // Co-location gate (Eames 83163028 / 5e1f603e). Verification is EARNED on the edge: for a
+      // claim_on_fact edge onto a ground_fact, the claim's figure AND its clause-scoped subject must both
+      // co-locate inside a verbatim span (anchor_quote) of the fact's rendered page. Figure-match alone is
+      // NOT a pass (that is what let INDUSTRY anchor to BUILDINGS). Any miss -> cited_not_verified
+      // (fail-safe). Runs only for synthesis_claim -> ground_fact; other edge kinds leave the columns null.
+      let verification: { state: string; review: string; reason: string } | null = null;
+      if (edge === "claim_on_fact" && depType === "synthesis_claim" && onType === "ground_fact") {
+        const anchorQuote = s("anchor_quote") ?? "";
+        const claimFigure = s("claim_canonical_string");
+        try {
+          const [claimRes, factRes] = await Promise.all([
+            ctx.supabase.from("synthesis_claim").select("claim_text").eq("id", depId).maybeSingle(),
+            ctx.supabase.from("ground_fact").select("source_document_id").eq("id", onId).maybeSingle(),
+          ]);
+          const claimText = (claimRes.data as { claim_text?: string } | null)?.claim_text ?? "";
+          const docId = (factRes.data as { source_document_id?: string } | null)?.source_document_id ?? null;
+          let pageContent = "", hasScreenshot = false;
+          if (docId) {
+            const docRes = await ctx.supabase.from("source_document")
+              .select("content, attestation").eq("id", docId).maybeSingle();
+            const d = docRes.data as { content?: string; attestation?: Record<string, unknown> } | null;
+            pageContent = d?.content ?? "";
+            hasScreenshot = !!(d?.attestation as { screenshot_url?: string } | undefined)?.screenshot_url;
+          }
+          const gate = runCoLocationGate({ claimText, pageContent, anchorQuote, claimFigure, hasScreenshot });
+          await ctx.supabase.from("element_dependency").update({
+            verification_state: gate.verificationState,
+            anchor_quote: anchorQuote || null,
+            claim_canonical_string: claimFigure || null,
+            review_state: gate.reviewState,
+          }).eq("id", row.id);
+          verification = { state: gate.verificationState, review: gate.reviewState, reason: gate.reason };
+        } catch (e) {
+          // Fail-safe: if the gate cannot run, the edge must NOT read as verified.
+          await ctx.supabase.from("element_dependency").update({
+            verification_state: "cited_not_verified", review_state: "pending",
+            anchor_quote: anchorQuote || null, claim_canonical_string: claimFigure || null,
+          }).eq("id", row.id);
+          verification = { state: "cited_not_verified", review: "pending", reason: `gate error: ${e instanceof Error ? e.message : String(e)}` };
+        }
+      }
+
+      const sysVerif = verification
+        ? ` VERIFICATION (${verification.state}): ${verification.reason}.` + (
+            verification.state === "anchored"
+              ? " The claim's figure and subject co-located in your quote on the page — a real anchor."
+              : verification.state === "screenshot_review"
+                ? " Qualitative — a human confirms the screenshot supports the claim."
+                : " NOT machine-verified: the claim is honestly SOURCED but its figure/subject did not co-locate in the quote on the page. Fix the anchor_quote/figure and re-link, or leave it for human review; do NOT treat it as anchored.")
+        : ` The ${depType} now descends to this ${onType} and inherits its tier/freshness; the dossier surfaces it in descend-to-evidence.`;
       return JSON.stringify({
         ok: true,
         edge_id: row.id,
         edge: `${depType}:${depId} --${edge}--> ${onType}:${onId}`,
-        "[SYSTEM]": `PERSISTED + CONFIRMED. Edge ${row.id} written. The ${depType} now descends to this ${onType} and inherits its tier/freshness; the dossier will surface it in descend-to-evidence and compute the claim's tier-gated state. A rejected write returns an error, not an id.`,
+        verification_state: verification?.state ?? null,
+        review_state: verification?.review ?? null,
+        verification_reason: verification?.reason ?? null,
+        "[SYSTEM]": `PERSISTED + CONFIRMED. Edge ${row.id} written.${sysVerif} A rejected write returns an error, not an id.`,
       });
     } catch (err) {
       return fail(`write_element_dependency call failed: ${err instanceof Error ? err.message : String(err)}`);
