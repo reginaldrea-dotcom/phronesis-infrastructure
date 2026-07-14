@@ -154,6 +154,12 @@ export const writeGroundFactTool: Tool = {
       p_source_document_id: sourceDocId,
       p_contestability: s("contestability") ?? "settled",
       p_captured_by_lineage: ctx.lineageName || "angelia",
+      // Disambiguate Connie's write_ground_fact OVERLOAD: a 13-arg variant (…, p_dossier_instance_id) was
+      // added alongside the 12-arg one, and since the new param DEFAULTs NULL, a 12-arg call matches BOTH →
+      // PostgREST "could not choose between two overloads" (blocked all grounding, 13 Jul). Passing the param
+      // explicitly resolves to the 13-arg unambiguously. NULL preserves the prior no-binding behaviour.
+      // FLAGGED to Connie to drop the redundant 12-arg overload (backward-compatible) as the permanent fix.
+      p_dossier_instance_id: null,
     };
 
     try {

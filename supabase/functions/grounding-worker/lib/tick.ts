@@ -15,6 +15,7 @@ import {
 
 interface QRow {
   id: string; claim_id: string; synthesis_id: string | null; attempts: number; max_attempts: number;
+  source_hint: Record<string, unknown> | null;
 }
 
 export interface TickSummary {
@@ -77,8 +78,8 @@ async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded:
       body: JSON.stringify({
         lineage_name: GROUNDING_LINEAGE,
         session_id: crypto.randomUUID(),                  // fresh short session per claim (clean context)
-        user_message: groundingPrompt(r.claim_id),
-        request_id: `grounding-${r.claim_id}-${r.attempts}`, // idempotent per attempt
+        user_message: groundingPrompt(r.claim_id, r.source_hint),
+        request_id: `grounding-${r.claim_id}-${crypto.randomUUID().slice(0, 8)}`, // UNIQUE per invocation: a deterministic id let the idempotency cache replay a prior failure across retries
       }),
       signal: ac.signal,
     });
@@ -101,16 +102,28 @@ async function hasEdge(supabase: SupabaseClient, claimId: string): Promise<boole
   return Array.isArray(data) && data.length > 0;
 }
 
-function groundingPrompt(claimId: string): string {
-  return [
-    "GROUNDING TASK - one claim, v1 mode: ground ONLY against sources already frozen in this Dossier.",
+function groundingPrompt(claimId: string, hint: Record<string, unknown> | null): string {
+  const url = typeof hint?.url === "string" ? hint.url as string : "";
+  const key = typeof hint?.key === "string" ? hint.key as string : "";
+  const kind = typeof hint?.kind === "string" ? hint.kind as string : "";
+  const tier = typeof hint?.tier === "string" ? hint.tier as string : "";
+  const lines = [
+    "GROUNDING TASK - one claim, full grounding (capture + verify + link).",
     `Ground synthesis_claim ${claimId}.`,
-    "1. Read the claim, then the frozen ground_facts already captured for this Dossier.",
-    "2. Find the frozen ground_fact whose captured content SUPPORTS this claim's load-bearing figure or assertion. If the figure is numeric, verify it is actually present in that frozen content first.",
-    "3. If found: write the claim_on_fact edge with write_element_dependency (dependent_type=synthesis_claim, dependent_id=" + claimId + ", depends_on_type=ground_fact, depends_on_id=<the fact>, edge_kind=claim_on_fact).",
-    "4. If NO frozen ground_fact supports it: do NOT invent, capture, or dispatch anything. State plainly which source is missing - the claim will be parked for a later capture pass.",
-    "Do exactly this ONE claim. Do not ground others.",
-  ].join("\n");
+    "1. Read the claim.",
+    "2. Capture and freeze its authoritative source with write_ground_fact. Pass the source_url; choose fact_kind = 'numeric' if the claim's load-bearing element is a figure, else 'qualitative'; set canonical_string to the exact figure (numeric) or the shortest quote that makes the claim (qualitative). The tool renders + screenshots + freezes the page and derives the hash itself - do NOT supply a hash. A numeric fact ANCHORS only if the figure is on the rendered page; a qualitative fact becomes SCREENSHOT_REVIEW (honest, awaiting a human) - both are fine, proceed either way.",
+    `3. Then link it: write_element_dependency (dependent_type=synthesis_claim, dependent_id=${claimId}, depends_on_type=ground_fact, depends_on_id=<the ground_fact you just wrote>, edge_kind=claim_on_fact).`,
+  ];
+  if (url) {
+    lines.push(`SOURCE PROVIDED (use this exact URL): ${url}`);
+    if (key) lines.push(`Key ${kind === "numeric" ? "figure" : "quote"} to check for: ${key}`);
+    if (kind) lines.push(`Suggested fact_kind: ${kind}${tier ? `; authority_tier: ${tier}` : ""}`);
+  } else {
+    lines.push("No source URL was provided - identify the single most authoritative source yourself and capture it. Do not dispatch a web search.");
+  }
+  lines.push("If write_ground_fact returns cited_not_verified (URL dead/blocked/figure absent), report that plainly and do NOT fabricate a source.");
+  lines.push("Do exactly this ONE claim. Do not ground others.");
+  return lines.join("\n");
 }
 
 function excerpt(s: string): string {
