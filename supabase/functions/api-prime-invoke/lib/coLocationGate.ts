@@ -1,30 +1,26 @@
 // coLocationGate — the anchor gate for a claim_on_fact edge. Eames rulings 83163028 (per-edge,
-// co-location) + 5e1f603e (clause-scoped extraction).
+// co-location) + 5e1f603e (clause-scoped) + 29bc91a0 (subject-term rule v2: distinctive + coverage).
 //
 // Anchoring is a property of the SUPPORT RELATION, not the captured page: to anchor, THIS claim's figure
 // AND THIS claim's subject must BOTH be found inside one verbatim span (anchor_quote) of the fact's
 // rendered page. The reasoner LOCATES (supplies a page span); it does not ASSERT — the subject terms are
-// derived here from Theo's upstream synthesis_claim.claim_text, so the party seeking the anchor never
-// chooses the subject it must match against.
+// derived here from Theo's upstream synthesis_claim.claim_text, clause-scoped to the figure.
 //
-// CLAUSE-SCOPED (5e1f603e): subject terms come from the CLAUSE CONTAINING THE FIGURE, not the whole claim.
-// A claim carrying two figures with different subjects ("enforced returns … 8,164 and voluntary returns …
-// 25,186") would otherwise yield a flat term bag and let the 8,164 edge co-locate against a "voluntary …
-// 25,186" span — the industry/buildings failure one level in. Clause-scoping keeps the subjects separate.
+// SUBJECT-TERM RULE v2 (29bc91a0, ported from Eames' tested subject_term_gate.py). NO mandatory head
+// token — a single required token tests VOCABULARY match, not SUBJECT match, because claim and source
+// legitimately differ in surface phrasing (accommodation vs hotels; crossings vs arrivals). Instead:
+//   1. DISTINCTIVENESS — at least ONE distinctive claim term present in the quote. Distinctive = content
+//      terms MINUS a synonym-prone MEASURE/CONTAINER list and MINUS temporal tokens (they name the
+//      measure/context, not the subject, and are exactly what sources paraphrase).
+//   2. COVERAGE — >= 50% of the clause's content terms present in the quote.
+// Matching: case-insensitive, 6-char bidirectional stem/substring (industr* == industrial/industry).
 //
-// FAIL-SAFE: any miss yields cited_not_verified, never a silent pass. Brittleness costs false-NEGATIVES
-// (a human looks), never false-POSITIVES — the correct direction for the error to point.
-//
-// NOTE: the stopword set + term threshold below are provisional to this spec; Eames holds a reference
-// regex/stopword set tested against the 15 sweep claims. Reconcile against his probes via the acceptance
-// test (coLocationGate.test.ts): the 4 separation cases must separate AND industry/buildings must fail.
+// FAIL-SAFE: any miss yields cited_not_verified, never a silent pass. A brittle gate costs false-NEGATIVES
+// (a human looks), never false-POSITIVES.
 
 // ---- normalisation -------------------------------------------------------------------------------------
 
-// Figure identity: lower-case, fold million/billion to m/bn, strip separators/currency/percent. So
-// "£290 million" == "£290m" == "290000000"? no — we match figures AS WRITTEN in prose (claim_text vs the
-// page span), where both use the same surface form; the m/bn fold covers the common "290 million"/"290m"
-// split. Needle must be >=2 chars to be meaningful evidence.
+// Figure identity for the figure-in-claim and figure-in-quote checks.
 export function normFigure(s: string): string {
   return (s || "")
     .toLowerCase()
@@ -33,96 +29,91 @@ export function normFigure(s: string): string {
     .replace(/[,\s£$€%]/g, "")
     .replace(/[^a-z0-9.]/g, "");
 }
-
 export function figureIn(haystack: string, figure: string): boolean {
   const h = normFigure(haystack), n = normFigure(figure);
   return n.length >= 2 && h.includes(n);
 }
-
-// Prose identity for quote-on-page and term matching: lower-case, non-alphanumerics to spaces, collapse.
-// Markdown artefacts (asterisks, links, quotes) and whitespace differences between the rendered page and
-// the supplied span therefore don't break the match.
+// Prose identity for the quote-on-page check.
 export function normProse(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-// ---- clause scoping + subject terms --------------------------------------------------------------------
+// ---- clause scoping ------------------------------------------------------------------------------------
 
-// Split on clause boundaries: semicolon, and/while/whereas (comma-and is covered by the bare "and"). Bare
-// "and" over-splits phrases like "iron and steel", but that is fail-safe: over-splitting yields FEWER
-// terms in the figure's clause -> at worst a false-negative (human looks), never a false-positive.
+// Clause boundaries: semicolon, and/while/whereas, AND trailing provenance appositives ("…, according to
+// ONS…", "…as reported by…", "…published by…"). Provenance is context about the SOURCE, not the claim's
+// subject (same category as temporal tokens, 29bc91a0) — scoping it off keeps it out of the coverage
+// denominator so a genuine figure clause isn't diluted by attribution the page-sentence never repeats.
 export function splitClauses(text: string): string[] {
   return (text || "")
-    .split(/\s*;\s*|\s+and\s+|\s+while\s+|\s+whereas\s+/i)
+    .split(/\s*;\s*|\s+and\s+|\s+while\s+|\s+whereas\s+|\s*,?\s+according to\s+|\s+as reported(?:\s+by)?\s+|\s*,?\s+published by\s+/i)
     .map((c) => c.trim())
     .filter(Boolean);
 }
-
-// The clause containing the figure (normalised match). Falls back to the whole text if no clause carries it.
 export function clauseContaining(claimText: string, figure: string): string {
   const clauses = splitClauses(claimText);
   for (const c of clauses) if (figureIn(c, figure)) return c;
   return claimText || "";
 }
 
-// Content words that are scaffolding, not subject. Month names are deliberately NOT here — "December"
-// distinguishes one release/period from another and is a real subject term (Eames' 813,000 case).
-const STOPWORDS = new Set([
-  "the", "a", "an", "of", "to", "in", "on", "at", "for", "and", "or", "was", "were", "is", "are", "be",
-  "been", "by", "with", "as", "that", "which", "this", "these", "those", "from", "into", "per", "its",
-  "their", "it", "some", "same", "release", "approximately", "about", "around", "reached", "totalled",
-  "total", "accounted", "stood", "reflecting", "targeted", "recorded", "estimated", "reported", "reports",
-  "report", "subsequently", "revised", "upward", "upwards", "provisional", "estimate", "estimates",
-  "published", "year", "ending", "period", "between", "under", "over", "up", "down", "figure", "figures",
-  "representing", "including", "dominate", "dominates",
-]);
+// ---- subject terms (Eames v2) --------------------------------------------------------------------------
 
-// Extract distinctive subject terms from a clause: lower-case, drop figures/dates/currency, drop stopwords,
-// keep content tokens (>=3 chars, or a hyphenated/compound token). Preserves order of appearance.
-export function extractSubjectTerms(clause: string): string[] {
-  const cleaned = (clause || "")
-    .toLowerCase()
-    .replace(/£|\$|€|%/g, " ")
-    .replace(/\b\d[\d,.]*\b/g, " ")      // strip figures and 4-digit years
-    .replace(/[^a-z\s-]/g, " ");
+const STOP = new Set(
+  ("the a an of to in for on at by and or was were is are be been approximately about totalled totaled " +
+   "reached stood recorded estimated reported revised representing which that with under from between per " +
+   "year ending same release main plus there total according subsequently upward before after during when " +
+   "as it its their this these those one two people cases person nationals reflecting targeted associated " +
+   "measures").split(/\s+/),
+);
+
+// Names a MEASURE/CONTAINER rather than the subject — never distinctive, never required: the source
+// routinely uses a synonym (accommodation/hotels; crossings/arrivals). Temporal tokens are added here too
+// (29bc91a0 fix): months/quarters/etc. are context, not subject, so they must not satisfy distinctiveness.
+const SYNONYM_PRONE = new Set(
+  ("accommodation crossings arrivals spending payments rates cost costs applications returns removals " +
+   "backlog estimates estimate " +
+   "january february march april may june july august september october november december " +
+   "quarter quarterly annual annually monthly weekly nightly daily").split(/\s+/),
+);
+
+// Eames' content_terms: strip figures (with optional currency prefix + scale suffix), keep letter/hyphen/
+// apostrophe tokens longer than 2 chars that aren't stopwords, lower-cased.
+export function contentTerms(text: string): string[] {
+  const stripped = (text || "").replace(/[£$]?\d[\d,.]*\s*(%|percent|million|billion|bn|m)?/gi, " ");
+  const words = stripped.match(/[A-Za-z][A-Za-z\-']+/g) || [];
   const out: string[] = [];
-  for (const raw of cleaned.split(/\s+/)) {
-    const t = raw.replace(/^-+|-+$/g, "").trim();
-    if (!t || t.length < 3) continue;
-    if (STOPWORDS.has(t)) continue;
-    if (!out.includes(t)) out.push(t);
+  for (const w of words) {
+    const lw = w.toLowerCase();
+    if (lw.length > 2 && !STOP.has(lw) && !out.includes(lw)) out.push(lw);
   }
   return out;
 }
 
-// A term matches a span by conservative stem/substring: "industr" matches industrial/industry. Stem =
-// drop a common inflectional suffix; match if the normalised span contains the stem.
-function stem(term: string): string {
-  return term.replace(/(ies|ing|ed|es|s|al|ly)$/i, "");
-}
-export function termInQuote(term: string, quote: string): boolean {
-  const q = normProse(quote);
-  const st = stem(term);
-  if (st.length < 3) return q.includes(normProse(term));
-  return q.includes(st);
+// 6-char bidirectional stem/substring match, as in Eames' gate().
+function termMatches(t: string, pageTerms: string[]): boolean {
+  const ts = t.slice(0, 6);
+  return pageTerms.some((p) => p.includes(ts) || t.includes(p.slice(0, 6)));
 }
 
-// Threshold: a majority of clause terms must co-locate AND the most distinctive (longest) term must be
-// present — the "head noun-phrase" guard. Tunable; the acceptance test pins the required behaviour.
-function longest(terms: string[]): string | null {
-  let best: string | null = null;
-  for (const t of terms) if (!best || t.length > best.length) best = t;
-  return best;
+// The subject decision (Eames v2), exposed for testing: distinctive >= 1 AND coverage >= 0.5.
+// claimTerms are the clause-scoped content terms; quoteText is the anchor span (or a page string).
+export function subjectCoLocate(claimTerms: string[], quoteText: string):
+  { pass: boolean; coverage: number; present: string[]; distinctivePresent: string[] } {
+  const quoteTerms = contentTerms(quoteText);
+  const present = claimTerms.filter((t) => termMatches(t, quoteTerms));
+  const distinctivePresent = claimTerms.filter((t) => !SYNONYM_PRONE.has(t) && termMatches(t, quoteTerms));
+  const coverage = present.length / Math.max(1, claimTerms.length);
+  return { pass: distinctivePresent.length >= 1 && coverage >= 0.5, coverage, present, distinctivePresent };
 }
 
 // ---- the gate ------------------------------------------------------------------------------------------
 
 export interface GateInput {
-  claimText: string;         // synthesis_claim.claim_text (upstream, Theo's)
-  pageContent: string;       // source_document.content (rendered page text)
-  anchorQuote: string;       // reasoner-supplied verbatim span it claims supports the link
-  claimFigure: string | null; // the claim's load-bearing figure this edge anchors; null => qualitative
-  hasScreenshot: boolean;    // does the fact have a frozen screenshot (for the qualitative review path)
+  claimText: string;
+  pageContent: string;
+  anchorQuote: string;
+  claimFigure: string | null;
+  hasScreenshot: boolean;
 }
 export interface GateResult {
   verificationState: "anchored" | "screenshot_review" | "cited_not_verified";
@@ -156,27 +147,24 @@ export function runCoLocationGate(inp: GateInput): GateResult {
   if (!figureIn(quote, figure)) {
     return none("cited_not_verified", "pending", `figure '${figure}' is not inside the anchor_quote`);
   }
-  // 3. The clause-scoped subject terms must co-locate in the quote (majority + head-noun guard).
+  // 3. Subject co-location — Eames v2: distinctive >= 1 AND coverage >= 0.5, over clause-scoped terms.
   const clause = clauseContaining(inp.claimText, figure);
-  const terms = extractSubjectTerms(clause);
-  if (terms.length === 0) {
+  const claimTerms = contentTerms(clause);
+  if (claimTerms.length === 0) {
     return none("cited_not_verified", "pending", "no subject terms could be extracted from the figure's clause");
   }
-  const matched = terms.filter((t) => termInQuote(t, quote));
-  const head = longest(terms);
-  const majority = matched.length >= Math.max(1, Math.ceil(terms.length / 2));
-  const headOk = head ? termInQuote(head, quote) : true;
-  if (!majority || !headOk) {
+  const d = subjectCoLocate(claimTerms, quote);
+  if (!d.pass) {
     return {
       verificationState: "cited_not_verified", reviewState: "pending",
-      reason: `subject did not co-locate: matched ${matched.length}/${terms.length}` +
-        (headOk ? "" : `, head term '${head}' absent`),
-      subjectTerms: terms, matchedTerms: matched,
+      reason: `subject did not co-locate: coverage ${d.present.length}/${claimTerms.length}=${d.coverage.toFixed(2)}` +
+        `, distinctive present [${d.distinctivePresent.join(", ")}]`,
+      subjectTerms: claimTerms, matchedTerms: d.present,
     };
   }
   return {
     verificationState: "anchored", reviewState: "not_required",
-    reason: `co-located: figure '${figure}' + subject (${matched.length}/${terms.length} terms incl. head '${head}') in the anchor_quote on the page`,
-    subjectTerms: terms, matchedTerms: matched,
+    reason: `co-located: figure '${figure}' + subject (coverage ${d.coverage.toFixed(2)}, distinctive [${d.distinctivePresent.join(", ")}]) in the anchor_quote on the page`,
+    subjectTerms: claimTerms, matchedTerms: d.present,
   };
 }
