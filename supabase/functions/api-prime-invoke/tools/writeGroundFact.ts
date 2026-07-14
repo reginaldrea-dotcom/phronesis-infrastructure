@@ -154,11 +154,13 @@ export const writeGroundFactTool: Tool = {
       p_source_document_id: sourceDocId,
       p_contestability: s("contestability") ?? "settled",
       p_captured_by_lineage: ctx.lineageName || "angelia",
-      // Disambiguate Connie's write_ground_fact OVERLOAD: a 13-arg variant (…, p_dossier_instance_id) was
-      // added alongside the 12-arg one, and since the new param DEFAULTs NULL, a 12-arg call matches BOTH →
-      // PostgREST "could not choose between two overloads" (blocked all grounding, 13 Jul). Passing the param
-      // explicitly resolves to the 13-arg unambiguously. NULL preserves the prior no-binding behaviour.
-      // FLAGGED to Connie to drop the redundant 12-arg overload (backward-compatible) as the permanent fix.
+      // NULL is the PERMANENT, by-design value (Connie ruled, 6f9be3ef): ground_facts are dossier-agnostic
+      // — a capture belongs to its SOURCE, not to whichever dossier requested it, so the same page serves any
+      // dossier citing it. The dossier binding lives on the claim_on_fact EDGE (element_dependency), not the
+      // fact node — the same per-edge architecture the co-location gate rests on. Do NOT thread a real
+      // dossier_instance_id here; it would make facts non-shareable and duplicate captures.
+      // (History: the redundant 12-arg overload that made a 12-arg call ambiguous was dropped 13 Jul; the
+      // 13-arg superset accepts all prior calls, so passing this param explicitly is unambiguous.)
       p_dossier_instance_id: null,
     };
 

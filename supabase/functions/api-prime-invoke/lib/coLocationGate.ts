@@ -40,15 +40,32 @@ export function normProse(s: string): string {
 
 // ---- clause scoping ------------------------------------------------------------------------------------
 
-// Clause boundaries: semicolon, and/while/whereas, AND trailing provenance appositives ("…, according to
-// ONS…", "…as reported by…", "…published by…"). Provenance is context about the SOURCE, not the claim's
-// subject (same category as temporal tokens, 29bc91a0) — scoping it off keeps it out of the coverage
-// denominator so a genuine figure clause isn't diluted by attribution the page-sentence never repeats.
+// Trailing-attribution provenance markers (Eames 0d6af588). Provenance is context about the SOURCE, not
+// the claim's subject (the third exclusion class, with measure nouns and temporal tokens) — scoping it off
+// keeps it out of the coverage denominator so a figure clause isn't diluted by attribution the page never
+// repeats. THE INVARIANT (ratify this, not the list): strip ONLY provenance that FOLLOWS the assertion; a
+// source that LEADS the clause is subject-bearing and must survive. Same token, opposite treatment by
+// POSITION: dropped in "…was 171,000, according to ONS…" but kept in "ONS revised … to 944,000". So this
+// list must contain ONLY multi-word attribution phrases — NEVER bare verbs (reports/estimated/recorded),
+// which appear in LEADING position ("IPCC reports…", "NAO recorded…") and would strip the subject actor.
+const PROVENANCE_MARKERS = [
+  "according to", "as reported by", "as recorded by", "as estimated by", "as published in",
+  "as published by", "reported in", "reported by", "published by", "per the", "data from",
+  "figures from", "estimates from", "estimates by", "citing", "as set out in", "as set out by",
+  "as stated in", "as stated by",
+];
+
+// Clause boundaries: semicolon, and/while/whereas, and trailing provenance. The provenance alternatives are
+// prefixed with \s*,?\s+ — the mandatory whitespace BEFORE the marker is what enforces the invariant: a
+// sentence-initial marker ("According to ONS, …") has no preceding whitespace, so it never splits, and the
+// leading source is preserved. Only a mid/trailing marker (" …, according to …") fires.
+const CLAUSE_SPLIT = new RegExp(
+  "\\s*;\\s*|\\s+and\\s+|\\s+while\\s+|\\s+whereas\\s+|\\s*,?\\s+(?:" +
+    PROVENANCE_MARKERS.join("|") + ")\\s+",
+  "i",
+);
 export function splitClauses(text: string): string[] {
-  return (text || "")
-    .split(/\s*;\s*|\s+and\s+|\s+while\s+|\s+whereas\s+|\s*,?\s+according to\s+|\s+as reported(?:\s+by)?\s+|\s*,?\s+published by\s+/i)
-    .map((c) => c.trim())
-    .filter(Boolean);
+  return (text || "").split(CLAUSE_SPLIT).map((c) => c.trim()).filter(Boolean);
 }
 export function clauseContaining(claimText: string, figure: string): string {
   const clauses = splitClauses(claimText);

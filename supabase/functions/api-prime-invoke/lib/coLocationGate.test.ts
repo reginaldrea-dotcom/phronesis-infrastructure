@@ -2,7 +2,19 @@
 // subject_term_gate.py + the temporal fix he specified + a provenance clause-split for real-corpus claims).
 // Run: deno test --no-check coLocationGate.test.ts
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { subjectCoLocate, runCoLocationGate } from "./coLocationGate.ts";
+import { subjectCoLocate, runCoLocationGate, clauseContaining, contentTerms } from "./coLocationGate.ts";
+
+// --- The provenance invariant (Eames 0d6af588): strip TRAILING attribution, keep a LEADING source -------
+Deno.test("invariant: trailing 'according to ONS' is stripped from the figure clause", () => {
+  const terms = contentTerms(clauseContaining("UK net migration for the year ending December 2025 was 171,000, according to ONS provisional estimates published 21 May 2026.", "171,000"));
+  assert(!terms.includes("ons"), `trailing ONS should be stripped: ${terms}`);
+  assert(terms.includes("migration"), `subject should survive: ${terms}`);
+});
+Deno.test("invariant: a LEADING source (ONS ... revised) is NOT stripped — it is subject-bearing", () => {
+  const terms = contentTerms(clauseContaining("ONS subsequently revised the 2023 net migration peak upward to 944,000.", "944,000"));
+  assert(terms.includes("ons"), `leading ONS must survive: ${terms}`);
+  assert(terms.includes("migration") && terms.includes("peak"), `subject must survive: ${terms}`);
+});
 
 // --- Eames' tested table: distinctive >= 1 AND coverage >= 0.5, no mandatory head token ----------------
 // (term-lists + page strings exactly as in his subject_term_gate.py, run through the SAME code path.)
