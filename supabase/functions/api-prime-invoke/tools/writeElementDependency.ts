@@ -119,7 +119,10 @@ export const writeElementDependencyTool: Tool = {
               .select("content, attestation").eq("id", docId).maybeSingle();
             const d = docRes.data as { content?: string; attestation?: Record<string, unknown> } | null;
             pageContent = d?.content ?? "";
-            hasScreenshot = !!(d?.attestation as { screenshot_url?: string } | undefined)?.screenshot_url;
+            // Reviewable proof for the qualitative path = a screenshot OR (operator-supplied) a retrievable
+            // frozen document a human can open. Operator uploads carry retrievable_url, not a screenshot.
+            const attn = (d?.attestation ?? {}) as { screenshot_url?: string; retrievable_url?: string; archive_url?: string };
+            hasScreenshot = !!(attn.screenshot_url || attn.retrievable_url || attn.archive_url);
           }
           const gate = runCoLocationGate({ claimText, pageContent, anchorQuote, claimFigure, hasScreenshot });
           await ctx.supabase.from("element_dependency").update({

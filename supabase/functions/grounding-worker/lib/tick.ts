@@ -104,26 +104,35 @@ async function hasEdge(supabase: SupabaseClient, claimId: string): Promise<boole
 
 function groundingPrompt(claimId: string, hint: Record<string, unknown> | null): string {
   const url = typeof hint?.url === "string" ? hint.url as string : "";
-  const key = typeof hint?.key === "string" ? hint.key as string : "";
+  const docId = typeof hint?.source_document_id === "string" ? hint.source_document_id as string : "";
+  const anchorHint = typeof hint?.anchor_hint === "string" ? hint.anchor_hint as string
+    : (typeof hint?.key === "string" ? hint.key as string : "");
   const kind = typeof hint?.kind === "string" ? hint.kind as string : "";
   const tier = typeof hint?.tier === "string" ? hint.tier as string : "";
+  // Step 2 differs for an ALREADY-CAPTURED operator-supplied document vs a URL to fetch.
+  const captureStep = docId
+    ? `2. The source is an ALREADY-CAPTURED document (operator-supplied, e.g. an uploaded PDF). Call write_ground_fact with source_document_id = ${docId} (NOT source_url) - the document is already stored, hashed and frozen; do NOT fetch a URL and do NOT look for another source. Choose fact_kind = 'numeric' if the claim's load-bearing element is a figure, else 'qualitative'; set canonical_string to the exact figure (numeric) or the shortest quote (qualitative). Set authority_tier by the SOURCE's own authority (e.g. a BSI Statement of Verification is T2; a company's own report body is T3). The tool binds the fact to the stored document and you anchor against the document's own text.`
+    : "2. Capture and freeze its authoritative source with write_ground_fact. Pass the source_url; choose fact_kind = 'numeric' if the claim's load-bearing element is a figure, else 'qualitative'; set canonical_string to the exact figure (numeric) or the shortest quote that makes the claim (qualitative). The tool renders + screenshots + freezes the page and derives the hash itself - do NOT supply a hash.";
   const lines = [
-    "GROUNDING TASK - one claim, full grounding (capture + verify + link).",
+    "GROUNDING TASK - one claim, full grounding (capture/attach + verify + link).",
     `Ground synthesis_claim ${claimId}.`,
     "1. Read the claim.",
-    "2. Capture and freeze its authoritative source with write_ground_fact. Pass the source_url; choose fact_kind = 'numeric' if the claim's load-bearing element is a figure, else 'qualitative'; set canonical_string to the exact figure (numeric) or the shortest quote that makes the claim (qualitative). The tool renders + screenshots + freezes the page and derives the hash itself - do NOT supply a hash.",
-    `3. Then link it AND prove it: write_element_dependency (dependent_type=synthesis_claim, dependent_id=${claimId}, depends_on_type=ground_fact, depends_on_id=<the ground_fact you just wrote>, edge_kind=claim_on_fact). Verification is EARNED on this edge by CO-LOCATION, not by the figure being somewhere on the page:`,
-    "   - For a NUMERIC claim: also pass claim_canonical_string = the claim's load-bearing figure exactly as the claim states it, AND anchor_quote = a SHORT VERBATIM span copied word-for-word from the rendered page that contains BOTH that figure AND the claim's subject. The edge ANCHORS only if that span is on the page and the figure + the claim's subject terms co-locate inside it. Do NOT paraphrase the quote, do NOT stitch a span from two places, and do NOT pick a span where the figure belongs to a DIFFERENT subject (a page can carry the same number for another thing - e.g. '39,000 partner visas' is not '39,000 small boat arrivals'). If no single span carries both the figure and the subject, omit anchor_quote and leave it cited_not_verified - do not force it.",
+    captureStep,
+    `3. Then link it AND prove it: write_element_dependency (dependent_type=synthesis_claim, dependent_id=${claimId}, depends_on_type=ground_fact, depends_on_id=<the ground_fact you just wrote>, edge_kind=claim_on_fact). Verification is EARNED on this edge by CO-LOCATION, not by the figure being somewhere in the source:`,
+    "   - For a NUMERIC claim: also pass claim_canonical_string = the claim's load-bearing figure exactly as the claim states it, AND anchor_quote = a SHORT VERBATIM span copied word-for-word from the source's own text that contains BOTH that figure AND the claim's subject. The edge ANCHORS only if that span is in the source and the figure + the claim's subject terms co-locate inside it. CRITICAL for TABLES / key-value / statement-of-verification layouts: the bare value is NOT a valid anchor_quote - 'Limited / 10%' or '294,999.6' on its own carries no subject and will FAIL. You MUST include the ROW LABEL / field name in the SAME span, e.g. 'GHG Emissions avoidance: 294,999.6 t CO2e (over a 10-year product in service period)' or 'Level of assurance / materiality: Limited / 10%'. Do NOT paraphrase the quote, do NOT stitch a span from two places, and do NOT pick a span where the figure belongs to a DIFFERENT subject. If no single span carries both the figure and the subject, omit anchor_quote and leave it cited_not_verified - do not force it.",
     "   - For a QUALITATIVE claim: omit claim_canonical_string; pass anchor_quote = the shortest verbatim span that makes the claim. The edge goes to SCREENSHOT_REVIEW for a human. Both anchored and cited_not_verified/screenshot_review are honest outcomes - proceed either way, never fake an anchor.",
   ];
-  if (url) {
+  if (docId) {
+    lines.push(`SOURCE ALREADY CAPTURED - source_document_id: ${docId}. Pass it to write_ground_fact as source_document_id (do NOT fetch a URL).`);
+    if (anchorHint) lines.push(`Anchor hint (the figure/quote to LOCATE in the document, then quote verbatim for anchor_quote): ${anchorHint}`);
+  } else if (url) {
     lines.push(`SOURCE PROVIDED (use this exact URL): ${url}`);
-    if (key) lines.push(`Key ${kind === "numeric" ? "figure" : "quote"} to check for: ${key}`);
+    if (anchorHint) lines.push(`Key ${kind === "numeric" ? "figure" : "quote"} to check for: ${anchorHint}`);
     if (kind) lines.push(`Suggested fact_kind: ${kind}${tier ? `; authority_tier: ${tier}` : ""}`);
   } else {
     lines.push("No source URL was provided - identify the single most authoritative source yourself and capture it. Do not dispatch a web search.");
   }
-  lines.push("If write_ground_fact returns cited_not_verified (URL dead/blocked/figure absent), report that plainly and do NOT fabricate a source.");
+  lines.push("If write_ground_fact returns cited_not_verified (source dead/blocked/figure absent), report that plainly and do NOT fabricate a source.");
   lines.push("Do exactly this ONE claim. Do not ground others.");
   return lines.join("\n");
 }

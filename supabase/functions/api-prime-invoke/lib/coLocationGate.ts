@@ -49,10 +49,10 @@ export function normProse(s: string): string {
 // list must contain ONLY multi-word attribution phrases — NEVER bare verbs (reports/estimated/recorded),
 // which appear in LEADING position ("IPCC reports…", "NAO recorded…") and would strip the subject actor.
 const PROVENANCE_MARKERS = [
-  "according to", "as reported by", "as recorded by", "as estimated by", "as published in",
-  "as published by", "reported in", "reported by", "published by", "per the", "data from",
-  "figures from", "estimates from", "estimates by", "citing", "as set out in", "as set out by",
-  "as stated in", "as stated by",
+  "according to", "as reported by", "as recorded by", "as estimated by", "as verified by",
+  "as assessed by", "as certified by", "as published in", "as published by", "reported in",
+  "reported by", "published by", "per the", "data from", "figures from", "estimates from",
+  "estimates by", "citing", "as set out in", "as set out by", "as stated in", "as stated by",
 ];
 
 // Clause boundaries: semicolon, and/while/whereas, and trailing provenance. The provenance alternatives are
