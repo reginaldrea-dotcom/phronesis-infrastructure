@@ -25,6 +25,15 @@ const standing = (): ToolContext => ({
   siblingGrant: null,
 });
 
+// An interrogate djinn (baton bac007e0): permit = {read_grounded, trace_interrogation}. Read-side + the
+// sanctioned answer path only — no capture, commission, project_slice, or free-write.
+const interrogate = (): ToolContext => ({
+  supabase: {} as unknown as ToolContext["supabase"],
+  directArtefacts: [],
+  lineageName: "delphia_interrogate_proof",
+  siblingGrant: { permit: ["read_grounded", "trace_interrogation"], cargo: {} },
+});
+
 // ── The belt names the missing capability structurally (not parsed from prose) ─────────────────────────
 Deno.test("belt: Mode-1 djinn attempting enqueue_dispatch is denied with capability 'raw_web_dispatch'", () => {
   const d = enforceCapability("enqueue_dispatch", mode1());
@@ -49,6 +58,28 @@ Deno.test("belt: a baseline harness tool (read_inbox) is allowed even for a seal
 
 Deno.test("belt: a standing Prime is ungated (enqueue_dispatch permitted)", () => {
   assertEquals(enforceCapability("enqueue_dispatch", standing()), null);
+});
+
+// ── Interrogate permit-wiring (baton bac007e0): trace_interrogation gated under the interrogate permit ──
+Deno.test("belt: a Mode-1 djinn calling trace_interrogation is denied with capability 'trace_interrogation'", () => {
+  const d = enforceCapability("trace_interrogation", mode1());
+  assert(d, "trace_interrogation must be refused for a Mode-1 permit (it holds no such capability)");
+  assertEquals(d!.deniedCapability, "trace_interrogation");
+});
+
+Deno.test("belt: an interrogate djinn calling trace_interrogation is PERMITTED", () => {
+  assertEquals(enforceCapability("trace_interrogation", interrogate()), null);
+});
+
+Deno.test("belt: an interrogate djinn is read-side only — enqueue_dispatch still denied (raw_web_dispatch)", () => {
+  const d = enforceCapability("enqueue_dispatch", interrogate());
+  assert(d, "interrogate permit is read-side + trace only; raw_web_dispatch is not in it");
+  assertEquals(d!.deniedCapability, "raw_web_dispatch");
+});
+
+Deno.test("belt: an interrogate djinn may read (read_synthesis -> read_grounded) but not commission", () => {
+  assertEquals(enforceCapability("read_synthesis", interrogate()), null);
+  assertEquals(enforceCapability("write_ground_fact", interrogate())!.deniedCapability, "commission_grounding");
 });
 
 // ── The chokepoint surfaces the denial WITHOUT running the tool ─────────────────────────────────────────

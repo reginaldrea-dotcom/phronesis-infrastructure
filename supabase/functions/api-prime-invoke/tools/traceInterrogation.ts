@@ -25,8 +25,11 @@
 // dressed as grounded, and an uncited factual segment cannot pass. RESIDUAL (documented for Aegis's
 // Denial Proof): the server cannot semantically detect a leap smuggled INSIDE a segment that cites a real
 // figure — hence the split requirement + tier-labelling narrow it, and delivery-only-via-trace-token is a
-// noted piece-4b hardening. This tool is ungated by the sealed permit: it is Delphia's SANCTIONED answer
-// path (the free_write gate, elsewhere, is what makes it her ONLY path).
+// noted piece-4b hardening. This tool is Delphia's SANCTIONED answer path (the free_write gate, elsewhere, is
+// what makes it her ONLY path). GATING (baton bac007e0): trace_interrogation is wired into the capability map
+// under the 'trace_interrogation' capability, held by the INTERROGATE permit. So a sealed interrogate djinn
+// may call it; a sealed sibling whose permit lacks it (a Mode-1 djinn) is REFUSED below the model (auditable
+// via execution_ledger.denied_capability). Standing Primes are unaffected (the belt is a no-op without a seal).
 
 import type { Tool, ToolContext } from "./types.ts";
 
@@ -138,8 +141,11 @@ export const traceInterrogationTool: Tool = {
       // Reverse graph walk: for each cited synthesis_claim, its claim_on_fact support (fact or figure),
       // joined to the tier of what grounds it. LEFT JOINs so a claim with zero support still returns one row.
       if (claimIds.length > 0) {
-        const q = `
-          SELECT sc.id AS claim_id, sc.claim_text, sc.assertion_contestability, sc.claim_role,
+        // NB: execute_raw_sql routes SELECT vs write by btrim()+LIKE 'SELECT%'/'WITH%', and btrim strips
+        // spaces but NOT newlines — so the query MUST start with SELECT (no leading newline/indent) or it is
+        // misclassified as a write and returns a non-iterable {rows_affected} instead of rows. (Caught in the
+        // first live interrogate run, baton bac007e0: this template literal began with a newline.)
+        const q = `SELECT sc.id AS claim_id, sc.claim_text, sc.assertion_contestability, sc.claim_role,
                  gf.id AS gf_id, gf.authority_tier AS gf_tier, gf.source_url AS gf_source,
                  cf.id AS cf_id, cf.provenance_tier AS cf_tier
           FROM synthesis_claim sc
@@ -150,7 +156,9 @@ export const traceInterrogationTool: Tool = {
           WHERE sc.id IN (${sqlList(claimIds)})`;
         const r = await ctx.supabase.rpc("execute_raw_sql", { query: q });
         if (r.error) return fail(`claim resolution failed: ${r.error.message}`);
-        for (const row of (r.data ?? []) as Array<Record<string, unknown>>) {
+        // Fail-safe: a non-array response (never expected for a SELECT) degrades to zero rows -> the segment
+        // withholds as unresolved, the gate's safe direction — it never crashes the whole interrogation.
+        for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
           const cid = String(row.claim_id);
           let cr = claimRes.get(cid);
           if (!cr) {
@@ -173,7 +181,7 @@ export const traceInterrogationTool: Tool = {
           query: `SELECT id, authority_tier, source_url FROM ground_fact WHERE id IN (${sqlList(factIds)})`,
         });
         if (r.error) return fail(`ground_fact resolution failed: ${r.error.message}`);
-        for (const row of (r.data ?? []) as Array<Record<string, unknown>>) {
+        for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
           factRes.set(String(row.id), { tier: (row.authority_tier as string) ?? null, source_url: (row.source_url as string) ?? null });
         }
       }
@@ -183,7 +191,7 @@ export const traceInterrogationTool: Tool = {
           query: `SELECT id, provenance_tier, value, unit FROM claim_figure WHERE id IN (${sqlList(figureIds)})`,
         });
         if (r.error) return fail(`claim_figure resolution failed: ${r.error.message}`);
-        for (const row of (r.data ?? []) as Array<Record<string, unknown>>) {
+        for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
           figureRes.set(String(row.id), { tier: (row.provenance_tier as string) ?? null, value: (row.value as number) ?? null, unit: (row.unit as string) ?? null });
         }
       }

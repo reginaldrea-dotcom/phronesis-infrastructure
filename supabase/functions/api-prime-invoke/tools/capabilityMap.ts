@@ -24,6 +24,7 @@ export type Capability =
   | "raw_web_dispatch"     // open multi-engine search (enqueue_dispatch). Gated since piece 1.
   | "project_slice"        // bounded grounded write (pin / fold a dossier_slice).
   | "read_user_document"   // [NEW, the intersect] user-upload ingest, private-cargo-scoped. Not built yet.
+  | "trace_interrogation"  // the interrogate answer path: draft segments -> server-vetted grounding trace. Interrogate-only.
   | "assign_tier"          // manual tier override. NEVER in a Delphia permit (tiering is Theo's, via tier-map).
   | "free_write";          // ungrounded free write. NO tool exists; defined-but-never-granted (Aegis's gate).
 
@@ -52,6 +53,11 @@ export const TOOL_CAPABILITY: Readonly<Record<string, Capability>> = {
   // project_slice — bounded grounded write (the pin/fold lifecycle)
   pin_dossier_slice: "project_slice",
   fold_session: "project_slice",
+  // trace_interrogation — the interrogate answer path (baton bac007e0). Wired here so it is DENY-BY-DEFAULT
+  // for any sealed sibling whose permit lacks 'trace_interrogation' (e.g. a Mode-1 djinn — refused below the
+  // model, auditable via execution_ledger.denied_capability), and OFFERED to an interrogate djinn whose
+  // sealed permit holds it. Standing Primes (no sealed grant) are unaffected — the belt is a no-op for them.
+  trace_interrogation: "trace_interrogation",
 };
 
 // Harness / self-context tools that carry no Dossier-capability and no exfil risk: read-only wake/inbox/self.
@@ -75,7 +81,10 @@ export const MODE_PERMITS: Readonly<Record<string, Capability[]>> = {
   mode1: ["read_grounded", "verify_figure"],
   mode2: ["read_grounded", "verify_figure", "capture_page", "commission_grounding"],
   mode3: ["read_grounded", "verify_figure", "capture_page", "commission_grounding", "raw_web_dispatch"],
-  interrogate: ["read_grounded"], // + the trace path (trace_interrogation) — wired when interrogate mode ships
+  interrogate: ["read_grounded", "trace_interrogation"], // read-side + the sanctioned answer path (baton bac007e0).
+  // Read-only content generation: NO capture / commission / project_slice / free-write (slice projection is a
+  // deferred later mode, Reg's decision 1). trace_interrogation is the ONLY answer path — the djinn may not
+  // answer EXCEPT through the server-vetted trace.
   project: ["read_grounded", "verify_figure", "project_slice", "read_user_document"],
 };
 
