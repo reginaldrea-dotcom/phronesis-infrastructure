@@ -941,11 +941,17 @@ Deno.serve(async (req: Request) => {
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
         let content: string;
+        // Denial instrumentation (baton 7f71b2df): the machine-auditable reason a call was REFUSED below the
+        // model, recorded on the ledger row so a refusal is a ROW not a prose self-report. null = not refused.
+        let deniedCapability: string | null = null;
         if (loopGate.governed && !loopGate.allowed?.has(toolUse.name)) {
           // Defense in depth: an ungranted tool was not offered, but never run one.
           content = `[SYSTEM: '${toolUse.name}' is not granted to lineage '${lineage_name}'. It was not offered and will not run; it needs a tool_grant (Connie + Aegis).]`;
+          deniedCapability = "not_granted_to_lineage";
         } else {
-          content = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: resolvedInstanceId, siblingGrant });
+          const runResult = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: resolvedInstanceId, siblingGrant });
+          content = runResult.content;
+          deniedCapability = runResult.deniedCapability; // non-null iff the sealed-sibling belt refused it
         }
         const dg = digestToolCall(toolUse.name, toolUse.input, content);
         toolLog.push(dg);
@@ -977,6 +983,9 @@ Deno.serve(async (req: Request) => {
             tool: toolUse.name,
             input_summary: dg.input_summary,
             outcome: dg.outcome,
+            // Denial instrumentation (baton 7f71b2df): non-null iff this call was REFUSED below the model —
+            // the missing capability or a structural sentinel. A Denial Proof reads THIS column, not the prose.
+            denied_capability: deniedCapability,
             theo_session_id: theoSessionId,
             // First-class juncture key for the MST-delivery F audit / M1 (baton 5dfb4003): lifted from
             // the tool input so load_mst / mark_juncture calls join on (lineage, session, juncture).

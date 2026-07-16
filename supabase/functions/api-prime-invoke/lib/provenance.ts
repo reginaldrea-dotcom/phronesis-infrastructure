@@ -61,6 +61,12 @@ function sampleRows(rows: unknown[]): string {
 function summariseOutcome(resultText: string): string {
   const txt = String(resultText ?? "").trim();
   if (!txt) return "→ (no result)";
+  // Denial (baton 7f71b2df): a refusal below the model must NOT read like an opaque success payload
+  // ("→ 251 chars"). The machine-auditable signal is execution_ledger.denied_capability; this keeps the
+  // human/model-facing outcome text honest too (the rendered tool-log block and the ledger's outcome string).
+  if (/^\[SYSTEM: DENIED below the model/i.test(txt)) return "→ denied below the model";
+  if (/^\[SYSTEM: '[^']+' is not (granted to lineage|part of this sealed sibling)/i.test(txt)) return "→ denied below the model";
+  if (/^denied:\s/i.test(txt)) return clip("→ " + collapse(txt), OUTCOME_MAX);
   if (ERROR_RE.test(txt)) return clip(collapse(txt.split("\n")[0]), OUTCOME_MAX);
   if (txt.startsWith("[]")) return "→ 0 rows";
   if (/^No .*(found|synthesis)/i.test(txt)) return "→ none (nothing found)";

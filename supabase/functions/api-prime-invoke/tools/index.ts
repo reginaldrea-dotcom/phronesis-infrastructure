@@ -137,14 +137,24 @@ export function summarizeToolUse(name: string, input: any): string {
   return t?.summarize ? t.summarize(input) : name;
 }
 
-export async function runTool(name: string, input: any, ctx: ToolContext): Promise<string> {
+// The result of a tool dispatch. `content` is what the model sees (tool result or the verbatim refusal).
+// `deniedCapability` (baton 7f71b2df) is the machine-auditable denial signal the caller records in
+// execution_ledger.denied_capability: null when the belt permitted the call (it ran — it may still have
+// errored in execution, which is NOT a belt denial), else the missing capability / structural sentinel.
+// Surfacing it here means the ledger never has to parse a refusal back out of `content`.
+export interface ToolRunResult {
+  content: string;
+  deniedCapability: string | null;
+}
+
+export async function runTool(name: string, input: any, ctx: ToolContext): Promise<ToolRunResult> {
   const t = BY_NAME[name];
-  if (!t) return `Unknown tool: ${name}`;
+  if (!t) return { content: `Unknown tool: ${name}`, deniedCapability: null };
   // Execution-layer capability gate (baton b28d6e36 / SP 67b43866): for a SEALED sibling (Delphia), refuse
   // below the model any tool its permit does not map to (deny-by-default). No-op for standing Primes.
   const denial = enforceCapability(name, ctx);
-  if (denial) return denial;
-  return await t.run(input, ctx);
+  if (denial) return { content: denial.message, deniedCapability: denial.deniedCapability };
+  return { content: await t.run(input, ctx), deniedCapability: null };
 }
 
 export type { ToolContext };

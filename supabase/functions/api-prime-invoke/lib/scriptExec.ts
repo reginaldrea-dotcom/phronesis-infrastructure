@@ -88,7 +88,13 @@ async function checkScriptGrant(service: SupabaseClient, lineage: string, family
   }
 }
 
-async function writeLedger(rc: ScriptRunCtx, tool: string, input: unknown, resultText: string): Promise<void> {
+async function writeLedger(
+  rc: ScriptRunCtx,
+  tool: string,
+  input: unknown,
+  resultText: string,
+  deniedCapability: string | null = null, // baton 7f71b2df: machine-auditable refusal reason; null = ran
+): Promise<void> {
   const d = digestToolCall(tool, input, resultText);
   try {
     await rc.service.from("execution_ledger").insert({
@@ -99,6 +105,9 @@ async function writeLedger(rc: ScriptRunCtx, tool: string, input: unknown, resul
       tool: d.tool,
       input_summary: d.input_summary,
       outcome: d.outcome,
+      // Denial instrumentation (baton 7f71b2df): a B1 script refusal is a ROW too — non-null names the
+      // reason (no script binding, or the missing <family>:<scope> the lineage lacked).
+      denied_capability: deniedCapability,
       // Same first-class juncture key as the loop path, so load_mst / mark_juncture calls made from a
       // B1 script also join into the MST-delivery F audit / M1 (baton 5dfb4003).
       juncture: extractLedgerJuncture(input),
@@ -115,13 +124,13 @@ export function makeOnToolCall(rc: ScriptRunCtx) {
     const binding = BINDINGS[tool];
     if (!binding) {
       const reason = `'${tool}' is not a script-callable binding`;
-      await writeLedger(rc, tool, input, `denied: ${reason}`);
+      await writeLedger(rc, tool, input, `denied: ${reason}`, "not_a_binding");
       return { ok: false, error: reason };
     }
     const granted = await checkScriptGrant(rc.service, rc.lineage, binding.grant.family, binding.grant.scope);
     if (!granted) {
       const reason = `lineage '${rc.lineage}' lacks script scope ${binding.grant.family}:${binding.grant.scope} for '${tool}'`;
-      await writeLedger(rc, tool, input, `denied: ${reason}`);
+      await writeLedger(rc, tool, input, `denied: ${reason}`, `${binding.grant.family}:${binding.grant.scope}`);
       return { ok: false, error: reason };
     }
     try {

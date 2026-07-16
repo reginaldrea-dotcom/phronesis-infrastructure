@@ -86,25 +86,45 @@ export function assertPermitClean(permit: readonly string[]): { clean: boolean; 
   return { clean: offending.length === 0, offending };
 }
 
-// THE CENTRAL GATE. Called at the runTool chokepoint for every tool dispatch. Returns a denial string (which
-// the caller returns verbatim, so the action never runs and the model sees only the refusal) or null (allowed).
+// A structured refusal (baton 7f71b2df). `message` is the denial string the caller returns verbatim to the
+// model; `deniedCapability` is the machine-auditable reason recorded in execution_ledger.denied_capability —
+// the missing CAPABILITY when the refusal is tied to one (e.g. 'raw_web_dispatch'), else the structural
+// sentinel 'deny_by_default' (unmapped privileged tool). This is the point where the refusal is KNOWN, so it
+// is the point where it is recorded — never parsed back out of the return prose (the anti-pattern we remove).
+export interface CapabilityDenial {
+  message: string;
+  deniedCapability: string;
+}
+
+// THE CENTRAL GATE. Called at the runTool chokepoint for every tool dispatch. Returns a CapabilityDenial
+// (whose .message the caller returns verbatim, so the action never runs and the model sees only the refusal,
+// and whose .deniedCapability the ledger records) or null (allowed).
 //
 //  - No sealed grant (standing Prime): null. Ungated. Non-breaking.
 //  - Sealed sibling:
 //      * BASELINE tool -> allowed.
-//      * mapped tool -> requireGrant on its capability (deny unless the sealed permit holds it).
+//      * mapped tool -> requireGrant on its capability (deny unless the sealed permit holds it; denied
+//        capability = that capability).
 //      * anything else (privileged/unmapped: execute_sql, deliver_artefact, github, conferences, a future
-//        free_write/assign_tier tool, trace_interrogation before interrogate-mode wiring) -> DENY-BY-DEFAULT.
-export function enforceCapability(toolName: string, ctx: ToolContext): string | null {
+//        free_write/assign_tier tool, trace_interrogation before interrogate-mode wiring) -> DENY-BY-DEFAULT
+//        (denied capability = the 'deny_by_default' sentinel — no single capability names the refusal).
+export function enforceCapability(toolName: string, ctx: ToolContext): CapabilityDenial | null {
   if (!ctx.siblingGrant) return null; // standing Prime — ungated
 
   if (BASELINE_TOOLS.has(toolName)) return null;
 
   const cap = TOOL_CAPABILITY[toolName];
-  if (cap) return requireGrant(ctx, cap); // null if permitted, denial string otherwise
+  if (cap) {
+    const message = requireGrant(ctx, cap); // null if permitted, denial string otherwise
+    return message ? { message, deniedCapability: cap } : null;
+  }
 
   // Deny-by-default: a sealed sibling may not reach an unmapped privileged tool.
-  return `[SYSTEM: DENIED below the model — '${toolName}' is not part of this sealed sibling's permit and is `
-    + `not a baseline harness tool. A grant-scoped sibling may only use the tools its mode's permit maps to. `
-    + `The action did not run. Do not retry — this is the answer.]`;
+  return {
+    message:
+      `[SYSTEM: DENIED below the model — '${toolName}' is not part of this sealed sibling's permit and is `
+      + `not a baseline harness tool. A grant-scoped sibling may only use the tools its mode's permit maps to. `
+      + `The action did not run. Do not retry — this is the answer.]`,
+    deniedCapability: "deny_by_default",
+  };
 }
