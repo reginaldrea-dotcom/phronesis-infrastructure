@@ -21,6 +21,8 @@
 //   COVERAGE  : if questions exist, every research_question is resolved by an ACTIVE
 //               claim carrying its question_id (answered or a gap claim) — not by the
 //               Prime-set research_question.status flag (that is the self-report loophole).
+//               DEDUP-AWARE: a reworded DUPLICATE question (same content-word signature as a
+//               covered one) does not count as an uncovered gap — its topic is already answered.
 //   When neither dispatch nor question exists, sections-only is acceptable → complete
 //   (no false-incomplete, the symmetric error Eames warned against).
 //
@@ -77,15 +79,41 @@ export async function evaluateCaptureState(
         WHERE synthesis_id = (SELECT id FROM sy)
           AND COALESCE(claim_lifecycle,'active') <> 'superseded'
       ),
-      uncov AS (
-        SELECT count(*) AS n FROM research_question rq
-        WHERE rq.theo_session_id = '${theoSessionId}'
-          AND NOT EXISTS (
+      sig AS (
+        -- Per-question: a normalised content-word signature + whether it is claim-covered. The signature
+        -- lower-cases FIRST then strips non-alphanumerics (doing it the other way drops capitalised words),
+        -- keeps content tokens (len>=3, minus function/question words), de-dupes and sorts them - so two
+        -- questions that differ only in phrasing get the SAME signature.
+        SELECT rq.id,
+          (SELECT string_agg(w, ' ' ORDER BY w) FROM (
+             SELECT DISTINCT tok AS w
+             FROM unnest(regexp_split_to_array(regexp_replace(lower(rq.question_text), '[^a-z0-9]+', ' ', 'g'), '\\s+')) AS tok
+             WHERE length(tok) >= 3 AND tok NOT IN (
+               'the','and','are','was','were','for','with','that','this','these','those','from','into',
+               'what','which','when','where','why','how','who','whom','whose','does','did','can','could',
+               'will','would','shall','should','may','might','must','they','them','their','there','its',
+               'has','have','had','than','then','about','over','under','between','per','not','any','some',
+               'all','both','each','more','most','less','such','also','you','your','our','been','being')
+          ) t) AS signature,
+          EXISTS (
             SELECT 1 FROM synthesis_claim sc
             WHERE sc.synthesis_id = (SELECT id FROM sy)
               AND sc.question_id = rq.id
               AND COALESCE(sc.claim_lifecycle,'active') <> 'superseded'
-          )
+          ) AS covered
+        FROM research_question rq
+        WHERE rq.theo_session_id = '${theoSessionId}'
+      ),
+      uncov AS (
+        -- COVERAGE, dedup-aware: a question counts as uncovered only if NEITHER it NOR any content-
+        -- duplicate (same signature) is claim-covered. This stops a reworded DUPLICATE question from
+        -- FALSE-flagging capture incomplete when its topic is already covered by its twin (Q7 vs Q8 -
+        -- "what carbon offset schemes are available..." / "carbon offset schemes: what is available...").
+        -- Derived from the question text, NOT a Prime-set status flag (which this predicate distrusts).
+        -- Over-counts only genuine both-uncovered duplicates - the SAFE direction (never false-complete).
+        SELECT count(*) AS n FROM sig s
+        WHERE NOT s.covered
+          AND NOT EXISTS (SELECT 1 FROM sig s2 WHERE s2.signature = s.signature AND s2.covered)
       )
       SELECT (SELECT id FROM sy) AS synthesis_id,
              d.dp_done, d.dp_inflight, qn.n AS questions, sec.n AS sections, cl.n AS claims, uncov.n AS uncovered
