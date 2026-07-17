@@ -35,7 +35,7 @@ export const readSynthesisTool: Tool = {
   definition: {
     name: "read_synthesis",
     description:
-      "Read the assembled synthesis for a theo_session. Default mode returns the synthesis header + per-section list with short excerpts (good for scanning structure and finding flagged join points). Pass knit=true to return the full assembled markdown — use before delivery to verify the document reads as intended. Always surfaces sections flagged needs_review (with join_note), any in-flight or failed engine_dispatch rows that mean the synthesis is being built on incomplete dispatch, and a `citations` block with each citation's resolution status (resolved vs 'unchecked' — i.e. whether a liveness pass has verified it) and anchored state (frozen-snapshot vs live URL), with exact counts.",
+      "Read the assembled synthesis for a theo_session. Default mode returns the synthesis header + per-section list with short excerpts (good for scanning structure and finding flagged join points). Pass knit=true to return the full assembled markdown — use before delivery to verify the document reads as intended. Always surfaces sections flagged needs_review (with join_note), any in-flight or failed engine_dispatch rows that mean the synthesis is being built on incomplete dispatch, and a `citations` block with each citation's resolution status (resolved vs 'unchecked' — i.e. whether a liveness pass has verified it) and anchored state (frozen-snapshot vs live URL), with exact counts. Also returns a `claims` block: every synthesis_claim with its text, contestability, role, and the ground_fact/claim_figure it rests on (with tier) — the grounding graph. To answer an interrogation, read this block, then cite a claim's `id` as a synthesis_claim ref in trace_interrogation (only claims with non-empty `grounding` resolve/KEEP; contested claims ground AS attributions).",
     input_schema: {
       type: "object",
       properties: {
@@ -196,6 +196,50 @@ export const readSynthesisTool: Tool = {
       rows_truncated: citationRows.length > CITATION_ROW_CAP ? citationRows.length - CITATION_ROW_CAP : 0,
     };
 
+    // ── The GROUNDING GRAPH (baton chain 6f1d98fa → interrogate self-drive) ──────────────────────────────
+    // trace_interrogation KEEPS a segment only if it cites a real synthesis_claim / ground_fact / claim_figure
+    // that RESOLVES in the claim_on_fact graph. But an interrogate djinn given a bare question had no way to
+    // DISCOVER those ids: sections are prose, citations carry a bare claim_id with no text. So she could not
+    // draft a grounded segment without a caller hand-feeding ids (which would steer an Integrity Test). This
+    // block surfaces, per claim, its text + contestability + role + the fact/figure it rests on (with tier) —
+    // the SAME graph trace_interrogation re-walks below the model. She reads the record, cites what she finds,
+    // and the server re-verifies her citation. Read-only, capped, no new capability (this is read_synthesis).
+    const CLAIM_CAP = 300;
+    let claimsOut: Array<Record<string, unknown>> = [];
+    if (claimIds.length > 0) {
+      // NB (same quirk as traceInterrogation.ts): execute_raw_sql routes SELECT-vs-write by btrim()+LIKE, and
+      // btrim strips spaces but NOT newlines — the query MUST begin with SELECT (no leading newline/indent).
+      const cq = await ctx.supabase.rpc("execute_raw_sql", {
+        query: `SELECT sc.id AS claim_id, sc.claim_text, sc.assertion_contestability, sc.claim_role,
+                 gf.id AS gf_id, gf.authority_tier AS gf_tier,
+                 cf.id AS cf_id, cf.provenance_tier AS cf_tier
+          FROM synthesis_claim sc
+          LEFT JOIN element_dependency ed ON ed.dependent_synthesis_claim_id = sc.id AND ed.edge_kind = 'claim_on_fact'
+          LEFT JOIN ground_fact gf ON gf.id = ed.depends_on_ground_fact_id
+          LEFT JOIN claim_figure cf ON cf.id = ed.depends_on_claim_figure_id
+          WHERE sc.synthesis_id = '${synthesisId}'`,
+      });
+      if (cq.error) return fail(`claims graph read failed: ${cq.error.message}`);
+      const byClaim = new Map<string, Record<string, unknown>>();
+      for (const row of (Array.isArray(cq.data) ? cq.data : []) as Array<Record<string, unknown>>) {
+        const cid = String(row.claim_id);
+        let c = byClaim.get(cid);
+        if (!c) {
+          c = {
+            id: cid,
+            claim_text: excerpt((row.claim_text as string) ?? null),
+            assertion_contestability: (row.assertion_contestability as string) ?? null,
+            claim_role: (row.claim_role as string) ?? null,
+            grounding: [] as Array<Record<string, unknown>>,
+          };
+          byClaim.set(cid, c);
+        }
+        if (row.gf_id) (c.grounding as Array<Record<string, unknown>>).push({ kind: "ground_fact", id: String(row.gf_id), tier: (row.gf_tier as string) ?? null });
+        else if (row.cf_id) (c.grounding as Array<Record<string, unknown>>).push({ kind: "claim_figure", id: String(row.cf_id), tier: (row.cf_tier as string) ?? null });
+      }
+      claimsOut = [...byClaim.values()].slice(0, CLAIM_CAP);
+    }
+
     let systemNote: string;
     if (sectionRows.length === 0) {
       systemNote = "synthesis row exists but has no sections — write sections with write_synthesis_section, starting with section_index 0 (executive summary).";
@@ -244,6 +288,11 @@ export const readSynthesisTool: Tool = {
       },
       dispatch_counts: counts,
       citations,                  // C3 (df7cafbb) — per-citation resolution + anchored state, with exact counts
+      // The grounding graph for interrogate self-drive (6f1d98fa): each claim + the fact/figure it rests on.
+      // Cite a claim's `id` as a synthesis_claim ref in trace_interrogation; only claims with non-empty
+      // `grounding` will be KEPT (the server re-walks the same edge). Contested claims ground AS attributions.
+      claims: claimsOut,
+      claims_truncated: claimIds.length > CLAIM_CAP ? claimIds.length - CLAIM_CAP : 0,
       sections: sectionsOut,
       flagged_sections: flagged,
       "[SYSTEM]": systemNote,

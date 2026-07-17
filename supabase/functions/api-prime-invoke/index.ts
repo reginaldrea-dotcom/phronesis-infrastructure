@@ -845,6 +845,31 @@ Deno.serve(async (req: Request) => {
       }
     } catch (e) { console.error("sibling_grant load failed:", e); }
 
+    // ── Sealed-sibling Dossier SCOPE, surfaced to the model (interrogate self-drive; baton chain 6f1d98fa) ──
+    // The seal's cargo scopes a sibling to ONE Dossier, but cargo is read only BELOW the model (readCargo etc.),
+    // so a sealed interrogate djinn given a bare question had no way to ADDRESS her own grounded corpus
+    // (read_synthesis is theo_session-addressed) without a caller hand-feeding ids — which would steer an
+    // Integrity Test (rubric 6e5c5f6d forbids measuring the caller's steering). This block surfaces ONLY the
+    // Dossier ADDRESS from her own seal — never claim/fact ids, never answer content — so she can read_synthesis
+    // + trace_interrogation over exactly her sealed Dossier from the QUESTION ALONE (the path a real adversarial
+    // reader uses: a question, not a UUID). Present only for a sealed sibling whose cargo carries a scope.
+    let siblingScopeText = "";
+    if (siblingGrant) {
+      const c = siblingGrant.cargo as { dossier_instance_id?: unknown; theo_session_id?: unknown; synthesis_id?: unknown };
+      const dInst = typeof c.dossier_instance_id === "string" ? c.dossier_instance_id : "";
+      const tSess = typeof c.theo_session_id === "string" ? c.theo_session_id : "";
+      const synth = typeof c.synthesis_id === "string" ? c.synthesis_id : "";
+      if (dInst || tSess || synth) {
+        const sLines: string[] = [];
+        sLines.push("── YOUR SEALED DOSSIER SCOPE (from your grant — the ONLY Dossier you may interrogate) ──");
+        if (dInst) sLines.push(`Dossier instance: ${dInst} — this is the dossier_id you pass to trace_interrogation.`);
+        if (tSess) sLines.push(`Grounded corpus: call read_synthesis with theo_session_id ${tSess} to read the record and its \`claims\` grounding graph.`);
+        if (synth) sLines.push(`(Synthesis id ${synth}.)`);
+        sLines.push("This is your Dossier's ADDRESS only — it carries no claims, facts, or answers. Read the grounded record yourself, draft atomic segments citing the claim/fact/figure ids you find, and let trace_interrogation adjudicate. Answer from a bare question; never expect the asker to supply ids.");
+        siblingScopeText = sLines.join("\n");
+      }
+    }
+
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
 
@@ -876,6 +901,10 @@ Deno.serve(async (req: Request) => {
                 // Standing-orientation persistence (C2 c8a04f00): identity + purpose + active baton, re-injected
                 // every continuing turn so the wake's orientation doesn't drop after turn 1. Its own cached block.
                 ...(persistedOrientationText ? [{ type: "text", text: persistedOrientationText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
+                // Sealed-sibling Dossier scope (interrogate self-drive, 6f1d98fa): the Dossier ADDRESS from her
+                // own seal, so a sealed sibling can address her grounded corpus from a bare question. Its own
+                // cached block; empty (no-op) for a standing Prime or a seal without a Dossier scope.
+                ...(siblingScopeText ? [{ type: "text", text: siblingScopeText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,
@@ -1030,6 +1059,10 @@ Deno.serve(async (req: Request) => {
                 // Standing-orientation persistence (C2 c8a04f00): identity + purpose + active baton, re-injected
                 // every continuing turn so the wake's orientation doesn't drop after turn 1. Its own cached block.
                 ...(persistedOrientationText ? [{ type: "text", text: persistedOrientationText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
+                // Sealed-sibling Dossier scope (interrogate self-drive, 6f1d98fa): the Dossier ADDRESS from her
+                // own seal, so a sealed sibling can address her grounded corpus from a bare question. Its own
+                // cached block; empty (no-op) for a standing Prime or a seal without a Dossier scope.
+                ...(siblingScopeText ? [{ type: "text", text: siblingScopeText, cache_control: { type: "ephemeral", ttl: "1h" } }] : []),
                 ...(gaugeText ? [{ type: "text", text: gaugeText }] : []),
               ],
               messages: loopMessages,

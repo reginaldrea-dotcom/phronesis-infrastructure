@@ -268,6 +268,24 @@ export const traceInterrogationTool: Tool = {
         ? `All ${kept} segment(s) resolved to supporting evidence in the graph. Deliver vetted_answer verbatim — every line is grounded (attributions tiered as attributions).`
         : `${kept} grounded, ${withheld} WITHHELD below the model. Deliver vetted_answer verbatim: the withheld lines are gap-notes stating absence-of-source, not absence-of-truth. Do NOT re-assert a withheld claim in your prose, and do NOT soften a gap-note into a hedge — the server has ruled these are the model's own leaps or unresolved citations, and that ruling stands.`;
 
+    // Persist the adjudication so the interrogation is ROW-AUDITABLE from the DB connector. The Integrity
+    // Test (rubric 6e5c5f6d) scores the trace's kept/withheld ROWS, but this tool's {kept, withheld,
+    // vetted_answer, ledger} was only a direct return value to the harness caller — a verifier on the
+    // Supabase connector (Aegis, msg 8cadd109) could not see it. One row per call in interrogation_run.
+    // BEST-EFFORT: an audit-write failure must NEVER break the answer — the vetted answer stands regardless.
+    try {
+      await ctx.supabase.from("interrogation_run").insert({
+        session_id: ctx.sessionId ?? null,
+        lineage: ctx.lineageName ?? null,
+        dossier_id: dossierId,
+        question,
+        kept,
+        withheld,
+        vetted_answer,
+        ledger,
+      });
+    } catch (_e) { /* audit write is best-effort; the interrogation answer is unaffected */ }
+
     return JSON.stringify({
       ok: true,
       question,
