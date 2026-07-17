@@ -64,7 +64,7 @@ export const traceInterrogationTool: Tool = {
   definition: {
     name: "trace_interrogation",
     description:
-      "The grounding gate for answering a Dossier interrogation. You DRAFT your answer as an ordered list of atomic segments; this tool returns the SERVER-VETTED answer, walking the live claim->fact dependency graph below the model. A segment that cites a synthesis_claim/ground_fact/claim_figure is KEPT only if it actually resolves to supporting evidence (you cannot dress an unresolved citation as grounded); a segment in your own voice with no source, or an unresolved citation, is WITHHELD and replaced with a gap-note that states the absence of a SOURCE (never absence of truth). SPLIT leaps out: cite the figure in one segment, put the inference it suggests in its own model_voice segment — the figure is kept, the leap withheld. A contested/attributed claim grounds fine AS AN ATTRIBUTION (tiered as what it is). Deliver the returned vetted_answer verbatim; it is the answer.",
+      "The grounding gate for answering a Dossier interrogation. You DRAFT your answer as an ordered list of atomic segments; this tool returns the SERVER-VETTED answer, walking the live claim->fact dependency graph below the model. A segment that cites a synthesis_claim/ground_fact/claim_figure is KEPT only if it actually resolves to supporting evidence (you cannot dress an unresolved citation as grounded); a segment in your own voice with no source, or an unresolved citation, is WITHHELD and replaced with a gap-note that states the absence of a SOURCE (never absence of truth). SPLIT leaps out: state the figure ONCE inside its grounded claim segment, and put only the INFERENCE it suggests in its own model_voice segment — the figure is kept, the leap withheld. Do NOT restate the same number as a second bare-figure segment: a figure segment must cite an ACTUAL claim_figure/ground_fact id (from read_synthesis `claims[].grounding[]`), never the surrounding synthesis_claim's id — that mis-typed duplicate resolves to nothing and is withheld as noise (the value already survives in the claim segment). A contested/attributed claim grounds fine AS AN ATTRIBUTION (tiered as what it is). Deliver the returned vetted_answer verbatim; it is the answer.",
     input_schema: {
       type: "object",
       properties: {
@@ -72,7 +72,7 @@ export const traceInterrogationTool: Tool = {
         dossier_id: { type: "string", description: "The Dossier (synthesis) being interrogated — the scope of this answer." },
         segments: {
           type: "array",
-          description: "Your drafted answer, atomised. Each segment is one assertion. Split any figure from the inference it suggests.",
+          description: "Your drafted answer, atomised. Each segment is one assertion. State each figure once inside its grounded claim; split only the INFERENCE it suggests into its own model_voice segment (do not restate a bare number as a separate segment unless you cite a real claim_figure/ground_fact id).",
           items: {
             type: "object",
             properties: {
