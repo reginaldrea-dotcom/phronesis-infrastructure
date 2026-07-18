@@ -173,12 +173,101 @@
 .sl-support-row.reasons-open .sl-reasons { display: inline-flex; }
 .sl-support-row.reasons-open .sl-rej { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
 .sl-accepted-dot { color: var(--accent); font-size: 9px; flex: none; line-height: 1.4; }
-.confidence { font-size: 11px; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
-.conf-ungrounded { color: var(--text-light); font-style: italic; }
-.conf-ok { color: var(--accent); }
-.conf-needs-corroboration { color: var(--status-amber); }
-.conf-tier-conflict { color: var(--status-red, #b3423a); }
-.conf-sparse-record { color: var(--text-light); }
+
+/* ── INVERTED STAMP DEFAULT — the section header tab (interrogate surface v2, Eames SP 4985c519) ──
+   A well-grounded section wears NOTHING; the tab appears only where there is something to warn about.
+   Two salience levels: QUIET (small muted text, no fill) for a mild note (pending review / not yet
+   grounded); WARN (a filled tint) reserved for genuine caution (unverified source / tier conflict). */
+.sec-tab { font-size: 10.5px; letter-spacing: 0.04em; white-space: nowrap; flex: none;
+           padding: 1px 7px; border-radius: 3px; }
+.sec-tab-quiet { color: var(--text-light); font-style: italic; }
+.sec-tab-warn  { color: var(--status-red, #b3423a); background: var(--status-red-dim, rgba(179, 66, 58, 0.10));
+                 border: 1px solid var(--status-red, #b3423a); font-weight: 500; }
+
+/* ── ANCHOR-QUOTE FIRST-CLASS — the "what anchors this section" zone ──────────────────────────────
+   claim -> the exact source sentence -> mark + tier + document. THE QUOTE IS THE VISUAL CENTRE OF GRAVITY;
+   the stamps are trim. A badge asserts; a quote demonstrates. */
+.anchor-zone { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+.az-head { font-family: 'Cormorant Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+           text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+.anchor-claim { margin-bottom: 18px; }
+.anchor-claim:last-child { margin-bottom: 0; }
+/* The claim is a quiet lead-in — the subject; the quote below it is the weight. */
+.ac-claim { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px; }
+
+/* The anchoring span, rendered visibly as THE SOURCE'S WORDS: serif, quotation marks, a distinct surface,
+   and a left rule tinted by the verification mark (recessive teal for anchored strength; only caution is
+   loud). This is the receipt on the page, not one interaction away. */
+.av-edge { margin: 0 0 10px; }
+.av-edge:last-child { margin-bottom: 0; }
+.av-quote { position: relative; margin: 0; padding: 10px 14px 10px 16px;
+            font-family: 'Lora', Georgia, serif; font-size: 15px; line-height: 1.6; color: var(--text);
+            background: var(--surface-1, var(--surface-2, rgba(128, 128, 128, 0.05)));
+            border-left: 3px solid var(--border); border-radius: 0 5px 5px 0; }
+.av-quote::before { content: '\201C'; }
+.av-quote::after  { content: '\201D'; }
+.av-noquote { font-size: 12.5px; font-style: italic; color: var(--text-light); padding: 4px 0 4px 16px; }
+/* Recessive-but-present strength (anchored) vs loud caution (unverified). */
+.av-edge.av-anchored   .av-quote { border-left-color: var(--accent); }
+.av-edge.av-review     .av-quote { border-left-color: var(--status-amber); }
+.av-edge.av-unverified .av-quote { border-left-color: var(--status-red, #b3423a);
+                                   background: var(--status-red-dim, rgba(179, 66, 58, 0.07)); }
+
+/* The trim line: mark + tier + document. Small and quiet — it supports the quote, never competes with it. */
+.av-trim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 5px; padding-left: 16px;
+           font-size: 11px; color: var(--text-muted); }
+.av-mark { letter-spacing: 0.03em; }
+.av-mark.av-anchored   { color: var(--accent); }                         /* recessive: small teal text, no badge */
+.av-mark.av-review     { color: var(--status-amber); }
+.av-mark.av-unverified { color: var(--status-red, #b3423a); font-weight: 600; font-style: italic; }  /* loud: a real weakness */
+.av-doc { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+a.av-doc:hover { color: var(--accent); }
+
+/* The worked-example rounding note — quiet reconciliation, anticipating the numerate reader's calculator. */
+.av-rounding { margin-top: 10px; font-size: 11.5px; font-style: italic; color: var(--text-light);
+               padding-left: 16px; border-left: 2px dotted var(--border); }
+
+/* ── THE ASK SIDE — interrogate this dossier (Eames §4) ──────────────────────────────────────────── */
+.ask-panel { border: 1px solid var(--accent-border, var(--border)); border-radius: 6px;
+             background: var(--surface-2, rgba(128, 128, 128, 0.04)); padding: 16px 18px; margin-bottom: 26px; }
+.ask-head { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 600; color: var(--text); }
+.ask-sub { font-family: 'Lora', Georgia, serif; font-size: 13px; color: var(--text-muted); line-height: 1.5;
+           margin: 4px 0 12px; max-width: 66ch; }
+.ask-form { display: flex; gap: 8px; }
+.ask-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 14px; color: var(--text);
+             background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 5px; padding: 8px 12px; }
+.ask-input:focus { outline: none; border-color: var(--accent-border, var(--accent)); }
+.ask-submit { flex: none; font-family: 'Cormorant Garamond', serif; font-size: 13px; letter-spacing: 1px;
+              text-transform: uppercase; color: var(--surface, #fff); background: var(--accent);
+              border: 1px solid var(--accent); border-radius: 5px; padding: 8px 18px; cursor: pointer; }
+.ask-submit:hover { filter: brightness(1.06); }
+.ask-submit:disabled { opacity: 0.55; cursor: default; }
+
+.ask-answer { margin-top: 14px; }
+.ans-loading { font-size: 13px; font-style: italic; color: var(--text-muted); }
+.ans-error   { font-size: 13px; color: var(--status-red, #b3423a); }
+.ans-note    { font-size: 13.5px; color: var(--text-muted); }
+.ans-model   { margin-top: 8px; font-size: 13.5px; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
+.ans-question { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; color: var(--text);
+                margin-bottom: 10px; }
+/* Kept vs withheld tallies — the withheld count only lights up when there IS withheld material. */
+.ans-summary { display: flex; gap: 14px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+               color: var(--text-muted); margin-bottom: 10px; }
+.ans-count-kept { color: var(--accent); }
+.ans-count-withheld.has-withheld { color: var(--status-red, #b3423a); font-weight: 600; }
+/* Kept lines — grounded prose with a quiet tier stamp trailing. */
+.ans-kept { font-size: 15px; line-height: 1.7; color: var(--text); margin: 0 0 0.7em; max-width: 70ch; }
+.ans-trim { margin-left: 6px; font-size: 11px; white-space: nowrap; }
+.ans-attr { color: var(--text-muted); font-style: italic; margin-left: 4px; }
+.ans-framing { color: var(--text-light); font-style: italic; margin-left: 4px; }
+/* WITHHELD — an explicit, prominent block. Withholding is a FINDING; the reader should SEE the djinn
+   declining to assert, not find a silent gap. Loud by design. */
+.ans-withheld { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 0.7em;
+                padding: 8px 12px; border-left: 3px solid var(--status-red, #b3423a);
+                background: var(--status-red-dim, rgba(179, 66, 58, 0.08)); border-radius: 0 5px 5px 0; }
+.ans-withheld-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
+                      color: var(--status-red, #b3423a); flex: none; }
+.ans-withheld-note { font-size: 13.5px; color: var(--text); line-height: 1.5; }
 
 /* L3 — the deepest descent: a quiet link to the engine workings, not a default view */
 .engine-workings { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); }

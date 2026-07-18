@@ -217,17 +217,120 @@
       '<div class="callout-stack">' + items + '</div></div>';
   }
 
-  // Per-section confidence — the tier-composition of the facts this section's claims rest on
-  // (render_section_confidence_v1, via synthesis_claim.section_id -> element_dependency). Live once claims
-  // are grounded with claim_on_fact edges; 'ungrounded' until then.
-  var CONF_LABEL = { ok: 'well grounded', needs_corroboration: 'needs corroboration', tier_conflict: 'sources conflict', sparse_record: 'sparse record', ungrounded: 'not yet grounded' };
-  var CONF_CLASS = { ok: 'conf-ok', needs_corroboration: 'conf-needs-corroboration', tier_conflict: 'conf-tier-conflict', sparse_record: 'conf-sparse-record', ungrounded: 'conf-ungrounded' };
-  function renderConfidence(d, s) {
-    var st = (s && s.confidence_state) || 'ungrounded';
-    var cls = CONF_CLASS[st] || 'conf-ungrounded';
-    var g = (s && s.grounded_claim_count) || 0, n = (s && s.claim_count) || 0;
-    var detail = n ? ' (' + g + '/' + n + ' claims grounded)' : '';
-    return '<span class="confidence ' + cls + '" title="Per-section confidence, derived from the evidence tiers of this section’s claims.' + esc(detail) + '">' + (CONF_LABEL[st] || st) + '</span>';
+  /* ── interrogate surface v2 — anchor-quote first-class + inverted stamps (Eames SP 4985c519, Napoleon
+     baton 629e4723) ──────────────────────────────────────────────────────────────────────────────────
+     The deepest fix: we spent the anchor-hazard rebuild to hold a verbatim span from the source's own bytes,
+     then showed the reader only the CONCLUSION of verification and never the THING VERIFIED. A badge ASSERTS;
+     a quote DEMONSTRATES. So each load-bearing claim now shows the exact source sentence that anchors it —
+     the quote is the visual centre of gravity, the stamps are trim. claim.grounding[] comes from
+     theo-render-data: one entry per claim_on_fact edge, carrying the edge's anchor_quote (the quote belongs
+     to the EDGE, not the fact — per-edge ruling 83163028), its verification_state, and the tier + document
+     of what grounds it. */
+  function claimsBySection(d) {
+    var m = {};
+    (d.claims || []).forEach(function (c) {
+      var sid = c.section_id; if (!sid) return;
+      (m[sid] = m[sid] || []).push(c);
+    });
+    return m;
+  }
+
+  // A verification MARK, sized by Eames's inversion: strength is RECESSIVE (small text mark, no filled
+  // badge), caution is LOUD (filled tint). anchored = the figure was found verbatim in the source's frozen
+  // bytes; screenshot_review = a human still confirms the frozen screenshot; cited_not_verified = a real
+  // weakness. QUIET IS NOT ABSENT — an anchored mark is present-but-recessive, never removed (an unmarked
+  // claim is indistinguishable from an unassessed one).
+  function verificationMark(state) {
+    if (state === 'anchored')          return { cls: 'av-anchored',   label: 'anchored', title: 'The stated figure was found verbatim in the source’s frozen page.' };
+    if (state === 'screenshot_review') return { cls: 'av-review',     label: 'screenshot · pending review', title: 'A full-page screenshot is frozen; a human confirms it supports the claim.' };
+    return { cls: 'av-unverified', label: 'unverified', title: 'Not verified — the figure was not found on the page, or the page could not be captured.' };
+  }
+
+  // One anchoring edge: the verbatim quote (centre of gravity, rendered visibly as THE SOURCE'S WORDS —
+  // quotation via a serif blockquote on a distinct surface) + a trim line of mark + tier + document.
+  function renderAnchorEdge(g) {
+    var mark = verificationMark(g.verification_state);
+    var tier = String(g.tier || '').toLowerCase();
+    var doc = g.document_title
+      ? (g.source_url
+          ? '<a class="av-doc" href="' + esc(g.source_url) + '" target="_blank" rel="noopener">' + esc(g.document_title) + '</a>'
+          : '<span class="av-doc">' + esc(g.document_title) + '</span>')
+      : '';
+    var quote = g.anchor_quote
+      ? '<blockquote class="av-quote">' + esc(g.anchor_quote) + '</blockquote>'
+      : '<div class="av-noquote">The co-locating span is not yet captured; the frozen screenshot is under review.</div>';
+    var trim = '<div class="av-trim">' +
+        '<span class="av-mark ' + mark.cls + '" title="' + esc(mark.title) + '">' + esc(mark.label) + '</span>' +
+        (tier ? '<span class="gf-tier ' + esc(tier) + '">' + esc(g.tier) + '</span>' : '') +
+        doc +
+      '</div>';
+    return '<div class="av-edge ' + mark.cls + '">' + quote + trim + '</div>';
+  }
+
+  // A single anchored claim: the claim, then the span(s) that anchor it. Anchored (strong) spans read first.
+  function renderAnchorClaim(c) {
+    var gs = (c.grounding || []).filter(Boolean);
+    if (!gs.length) return '';
+    var order = { anchored: 0, screenshot_review: 1, cited_not_verified: 2 };
+    gs = gs.slice().sort(function (a, b) {
+      var ra = order[a.verification_state]; var rb = order[b.verification_state];
+      return (ra == null ? 3 : ra) - (rb == null ? 3 : rb);
+    });
+    return '<div class="anchor-claim">' +
+        '<div class="ac-claim">' + esc(c.claim_text || '') + '</div>' +
+        gs.map(renderAnchorEdge).join('') +
+      '</div>';
+  }
+
+  // The worked-example rounding note (Eames §5): the five AESSEAL component figures sum to 294,999.65 t
+  // against a stated 294,999.6 t. Displaying the quotes adjacently invites a numerate reader to do the
+  // arithmetic, so we anticipate it with a quiet reconciliation note rather than claim a false exactness.
+  // Rendered only in the section that actually carries the total figure (detected from its own spans).
+  function roundingNote(claims) {
+    var hit = (claims || []).some(function (c) {
+      if (/294,999\.6\b/.test(c.claim_text || '')) return true;
+      return (c.grounding || []).some(function (g) { return /294,999\.6\b/.test(g.anchor_quote || ''); });
+    });
+    if (!hit) return '';
+    return '<div class="av-rounding">The five component figures sum to 294,999.65&nbsp;t; the report states 294,999.6&nbsp;t — consistent to rounding.</div>';
+  }
+
+  // The section's "what anchors this" zone — the receipt on the page, not one interaction away.
+  function renderSectionAnchors(claims) {
+    var withGrounding = (claims || []).filter(function (c) { return (c.grounding || []).length; });
+    if (!withGrounding.length) return '';
+    return '<div class="anchor-zone">' +
+        '<div class="az-head">What anchors this section</div>' +
+        withGrounding.map(renderAnchorClaim).join('') +
+        roundingNote(claims) +
+      '</div>';
+  }
+
+  // INVERTED STAMP DEFAULT — the section tab. Derived from what actually ANCHORS the section, not from
+  // tier-composition alone: a section anchored to verbatim bytes wears NOTHING (quiet is the signal of
+  // strength); prominence (a filled warning tint) is reserved for GENUINE caution — an unverified source or
+  // a tier conflict. This fixes the false gestalt where a page of qualifiers reads "nothing here is solid"
+  // when much of it is anchored (Reg: the old per-section tabs "just make it appear that everything is
+  // uncertain"). A well-grounded section is silent; only a warning speaks.
+  function sectionPosture(claims, confidenceState) {
+    var edges = [];
+    (claims || []).forEach(function (c) { (c.grounding || []).forEach(function (g) { edges.push(g); }); });
+    var anchored = edges.some(function (g) { return g.verification_state === 'anchored'; });
+    var weak     = edges.some(function (g) { return g.verification_state === 'cited_not_verified'; });
+    var review   = edges.some(function (g) { return g.verification_state === 'screenshot_review'; });
+    var hasClaims = (claims || []).length > 0;
+    if (weak)                                return { salience: 'warn',  label: 'unverified source', title: 'A source in this section could not be verified.' };
+    if (confidenceState === 'tier_conflict') return { salience: 'warn',  label: 'sources conflict', title: 'Sources in this section disagree.' };
+    if (anchored)                            return { salience: 'none' };   // anchored to verbatim bytes — wears nothing
+    if (review)                              return { salience: 'quiet', label: 'pending review', title: 'Frozen screenshots in this section await human confirmation.' };
+    if (hasClaims && edges.length === 0)     return { salience: 'quiet', label: 'not yet grounded', title: 'This section’s claims are not yet anchored to sources.' };
+    return { salience: 'none' };
+  }
+  function renderSectionTab(claims, confidenceState) {
+    var p = sectionPosture(claims, confidenceState);
+    if (p.salience === 'none') return '';
+    var cls = p.salience === 'warn' ? 'sec-tab sec-tab-warn' : 'sec-tab sec-tab-quiet';
+    return '<span class="' + cls + '" title="' + esc(p.title || '') + '">' + esc(p.label) + '</span>';
   }
 
   function domainOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } }
@@ -318,17 +421,19 @@
   // synthesis reads as a scannable stack of §N · label headers (structure undeniable) rather than one
   // undifferentiated scroll. The header is a STICKY button (stays pinned while scrolling a long section,
   // so you always know which section you are in) carrying the shared identity + per-section confidence.
-  function renderL1(d, secs) {
+  function renderL1(d, secs, cbs) {
     if (!secs.length) return '<div class="dossier-section"><div class="dossier-prose"><p><em>Full synthesis pending.</em></p></div></div>';
     var n = secs.length;
     return secs.map(function (s, idx) {
+      var claims = (cbs && cbs[s.id]) || [];
       return '<section class="dossier-section synthesis-section collapsed" id="' + sectionAnchor(s, idx) + '" data-idx="' + idx + '" style="--sec-hue:' + hueFor(idx, n) + '">' +
         '<button type="button" class="section-head" aria-expanded="false">' +
           '<span class="section-caret" aria-hidden="true"></span>' +
           '<span class="section-id">§' + (idx + 1) + ' · ' + esc(labelOf(s, idx)) + '</span>' +
-          renderConfidence(d, s) +
+          renderSectionTab(claims, s.confidence_state) +
         '</button>' +
-        '<div class="section-body"><div class="dossier-prose">' + md(s.content_md) + '</div>' + renderSectionFootLinks(s) + '</div>' +
+        '<div class="section-body"><div class="dossier-prose">' + md(s.content_md) + '</div>' +
+          renderSectionAnchors(claims) + renderSectionFootLinks(s) + '</div>' +
       '</section>';
     }).join('');
   }
@@ -337,14 +442,61 @@
   // public share host, so it could never be viewed there — and, more importantly, the engine workings expose
   // the underlying dispatches (here, an individual's job search) which must NOT be shared. Removed until a
   // reviewed way to surface workings safely exists (Reg, 7 Jul).
+  /* ── THE ASK SIDE (interrogate surface v2, Eames §4 / Napoleon baton 629e4723) ──────────────────────
+     A reader asks a natural-language question; the answer comes back through trace_interrogation — the ONLY
+     sanctioned answer path — vetted below the model against the live claim->fact graph. Each KEPT line is
+     grounded (with the tier of what grounds it); WITHHELD material is shown as an EXPLICIT, PROMINENT block
+     ("withheld — no grounded fact supports this"), never silently dropped: withholding is a FINDING, and the
+     reader should SEE the djinn declining to assert. The dossier-interrogate EF confirms availability lazily
+     (a sealed interrogation session must exist for this Dossier) and returns { kept, withheld, vetted_answer }. */
+  function renderAskPanel(d) {
+    return '<div class="ask-panel" data-session="' + esc((d.session || {}).id || '') + '">' +
+        '<div class="ask-head">Interrogate this dossier</div>' +
+        '<div class="ask-sub">Ask a question. The answer is drawn only from the grounded record — every line is traced below the model, and anything the record does not support is shown as <em>withheld</em>, not guessed.</div>' +
+        '<form class="ask-form" autocomplete="off">' +
+          '<input type="text" class="ask-input" name="q" placeholder="e.g. How much emissions avoidance did AESSEAL report, and who verified it?" maxlength="600">' +
+          '<button type="submit" class="ask-submit">Ask</button>' +
+        '</form>' +
+        '<div class="ask-answer" hidden></div>' +
+      '</div>';
+  }
+  function tierStamp(tier) {
+    if (!tier) return '';
+    return '<span class="gf-tier ' + esc(String(tier).toLowerCase()) + '">' + esc(tier) + '</span>';
+  }
+  // The vetted answer: kept segments carry their tier stamp (attributions labelled as such); withheld
+  // segments render as a prominent gap-note block stating absence-of-SOURCE (never absence of truth).
+  function renderVettedAnswer(res) {
+    var segs = res.vetted_answer || [];
+    var summary = '<div class="ans-summary">' +
+      '<span class="ans-count-kept">' + (res.kept || 0) + ' grounded</span>' +
+      '<span class="ans-count-withheld' + ((res.withheld || 0) ? ' has-withheld' : '') + '">' + (res.withheld || 0) + ' withheld</span>' +
+    '</div>';
+    var body = segs.map(function (s) {
+      if (s && s.withheld) {
+        return '<div class="ans-withheld">' +
+            '<span class="ans-withheld-label">Withheld</span>' +
+            '<span class="ans-withheld-note">' + esc(s.note || 'No grounded fact in this dossier supports this.') + '</span>' +
+          '</div>';
+      }
+      var attr = s && s.attributed_to ? '<span class="ans-attr">attributed to ' + esc(s.attributed_to) + '</span>' : '';
+      var framing = s && s.framing === 'attribution' ? '<span class="ans-framing">as an attribution</span>' : '';
+      return '<p class="ans-kept">' + esc((s && s.text) || '') +
+        '<span class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + '</span></p>';
+    }).join('');
+    return summary + body;
+  }
+
   function renderMain(d) {
     var secs = sectionsOrdered(d);
+    var cbs = claimsBySection(d);
     return '<div class="dossier-main">' +
+      renderAskPanel(d) +
       renderL0(secs) +
       '<div class="layer-divider"><span>Full synthesis</span>' +
         (secs.length ? '<button type="button" class="expand-all" data-mode="expand">Expand all</button>' : '') +
       '</div>' +
-      renderL1(d, secs) +
+      renderL1(d, secs, cbs) +
     '</div>';
   }
 
@@ -474,6 +626,47 @@
     }
   }
 
+  // The ASK side wiring: submit a question to dossier-interrogate, render the trace-vetted answer. The EF
+  // can take a little while (it drives a sealed interrogate djinn synchronously), so a loading state holds.
+  function wireAsk() {
+    var panel = root.querySelector('.ask-panel');
+    if (!panel) return;
+    var form = panel.querySelector('.ask-form');
+    var input = panel.querySelector('.ask-input');
+    var out = panel.querySelector('.ask-answer');
+    var endpoint = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateUrl) ? RENDER_CONFIG.interrogateUrl : '';
+    if (!form || !endpoint) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = (input.value || '').trim();
+      if (!q) return;
+      var sid = panel.getAttribute('data-session');
+      out.hidden = false;
+      out.innerHTML = '<div class="ans-loading">Tracing the answer through the grounded record…</div>';
+      panel.classList.add('is-asking');
+      var submit = form.querySelector('.ask-submit'); if (submit) submit.disabled = true;
+      function done() { panel.classList.remove('is-asking'); if (submit) submit.disabled = false; }
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+        body: JSON.stringify({ theo_session_id: sid, question: q }),
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        done();
+        if (!res || res.ok === false) { out.innerHTML = '<div class="ans-error">The interrogation could not be completed. Please try again.</div>'; return; }
+        if (res.available === false) { out.innerHTML = '<div class="ans-note">Interrogation is not enabled for this dossier.</div>'; return; }
+        if (res.traced === false) {
+          out.innerHTML = '<div class="ans-note">This question could not be answered from the grounded record.</div>' +
+            (res.response ? '<div class="ans-model">' + esc(res.response) + '</div>' : '');
+          return;
+        }
+        out.innerHTML = '<div class="ans-question">' + esc(res.question || q) + '</div>' + renderVettedAnswer(res);
+      }).catch(function () {
+        done();
+        out.innerHTML = '<div class="ans-error">Could not reach the interrogation service. Please try again.</div>';
+      });
+    });
+  }
+
   function render(d) {
     var html = '<div class="dossier-shell">';
     html += renderHeader(d);
@@ -483,6 +676,7 @@
     html += '</div></div>';
     root.innerHTML = html;
     wireInteractions();
+    wireAsk();
   }
 
   // Session id from ?session= (page behind Cloudflare Access) OR window.RENDER_SESSION_ID (set by the

@@ -212,6 +212,46 @@ Deno.serve(async (req: Request) => {
       citations = cit.data ?? [];
       claimSources = cs.data ?? [];
     }
+
+    // Per-claim ANCHOR EDGES (interrogate surface v2 — anchor-quote-first-class, Eames SP 4985c519 /
+    // Napoleon baton 629e4723). The claim_on_fact edge carries the verbatim `anchor_quote` (the span from
+    // the source's own bytes that co-locates figure + subject), its verification_state, and the tier +
+    // document of the fact/figure it rests on. THE QUOTE BELONGS TO THE EDGE, not the fact (per-edge ruling
+    // 83163028): a claim shows the span that anchors IT. Grouped per claim so the front-end can render the
+    // load-bearing surface — claim -> verbatim quote -> mark + tier + document — with the quote as the centre
+    // of gravity. Short co-locating spans only; the substrate already holds them (never bulk reproduction).
+    const groundingByClaim = new Map<string, Array<Record<string, unknown>>>();
+    if (ID_RE.test(String(synthesis.id))) {   // synthesis.id is our own UUID; guard the interpolation anyway
+      const q = "SELECT ed.dependent_synthesis_claim_id AS claim_id, ed.anchor_quote, ed.verification_state, ed.review_state, "
+        + "gf.id AS fact_id, gf.title AS fact_title, gf.authority_tier AS fact_tier, gf.source_url AS fact_source_url, gf.source_document_id AS fact_doc_id, "
+        + "cf.id AS figure_id, cf.provenance_tier AS figure_tier, cf.value AS figure_value, cf.unit AS figure_unit "
+        + "FROM element_dependency ed "
+        + "JOIN synthesis_claim sc ON sc.id = ed.dependent_synthesis_claim_id "
+        + "LEFT JOIN ground_fact gf ON gf.id = ed.depends_on_ground_fact_id "
+        + "LEFT JOIN claim_figure cf ON cf.id = ed.depends_on_claim_figure_id "
+        + `WHERE sc.synthesis_id = '${synthesis.id}' AND ed.edge_kind = 'claim_on_fact'`;
+      const anch = await run("anchor_edges", () => supabase.rpc("execute_raw_sql", { query: q }));
+      if (anch.error) return json({ error: `anchor_edges: ${anch.error.message}` }, 500);
+      for (const row of (Array.isArray(anch.data) ? anch.data : []) as Array<Record<string, unknown>>) {
+        const cid = String(row.claim_id);
+        if (!groundingByClaim.has(cid)) groundingByClaim.set(cid, []);
+        const onFigure = row.figure_id != null;
+        groundingByClaim.get(cid)!.push({
+          anchor_quote: (row.anchor_quote as string) ?? null,
+          verification_state: (row.verification_state as string) ?? null,
+          review_state: (row.review_state as string) ?? null,
+          source_kind: onFigure ? "claim_figure" : "ground_fact",
+          tier: ((onFigure ? row.figure_tier : row.fact_tier) as string) ?? null,
+          document_title: (row.fact_title as string) ?? null,
+          source_url: (row.fact_source_url as string) ?? null,
+          source_document_id: (row.fact_doc_id as string) ?? null,
+          figure_value: onFigure ? (row.figure_value ?? null) : null,
+          figure_unit: onFigure ? ((row.figure_unit as string) ?? null) : null,
+        });
+      }
+    }
+    // Attach the grounding edges to each claim (empty array when a claim rests on nothing).
+    claims = claims.map((c) => ({ ...c, grounding: groundingByClaim.get(String(c.claim_id)) ?? [] }));
   }
 
   // Posture is derivable client-side: reading when synthesis.layer_1_synthesis_md is present

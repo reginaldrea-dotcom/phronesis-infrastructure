@@ -38,6 +38,14 @@ verify_jwt = false
 [functions.relay-iti-promote]
 verify_jwt = false
 
+# dossier-interrogate is the reader-facing ASK side of the Dossier surface (interrogate surface v2,
+# Napoleon baton 629e4723). Public/token-gated at the surface (share-viewer), UUID-addressed
+# (theo_session_id is the capability); mints a fresh ephemeral interrogate seal, drives api-prime-invoke,
+# and returns the trace_interrogation-vetted answer. Called from the surface with the publishable key and
+# no JWT. MUST deploy with --no-verify-jwt.
+[functions.dossier-interrogate]
+verify_jwt = false
+
 # dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
 # (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
 # dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the

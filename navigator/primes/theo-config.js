@@ -7,6 +7,9 @@ var RENDER_CONFIG = {
   supabaseUrl:   'https://vysenpymsfhgionqfulf.supabase.co',
   supabaseKey:   'sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y',
   renderDataUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/theo-render-data',
+  // The reader-facing ASK side of the Dossier surface (interrogate surface v2). Returns the
+  // trace_interrogation-vetted answer for a natural-language question of a Dossier.
+  interrogateUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/dossier-interrogate',
   // interactive=false: read-only (Napoleon's reading-first). The action affordances
   // (Confirm and dispatch / Commit synthesis / Retry) render as historical records.
   // Flip to true when the write path is wired into the surface (Eames §9).
