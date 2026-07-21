@@ -1,8 +1,9 @@
 -- ============================================================================
 -- pg_cron drainer for grounding-worker
 -- ----------------------------------------------------------------------------
--- DRAFT FOR REVIEW. Do NOT apply without Reg (and Connie, per the DDL+secrets
--- lane) sign-off. Mirrors 20260603_phase1_theo_dispatch_worker_cron.sql.
+-- APPLIED 21 Jul 2026 (Reg greenlit; Connie signed off per the DDL+secrets lane, msg 3b5d3937).
+-- Live as cron.job jobid 3 'grounding-worker-tick'. Verified: correct worker key -> 200 tick summary;
+-- wrong key -> 401 self-guard. Mirrors 20260603_phase1_theo_dispatch_worker_cron.sql.
 --
 -- Purpose: tick grounding-worker on a fixed cadence so it auto-drains
 -- grounding_queue rows in state='pending' (2 claims/tick, Reg decision 1),
