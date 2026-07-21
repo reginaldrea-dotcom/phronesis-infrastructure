@@ -79,7 +79,7 @@ async function graphVersion(supabase: any, tid: string): Promise<string | null> 
   const row = (Array.isArray(r.data) ? r.data[0] : null) as { gv?: string } | null;
   // GV_VERSION prefix (keep in lock-step with dossier-interrogate / interrogate-precompute): v2 = withheld
   // entries carry `subject`. Chips match cache rows by graph_version, so this MUST equal what the writer uses.
-  return row?.gv ? "v3:" + row.gv : null;
+  return row?.gv ? "v4:" + row.gv : null;
 }
 
 Deno.serve(async (req: Request) => {

@@ -558,11 +558,18 @@
         (naCount === 1 ? 'it' : 'them') + '. Nothing to commission there.</p>';
     }
     if (gaps.length > 0) {
+      // An EDITOR may ACCEPT a record-gap on their own knowledge (baton 53897bcc) — the accept-write is
+      // authorised server-side by the editor token; this affordance is shown only to editors as UX. Each
+      // carries its claim_id (the accept target).
+      var isEditor = (typeof window !== 'undefined' && window.RENDER_IS_EDITOR === true);
       detail += '<p class="ans-wh-note">The record makes ' + (gaps.length === 1 ? 'this claim' : 'these claims') +
         ' but cites no source for ' + (gaps.length === 1 ? 'it' : 'them') + ':</p><ul class="ans-wh-gaps">' +
         gaps.map(function (g) {
           var subj = g && g.subject ? truncate(g.subject, 120) : 'a recorded claim with no cited source';
-          return '<li>' + esc(subj) + '</li>';
+          var accept = (isEditor && g && g.claim_id)
+            ? '<button type="button" class="ans-accept-btn" data-claim-id="' + esc(g.claim_id) + '">add on your knowledge</button>'
+            : '';
+          return '<li>' + esc(subj) + accept + '</li>';
         }).join('') + '</ul>';
     }
 
@@ -807,6 +814,41 @@
     }
   }
 
+  // Operator-curation accept (baton 53897bcc): an editor accepts a record-gap on their own knowledge. Reveals
+  // an inline basis input, then POSTs to the accept-write with the share token (authorisation is server-side).
+  function revealAcceptForm(btn) {
+    var claimId = btn.getAttribute('data-claim-id') || '';
+    var wrap = document.createElement('span');
+    wrap.className = 'ans-accept-form';
+    wrap.innerHTML =
+      '<input type="text" class="ans-accept-basis" maxlength="1000" placeholder="Your basis for adding this…">' +
+      '<button type="button" class="ans-accept-confirm" data-claim-id="' + esc(claimId) + '">add</button>';
+    btn.parentNode.replaceChild(wrap, btn);
+    var inp = wrap.querySelector('.ans-accept-basis'); if (inp) inp.focus();
+  }
+  function submitAccept(confirmBtn) {
+    var claimId = confirmBtn.getAttribute('data-claim-id') || '';
+    var form = confirmBtn.closest('.ans-accept-form');
+    var inp = form ? form.querySelector('.ans-accept-basis') : null;
+    var basis = inp ? (inp.value || '').trim() : '';
+    if (!basis) { if (inp) inp.focus(); return; }
+    var token = (typeof window !== 'undefined') ? window.RENDER_SHARE_TOKEN : null;
+    var url = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateAcceptUrl) ? RENDER_CONFIG.interrogateAcceptUrl : '';
+    if (!token || !url) { form.innerHTML = '<span class="ans-accept-err">Curation is unavailable in this view.</span>'; return; }
+    confirmBtn.disabled = true; confirmBtn.textContent = 'adding…';
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+      body: JSON.stringify({ token: token, claim_id: claimId, stated_basis: basis, scope: 'general' }),
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (res && (res.curated || res.already_curated)) {
+        form.innerHTML = '<span class="ans-accept-ok">✓ added to the dossier — it will show as curated by you</span>';
+      } else {
+        form.innerHTML = '<span class="ans-accept-err">' + esc((res && res.error) || 'Could not add this.') + '</span>';
+      }
+    }).catch(function () { form.innerHTML = '<span class="ans-accept-err">Could not reach the curation service.</span>'; });
+  }
+
   // The ASK side wiring: submit a question to dossier-interrogate, showing REAL progress (polled from the
   // status EF, driven by actual execution rows) during the wait, then render the trace-vetted answer. A chip
   // click runs the same path with the chip's verbatim text (which also hits the warm cache -> instant).
@@ -822,6 +864,15 @@
     var chipsUrl = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateChipsUrl) ? RENDER_CONFIG.interrogateChipsUrl : '';
     if (!form || !endpoint) return;
     var sid = panel.getAttribute('data-session');
+
+    // Delegated accept wiring (survives innerHTML replacement of the answer). Editor-only affordance; the
+    // authorisation is enforced server-side regardless (baton 53897bcc).
+    out.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.ans-accept-btn') : null;
+      if (b) { revealAcceptForm(b); return; }
+      var c = e.target.closest ? e.target.closest('.ans-accept-confirm') : null;
+      if (c) { submitAccept(c); return; }
+    });
 
     // Typed-question matching (Eames 0967275d item 3). As the reader types, match their text against the
     // answerable questions' term profiles (loaded with the chips). Surface up to 3 CLOSE answerable questions

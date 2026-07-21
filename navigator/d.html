@@ -55,6 +55,12 @@
         if (!res || !res.session_id) { fail('This link is invalid or has expired.'); return; }
         if (!res.suppress_notice) { showConfidentialNotice(); }   // default-on: shown unless explicitly suppressed
         window.RENDER_SESSION_ID = res.session_id;                // both renderers read this when no ?session= is present
+        // Operator-curation affordance (baton 53897bcc): an EDITOR token may accept a withheld ungrounded
+        // claim. The renderer shows the accept affordance only for editors; the authorisation is enforced
+        // server-side regardless (a hidden button is not the auth model). The token is carried so the accept
+        // call can present it.
+        window.RENDER_IS_EDITOR = res.is_editor === true;
+        window.RENDER_SHARE_TOKEN = token;
         // Renderer choice. DEFAULT = the legacy research-session render (theo-render.js) — this keeps every
         // already-distributed share link (e.g. the ECHR interview-prep slice) rendering exactly as before.
         // A DOSSIER share opts in with &view=dossier to get the universal Dossier page (§-section descent,

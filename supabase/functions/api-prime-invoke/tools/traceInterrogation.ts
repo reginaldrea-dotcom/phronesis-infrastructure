@@ -286,10 +286,12 @@ export const traceInterrogationTool: Tool = {
       disputed: boolean;          // a supporting ground_fact is review_state='disputed' — surface it
       curator: string | null;     // CURATED_OPERATOR: the resolved identity that vouched for this claim
       basis: string | null;       // CURATED_OPERATOR: the operator's stated basis
+      claim_id: string | null;    // for an ungrounded_claim: the synthesis_claim id — the accept-write target
     }
     const withhold = (index: number, reason: string, rendered: string, text: string): LedgerEntry => ({
       index, disposition: "withheld", reason, tier: null, text, rendered, attribution: null,
       anchor_quote: null, source_document: null, source_url: null, disputed: false, curator: null, basis: null,
+      claim_id: null,
     });
 
     const ledger: LedgerEntry[] = segs.map((s): LedgerEntry => {
@@ -311,10 +313,11 @@ export const traceInterrogationTool: Tool = {
             return { index: s.index, disposition: "curated", reason: "curated_operator", tier: null,
                      text: s.text, rendered: s.text, attribution: null,
                      anchor_quote: null, source_document: null, source_url: null,
-                     disputed: false, curator: curated.curator || null, basis: curated.basis || null };
+                     disputed: false, curator: curated.curator || null, basis: curated.basis || null, claim_id: null };
           }
-          // Otherwise a real GAP IN THE RECORD (present-and-absent, not "unsupported").
-          return withhold(s.index, "ungrounded_claim", `[Withheld: the Dossier records this claim, but ${GAP_UNGROUNDED_CLAIM}.]`, s.text);
+          // Otherwise a real GAP IN THE RECORD (present-and-absent, not "unsupported"). Carry the claim_id so
+          // an editor can ACCEPT it (the accept-write target; baton 53897bcc).
+          return { ...withhold(s.index, "ungrounded_claim", `[Withheld: the Dossier records this claim, but ${GAP_UNGROUNDED_CLAIM}.]`, s.text), claim_id: cr.claim_id };
         }
         // Grounded. Tier = the strongest thing that grounds it (first support's tier is representative).
         const tier = cr.support.find(x => x.tier)?.tier ?? null;
@@ -332,7 +335,7 @@ export const traceInterrogationTool: Tool = {
                  anchor_quote: rep?.anchor_quote ?? null,
                  source_document: rep?.document_title ?? null,
                  source_url: rep?.source_url ?? null,
-                 disputed, curator: null, basis: null };
+                 disputed, curator: null, basis: null, claim_id: null };
       }
 
       if (s.grounding === "ground_fact") {
@@ -343,7 +346,7 @@ export const traceInterrogationTool: Tool = {
         return { index: s.index, disposition: "kept", reason: "grounded", tier: f.tier,
                  text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
                  anchor_quote: null, source_document: f.title, source_url: f.source_url,
-                 disputed: f.review_state === "disputed", curator: null, basis: null };
+                 disputed: f.review_state === "disputed", curator: null, basis: null, claim_id: null };
       }
 
       // claim_figure — directly cited; provenance is the tier (no edge, so no anchor quote or document here).
@@ -352,7 +355,7 @@ export const traceInterrogationTool: Tool = {
       return { index: s.index, disposition: "kept", reason: "grounded", tier: fg.tier,
                text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
                anchor_quote: null, source_document: null, source_url: null,
-               disputed: false, curator: null, basis: null };
+               disputed: false, curator: null, basis: null, claim_id: null };
     });
 
     const kept = ledger.filter(l => l.disposition === "kept").length;
@@ -393,7 +396,7 @@ export const traceInterrogationTool: Tool = {
       // claim's own text — already published Dossier content) so the surface can NAME the gap.
       return {
         withheld: true, note: l.rendered, reason: l.reason,
-        ...(l.reason === "ungrounded_claim" ? { subject: l.text } : {}),
+        ...(l.reason === "ungrounded_claim" ? { subject: l.text, ...(l.claim_id ? { claim_id: l.claim_id } : {}) } : {}),
       };
     });
 
