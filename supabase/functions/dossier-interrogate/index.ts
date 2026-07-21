@@ -75,7 +75,10 @@ async function graphVersion(
   const r = await supabase.rpc("execute_raw_sql", { query: q });
   if (r.error) return null;
   const row = (Array.isArray(r.data) ? r.data[0] : null) as { gv?: string } | null;
-  return row?.gv ?? null;
+  // GV_VERSION prefix: bump when the vetted_answer SHAPE changes (not just the graph). v2 = withheld entries
+  // carry `subject` for record-gaps (Eames 0967275d). Bumping invalidates every cache row so answers recompute
+  // in the new shape. Keep this in lock-step across dossier-interrogate / interrogate-precompute / -chips.
+  return row?.gv ? "v2:" + row.gv : null;
 }
 
 Deno.serve(async (req: Request) => {

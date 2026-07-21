@@ -331,7 +331,15 @@ export const traceInterrogationTool: Tool = {
             ...(l.attribution ? { attributed_to: l.attribution } : {}),
             ...(l.reason === "grounded_attribution" ? { framing: "attribution" } : {}),
           }
-        : { withheld: true, note: l.rendered, reason: l.reason }
+        // Withheld carries its reason so the surface can SPLIT the two kinds (Eames 0967275d item 1e):
+        // model_voice = narration correctly not asserted (count only — never surface the model's own
+        // discarded inference); ungrounded_claim = a real GAP IN THE RECORD, so we carry its `subject` (the
+        // recorded claim's own text — already published Dossier content, not model invention) so the surface
+        // can NAME the gap ("no source for X") instead of repeating a boilerplate note.
+        : {
+            withheld: true, note: l.rendered, reason: l.reason,
+            ...(l.reason === "ungrounded_claim" ? { subject: l.text } : {}),
+          }
     );
 
     const systemNote =

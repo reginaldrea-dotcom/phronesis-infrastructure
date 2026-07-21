@@ -56,7 +56,9 @@ async function graphVersion(supabase: any, tid: string): Promise<string | null> 
   const r = await supabase.rpc("execute_raw_sql", { query: q });
   if (r.error) return null;
   const row = (Array.isArray(r.data) ? r.data[0] : null) as { gv?: string } | null;
-  return row?.gv ?? null;
+  // GV_VERSION prefix (keep in lock-step with dossier-interrogate / interrogate-precompute): v2 = withheld
+  // entries carry `subject`. Chips match cache rows by graph_version, so this MUST equal what the writer uses.
+  return row?.gv ? "v2:" + row.gv : null;
 }
 
 Deno.serve(async (req: Request) => {

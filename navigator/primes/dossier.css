@@ -292,14 +292,23 @@ a.av-doc:hover { color: var(--accent); }
 .ans-source { color: var(--text-light); font-size: 11px; }
 .ans-source a { color: var(--text-muted); text-decoration: none; border-bottom: 1px dotted var(--border); }
 .ans-source a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-/* WITHHELD — an explicit, prominent block. Withholding is a FINDING; the reader should SEE the djinn
-   declining to assert, not find a silent gap. Loud by design. */
-.ans-withheld { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 0.7em;
-                padding: 8px 12px; border-left: 3px solid var(--status-red, #b3423a);
-                background: var(--status-red-dim, rgba(179, 66, 58, 0.08)); border-radius: 0 5px 5px 0; }
-.ans-withheld-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
-                      color: var(--status-red, #b3423a); flex: none; }
-.ans-withheld-note { font-size: 13.5px; color: var(--text); line-height: 1.5; }
+/* WITHHELD — recessive, neutral, AGGREGATED (Eames ruling 0967275d). Withholding is a FINDING, but it is an
+   ABSENCE, not a danger: a correct refusal must not read as system failure. One quiet line below the answer,
+   lighter than the grounded content, a dashed glyph — never red, never a stacked block per item. */
+.ans-withheld-agg { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border);
+                    font-size: 12.5px; color: var(--text-muted); }
+.ans-wh-summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px;
+                  color: var(--text-muted); }
+.ans-wh-summary::-webkit-details-marker { display: none; }
+.ans-wh-glyph { color: var(--text-light); letter-spacing: -1px; flex: none; }
+.ans-wh-line { flex: 1 1 auto; }
+.ans-withheld-agg[open] > .ans-wh-summary { margin-bottom: 8px; color: var(--text); }
+.ans-wh-summary::after { content: '▸'; color: var(--text-light); font-size: 10px; transition: transform 0.15s; }
+.ans-withheld-agg[open] > .ans-wh-summary::after { transform: rotate(90deg); }
+.ans-wh-detail { padding-left: 4px; }
+.ans-wh-note { margin: 0 0 6px; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+.ans-wh-gaps { margin: 0 0 4px; padding-left: 18px; }
+.ans-wh-gaps li { font-size: 12.5px; color: var(--text); line-height: 1.5; margin-bottom: 3px; }
 
 /* L3 — the deepest descent: a quiet link to the engine workings, not a default view */
 .engine-workings { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); }

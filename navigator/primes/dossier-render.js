@@ -464,41 +464,82 @@
     if (!tier) return '';
     return '<span class="gf-tier ' + esc(String(tier).toLowerCase()) + '">' + esc(tier) + '</span>';
   }
-  // The vetted answer: kept segments carry their tier stamp (attributions labelled as such); withheld
-  // segments render as a prominent gap-note block stating absence-of-SOURCE (never absence of truth).
+  function truncate(t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; }
+
+  // A KEPT segment: grounded prose + its receipt (the verbatim anchor quote) + a quiet tier/source trim.
+  function renderKept(s) {
+    var attr = s && s.attributed_to ? '<span class="ans-attr">attributed to ' + esc(s.attributed_to) + '</span>' : '';
+    var framing = s && s.framing === 'attribution' ? '<span class="ans-framing">as an attribution</span>' : '';
+    var quote = s && s.anchor_quote
+      ? '<blockquote class="av-quote ans-quote">' + esc(s.anchor_quote) + '</blockquote>' : '';
+    var src = '';
+    if (s && s.source && (s.source.document || s.source.url)) {
+      var label = esc(s.source.document || 'source');
+      src = '<span class="ans-source">' + (s.source.url
+        ? '<a href="' + esc(s.source.url) + '" target="_blank" rel="noopener">' + label + '</a>'
+        : label) + '</span>';
+    }
+    return '<div class="ans-kept">' +
+      '<p class="ans-kept-text">' + esc((s && s.text) || '') + '</p>' +
+      quote +
+      '<div class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + src + '</div>' +
+    '</div>';
+  }
+
+  // WITHHELD — recessive, neutral, AGGREGATED (Eames ruling 0967275d item 1). Withheld is an ABSENCE, not a
+  // danger: a correct refusal must not read as system failure. So instead of N red blocks, ONE quiet line
+  // below the answer, SPLIT into the two kinds the trace already distinguishes:
+  //   model_voice / unresolved_ref -> "not asserted (the model's own inference)": narration correctly not
+  //     asserted; the system worked, nothing to commission.
+  //   ungrounded_claim -> "gaps in the record": the Dossier records the claim but cites no source — a real
+  //     gap, NAMED (from `subject`) so the reader sees WHAT is missing, not a boilerplate note.
+  // Detail sits behind a native <details> disclosure (no JS); the header keeps the quiet tally.
+  function renderWithheldAggregate(withheld) {
+    if (!withheld.length) return '';
+    var gaps = [], naCount = 0;
+    withheld.forEach(function (w) {
+      if (w && w.reason === 'ungrounded_claim') gaps.push(w);
+      else naCount++; // model_voice, unresolved_ref: the model's own line, not a record gap
+    });
+    var parts = [];
+    if (naCount > 0) parts.push(naCount + (naCount === 1 ? ' line' : ' lines') + ' not asserted (the model’s own inference)');
+    if (gaps.length > 0) parts.push(gaps.length + (gaps.length === 1 ? ' gap' : ' gaps') + ' in the record');
+    var line = parts.join(' · ');
+
+    var detail = '';
+    if (naCount > 0) {
+      detail += '<p class="ans-wh-note">' + naCount + (naCount === 1 ? ' line was' : ' lines were') +
+        ' the assistant’s own inference — correctly not asserted, because the record grounds nothing for ' +
+        (naCount === 1 ? 'it' : 'them') + '. Nothing to commission there.</p>';
+    }
+    if (gaps.length > 0) {
+      detail += '<p class="ans-wh-note">The record makes ' + (gaps.length === 1 ? 'this claim' : 'these claims') +
+        ' but cites no source for ' + (gaps.length === 1 ? 'it' : 'them') + ':</p><ul class="ans-wh-gaps">' +
+        gaps.map(function (g) {
+          var subj = g && g.subject ? truncate(g.subject, 120) : 'a recorded claim with no cited source';
+          return '<li>' + esc(subj) + '</li>';
+        }).join('') + '</ul>';
+    }
+
+    return '<details class="ans-withheld-agg">' +
+      '<summary class="ans-wh-summary"><span class="ans-wh-glyph" aria-hidden="true">– –</span>' +
+      '<span class="ans-wh-line">' + esc(line) + '</span></summary>' +
+      '<div class="ans-wh-detail">' + detail + '</div>' +
+    '</details>';
+  }
+
+  // The vetted answer: the grounded lines ARE the answer (each with its receipt); withheld material is
+  // aggregated into one recessive line beneath — a finding, never an alarm, never repeated per item.
   function renderVettedAnswer(res) {
     var segs = res.vetted_answer || [];
+    var kept = [], withheld = [];
+    segs.forEach(function (s) { if (s && s.withheld) withheld.push(s); else kept.push(s); });
     var summary = '<div class="ans-summary">' +
       '<span class="ans-count-kept">' + (res.kept || 0) + ' grounded</span>' +
       '<span class="ans-count-withheld' + ((res.withheld || 0) ? ' has-withheld' : '') + '">' + (res.withheld || 0) + ' withheld</span>' +
     '</div>';
-    var body = segs.map(function (s) {
-      if (s && s.withheld) {
-        return '<div class="ans-withheld">' +
-            '<span class="ans-withheld-label">Withheld</span>' +
-            '<span class="ans-withheld-note">' + esc(s.note || 'No grounded fact in this dossier supports this.') + '</span>' +
-          '</div>';
-      }
-      var attr = s && s.attributed_to ? '<span class="ans-attr">attributed to ' + esc(s.attributed_to) + '</span>' : '';
-      var framing = s && s.framing === 'attribution' ? '<span class="ans-framing">as an attribution</span>' : '';
-      // The RECEIPT (baton 4fb28d1c Part 2): the verbatim anchor quote is the persuasive object — render it
-      // as the serif source span below the claim, with the source document as the quiet attribution line.
-      var quote = s && s.anchor_quote
-        ? '<blockquote class="av-quote ans-quote">' + esc(s.anchor_quote) + '</blockquote>' : '';
-      var src = '';
-      if (s && s.source && (s.source.document || s.source.url)) {
-        var label = esc(s.source.document || 'source');
-        src = '<span class="ans-source">' + (s.source.url
-          ? '<a href="' + esc(s.source.url) + '" target="_blank" rel="noopener">' + label + '</a>'
-          : label) + '</span>';
-      }
-      return '<div class="ans-kept">' +
-        '<p class="ans-kept-text">' + esc((s && s.text) || '') + '</p>' +
-        quote +
-        '<div class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + src + '</div>' +
-      '</div>';
-    }).join('');
-    return summary + body;
+    var body = kept.map(renderKept).join('');
+    return summary + body + renderWithheldAggregate(withheld);
   }
 
   function renderMain(d) {
