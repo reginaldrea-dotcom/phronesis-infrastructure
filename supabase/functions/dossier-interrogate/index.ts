@@ -45,6 +45,39 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Normalized question key (baton 39ea928f item 3): lower + trim + collapse internal whitespace, so a
+// suggested question and a re-typed variant of it hit the same cache row.
+function questionNorm(q: string): string {
+  return q.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// GRAPH_VERSION fingerprint — md5 over the Dossier's claim/edge/tier state (exactly the inputs the trace
+// walks). A cached answer is served ONLY while this still matches; any claim edit / re-ground / tier change
+// flips it and forces a recompute (staleness = correctness, per Napoleon). theoSessionId is UUID_RE-validated
+// before this is called, so the interpolation is safe. Returns null on error -> caller skips the cache (the
+// safe direction: never serve a possibly-stale answer when we cannot verify freshness).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- internal helper; the rpc path is untyped repo-wide
+async function graphVersion(
+  supabase: any,
+  theoSessionId: string,
+): Promise<string | null> {
+  const q = "SELECT md5(coalesce(string_agg(sig, '|' ORDER BY sig), '')) AS gv FROM ("
+    + "SELECT ed.id::text||':'||coalesce(ed.anchor_quote,'')||':'||coalesce(ed.verification_state,'')||':'||coalesce(ed.review_state,'')||':'||coalesce(ed.depends_on_ground_fact_id::text,'')||':'||coalesce(ed.depends_on_claim_figure_id::text,'') AS sig "
+    + "FROM element_dependency ed JOIN synthesis_claim sc ON sc.id = ed.dependent_synthesis_claim_id JOIN synthesis sy ON sy.id = sc.synthesis_id "
+    + "WHERE sy.theo_session_id = '" + theoSessionId + "' AND ed.edge_kind='claim_on_fact' "
+    + "UNION ALL "
+    + "SELECT sc.id::text||':'||md5(coalesce(sc.claim_text,'')) AS sig FROM synthesis_claim sc JOIN synthesis sy ON sy.id = sc.synthesis_id WHERE sy.theo_session_id = '" + theoSessionId + "' "
+    + "UNION ALL "
+    + "SELECT gf.id::text||':'||coalesce(gf.authority_tier,'') AS sig FROM ground_fact gf WHERE gf.id IN (SELECT ed2.depends_on_ground_fact_id FROM element_dependency ed2 JOIN synthesis_claim sc2 ON sc2.id=ed2.dependent_synthesis_claim_id JOIN synthesis sy2 ON sy2.id=sc2.synthesis_id WHERE sy2.theo_session_id='" + theoSessionId + "') "
+    + "UNION ALL "
+    + "SELECT cf.id::text||':'||coalesce(cf.provenance_tier,'') AS sig FROM claim_figure cf WHERE cf.id IN (SELECT ed3.depends_on_claim_figure_id FROM element_dependency ed3 JOIN synthesis_claim sc3 ON sc3.id=ed3.dependent_synthesis_claim_id JOIN synthesis sy3 ON sy3.id=sc3.synthesis_id WHERE sy3.theo_session_id='" + theoSessionId + "')"
+    + ") t";
+  const r = await supabase.rpc("execute_raw_sql", { query: q });
+  if (r.error) return null;
+  const row = (Array.isArray(r.data) ? r.data[0] : null) as { gv?: string } | null;
+  return row?.gv ?? null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -90,6 +123,33 @@ Deno.serve(async (req: Request) => {
     | null;
   // No interrogation seal for this Dossier -> the ASK panel is simply unavailable (not an error).
   if (!tmpl) return json({ ok: true, available: false }, 200);
+
+  // CACHE CHECK (baton 39ea928f item 3): if this exact question was already traced against the CURRENT graph
+  // state, serve it instantly — the trace ran (audit intact), just earlier. Served only when graph_version
+  // still matches, so a stale answer is never returned. A cache miss (or any lookup error) falls straight
+  // through to the live path; the cache is an accelerator, never a gate. `force_fresh` bypasses it (used by
+  // precompute to always recompute).
+  const forceFresh = body?.force_fresh === true;
+  const gv = await graphVersion(supabase, theoSessionId);
+  if (!forceFresh && gv) {
+    const cached = await supabase
+      .from("interrogation_cache")
+      .select("vetted_answer, kept, withheld, assertion_count")
+      .eq("theo_session_id", theoSessionId)
+      .eq("question_norm", questionNorm(question))
+      .eq("graph_version", gv)
+      .maybeSingle();
+    if (!cached.error && cached.data) {
+      const c = cached.data as { vetted_answer: unknown; kept: number; withheld: number; assertion_count: number | null };
+      return json({
+        ok: true, available: true, traced: true, cached: true,
+        question,
+        kept: c.kept, withheld: c.withheld,
+        vetted_answer: c.vetted_answer,
+        timings: { total_ms: Date.now() - tTotal, cache_hit: true },
+      }, 200);
+    }
+  }
 
   // 2. Fresh ephemeral seal on a unique session (race-free read-back; no cross-reader thread bleed).
   // The client may supply a progress_id (a uuid it generated) so it can POLL dossier-interrogate-status for
@@ -141,7 +201,7 @@ Deno.serve(async (req: Request) => {
     const tReadback = Date.now();
     const rb = await supabase
       .from("interrogation_run")
-      .select("id, question, kept, withheld, vetted_answer, ledger, stage_timings, created_at")
+      .select("id, question, kept, withheld, assertion_count, vetted_answer, ledger, stage_timings, created_at")
       .eq("session_id", askSession)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -149,7 +209,7 @@ Deno.serve(async (req: Request) => {
     timing.readback_ms = Date.now() - tReadback;
     if (rb.error) return json({ error: `read-back: ${rb.error.message}` }, 500);
     const row = rb.data as
-      | { id: string; question: string; kept: number; withheld: number; vetted_answer: unknown; ledger: unknown; stage_timings: Record<string, unknown> | null }
+      | { id: string; question: string; kept: number; withheld: number; assertion_count: number | null; vetted_answer: unknown; ledger: unknown; stage_timings: Record<string, unknown> | null }
       | null;
 
     // The djinn produced no traced answer (e.g. it declined as out of scope). Surface its prose as context;
@@ -172,6 +232,27 @@ Deno.serve(async (req: Request) => {
         .update({ stage_timings: fullTimings, total_ms: totalMs })
         .eq("id", row.id);
     } catch (_e) { /* timing enrichment is best-effort */ }
+
+    // CACHE WRITE (baton 39ea928f item 3): store the traced answer keyed to the CURRENT graph_version, so the
+    // next identical ask (a suggested question, or a precompute pass) serves instantly. Every traced answer
+    // warms the cache — precompute is just this path driven ahead of the reader. Upsert on (dossier, question)
+    // so a re-ground overwrites the prior entry. Best-effort; a cache-write failure never affects the answer.
+    if (gv) {
+      try {
+        await supabase.from("interrogation_cache").upsert({
+          theo_session_id: theoSessionId,
+          question,
+          question_norm: questionNorm(question),
+          vetted_answer: row.vetted_answer,
+          kept: row.kept,
+          withheld: row.withheld,
+          assertion_count: row.assertion_count,
+          graph_version: gv,
+          source: forceFresh ? "precompute" : "live",
+          computed_at: new Date().toISOString(),
+        }, { onConflict: "theo_session_id,question_norm" });
+      } catch (_e) { /* cache write is best-effort */ }
+    }
 
     return json({
       ok: true, available: true, traced: true,

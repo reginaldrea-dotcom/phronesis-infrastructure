@@ -54,6 +54,13 @@ verify_jwt = false
 [functions.dossier-interrogate-status]
 verify_jwt = false
 
+# interrogate-precompute warms the interrogate cache over a Dossier's KNOWN questions (research_question) so
+# suggested questions serve instantly (baton 39ea928f, item 3). Bounded + resumable (drives dossier-interrogate
+# per question, up to `limit` uncached-at-current-graph_version per call). UUID-addressed (theo_session_id);
+# once warm, repeated calls are cheap (all skipped). MUST deploy with --no-verify-jwt.
+[functions.interrogate-precompute]
+verify_jwt = false
+
 # dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
 # (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
 # dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the
