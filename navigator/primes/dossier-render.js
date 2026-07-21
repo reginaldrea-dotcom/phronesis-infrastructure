@@ -727,13 +727,21 @@
     var wrap = document.createElement('div');
     wrap.className = 'ask-chips';
     var html = '';
+    // COLLAPSED BY DEFAULT (Eames 0967275d item 2): one line + a disclosure caret, so the chip list never
+    // pushes the ask box below the fold. Native <details> — expands to the verbatim-labelled chips.
     if (chips.length) {
-      html += '<div class="ask-chips-head">This dossier can evidence:</div>';
-      html += '<div class="ask-chips-row">' + chips.map(function (c) {
-        var t = (c && c.question_text) || '';
-        return '<button type="button" class="ask-chip" title="' + esc(t) + '">' + esc(t) + '</button>';
-      }).join('') + '</div>';
+      var n = chips.length;
+      html += '<details class="ask-chips-disclose">' +
+        '<summary class="ask-chips-head">This dossier can evidence <strong>' + n +
+          (n === 1 ? ' question' : ' questions') + '</strong></summary>' +
+        '<div class="ask-chips-row">' + chips.map(function (c) {
+          var t = (c && c.question_text) || '';
+          return '<button type="button" class="ask-chip" title="' + esc(t) + '">' + esc(t) + '</button>';
+        }).join('') + '</div>' +
+      '</details>';
     }
+    // The GAP LINE stays visible even when the chips are collapsed (Eames): suggestions ADD TO gap-reporting,
+    // they never replace it — the gap must never hide behind a closed disclosure.
     if (gap > 0) {
       html += '<div class="ask-gap">' + gap + (gap === 1 ? ' question' : ' questions') +
         ' in this dossier ' + (gap === 1 ? 'has' : 'have') + ' no grounded answer yet.</div>';
