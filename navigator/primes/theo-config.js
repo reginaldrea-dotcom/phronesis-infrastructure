@@ -14,6 +14,9 @@ var RENDER_CONFIG = {
   // kept/withheld counts while an interrogation runs, so the wait shows the integrity machinery, not a
   // dead screen (Napoleon baton 39ea928f, item 1).
   interrogateStatusUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/dossier-interrogate-status',
+  // Suggested-question chips: the questions this Dossier can EVIDENCE (eligibility from the trace's kept-count,
+  // not a stored status), plus a count of questions with no grounded answer yet (Eames ruling 11b073fb).
+  interrogateChipsUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/dossier-interrogate-chips',
   // interactive=false: read-only (Napoleon's reading-first). The action affordances
   // (Confirm and dispatch / Commit synthesis / Retry) render as historical records.
   // Flip to true when the write path is wired into the surface (Eames §9).

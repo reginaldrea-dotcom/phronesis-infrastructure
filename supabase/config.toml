@@ -61,6 +61,14 @@ verify_jwt = false
 [functions.interrogate-precompute]
 verify_jwt = false
 
+# dossier-interrogate-chips returns the suggested-question chips for the ASK panel (Eames ruling 11b073fb /
+# SP a1938393). Eligibility comes from the TRACE (a question is offered iff its cached trace returned >=1 kept
+# claim — grounding true by construction, not from research_question.status), plus a gap_count of known
+# questions with no grounded answer (a finding, surfaced quietly). UUID-addressed; MUST deploy with
+# --no-verify-jwt.
+[functions.dossier-interrogate-chips]
+verify_jwt = false
+
 # dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
 # (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
 # dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the

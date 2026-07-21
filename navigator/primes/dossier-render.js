@@ -674,27 +674,61 @@
     '</div>';
   }
 
+  // SUGGESTED-QUESTION CHIPS (Eames ruling 11b073fb): the questions this Dossier CAN EVIDENCE — eligibility
+  // comes from the trace (a cached answer with >=1 kept claim), never a stored status, so a chip asserts
+  // grounding by construction. The label is the VERBATIM question_text (truncated visually, full in the
+  // title) — never a rewrite. Excluded questions are a FINDING, not a deletion: a quiet gap line reports how
+  // many questions have no grounded answer yet, so suggestions ADD TO gap-reporting rather than hiding it.
+  function renderChips(panel, form, res, onPick) {
+    var chips = (res && res.chips) || [];
+    var gap = (res && res.gap_count) || 0;
+    if (!chips.length && !gap) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'ask-chips';
+    var html = '';
+    if (chips.length) {
+      html += '<div class="ask-chips-head">This dossier can evidence:</div>';
+      html += '<div class="ask-chips-row">' + chips.map(function (c) {
+        var t = (c && c.question_text) || '';
+        return '<button type="button" class="ask-chip" title="' + esc(t) + '">' + esc(t) + '</button>';
+      }).join('') + '</div>';
+    }
+    if (gap > 0) {
+      html += '<div class="ask-gap">' + gap + (gap === 1 ? ' question' : ' questions') +
+        ' in this dossier ' + (gap === 1 ? 'has' : 'have') + ' no grounded answer yet.</div>';
+    }
+    wrap.innerHTML = html;
+    form.parentNode.insertBefore(wrap, form);
+    var btns = wrap.querySelectorAll('.ask-chip');
+    for (var i = 0; i < btns.length; i++) {
+      (function (idx) { btns[idx].addEventListener('click', function () { onPick(chips[idx].question_text); }); })(i);
+    }
+  }
+
   // The ASK side wiring: submit a question to dossier-interrogate, showing REAL progress (polled from the
-  // status EF, driven by actual execution rows) during the wait, then render the trace-vetted answer.
+  // status EF, driven by actual execution rows) during the wait, then render the trace-vetted answer. A chip
+  // click runs the same path with the chip's verbatim text (which also hits the warm cache -> instant).
   function wireAsk() {
     var panel = root.querySelector('.ask-panel');
     if (!panel) return;
     var form = panel.querySelector('.ask-form');
     var input = panel.querySelector('.ask-input');
     var out = panel.querySelector('.ask-answer');
+    var submit = form ? form.querySelector('.ask-submit') : null;
     var endpoint = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateUrl) ? RENDER_CONFIG.interrogateUrl : '';
     var statusUrl = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateStatusUrl) ? RENDER_CONFIG.interrogateStatusUrl : '';
+    var chipsUrl = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateChipsUrl) ? RENDER_CONFIG.interrogateChipsUrl : '';
     if (!form || !endpoint) return;
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var q = (input.value || '').trim();
+    var sid = panel.getAttribute('data-session');
+
+    function runAsk(q) {
+      q = (q || '').trim();
       if (!q) return;
-      var sid = panel.getAttribute('data-session');
       var progressId = newProgressId();
       out.hidden = false;
       out.innerHTML = progressHTML(null);
       panel.classList.add('is-asking');
-      var submit = form.querySelector('.ask-submit'); if (submit) submit.disabled = true;
+      if (submit) submit.disabled = true;
 
       // Poll REAL stage state while the answer computes. Only runs if we have a progress_id + status URL;
       // otherwise the initial honest message holds. Stops as soon as the answer arrives.
@@ -737,7 +771,21 @@
         done();
         out.innerHTML = '<div class="ans-error">Could not reach the interrogation service. Please try again.</div>';
       });
-    });
+    }
+
+    form.addEventListener('submit', function (e) { e.preventDefault(); runAsk(input.value); });
+
+    // Fetch + render the chip row (best-effort; the free-text ask works regardless). A chip click fills the
+    // input with its verbatim text (so the reader sees exactly what was asked) and runs it.
+    if (chipsUrl && sid) {
+      fetch(chipsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+        body: JSON.stringify({ theo_session_id: sid }),
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.ok) renderChips(panel, form, res, function (text) { input.value = text; runAsk(text); });
+      }).catch(function () { /* chips are additive; a failure just omits them */ });
+    }
   }
 
   function render(d) {
