@@ -69,6 +69,14 @@ verify_jwt = false
 [functions.dossier-interrogate-chips]
 verify_jwt = false
 
+# dossier-curate-accept is the OPERATOR CURATION accept-write (baton 53897bcc; Aegis 450a3ab4). An operator
+# accepts a withheld ungrounded_claim on their own knowledge -> an operator_curation_log 'add'. Authenticated
+# by the EDITOR ROLE on the share token, resolved + enforced SERVER-SIDE (general scope requires is_editor;
+# curator = the resolved identity_key, never a constant). Only a real ungrounded_claim in the Dossier is
+# acceptable. verify_jwt=false (the token is the capability). MUST deploy with --no-verify-jwt.
+[functions.dossier-curate-accept]
+verify_jwt = false
+
 # dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
 # (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
 # dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the
