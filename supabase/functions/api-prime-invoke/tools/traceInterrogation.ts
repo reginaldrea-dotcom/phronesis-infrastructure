@@ -66,6 +66,7 @@ interface ClaimResolution {
     source_url: string | null;
     anchor_quote: string | null;
     document_title: string | null;
+    review_state: string | null;   // 'disputed' surfaces the dispute wherever this fact is drawn on (baton 53897bcc)
   }>;
 }
 
@@ -146,7 +147,7 @@ export const traceInterrogationTool: Tool = {
     const figureIds = [...new Set(segs.filter(s => s.grounding === "claim_figure" && s.ref_valid).map(s => s.ref_id))];
 
     const claimRes = new Map<string, ClaimResolution>();
-    const factRes = new Map<string, { tier: string | null; source_url: string | null; title: string | null }>();
+    const factRes = new Map<string, { tier: string | null; source_url: string | null; title: string | null; review_state: string | null }>();
     const figureRes = new Map<string, { tier: string | null; value: number | null; unit: string | null }>();
 
     const sqlList = (ids: string[]) => ids.map(id => `'${id}'`).join(","); // ids are UUID_RE-validated
@@ -178,7 +179,7 @@ export const traceInterrogationTool: Tool = {
         // fact — a claim shows the span that anchors IT (per-edge ruling 83163028).
         const q = `SELECT sc.id AS claim_id, sc.claim_text, sc.assertion_contestability, sc.claim_role,
                  ed.anchor_quote AS ed_anchor_quote,
-                 gf.id AS gf_id, gf.authority_tier AS gf_tier, gf.source_url AS gf_source, gf.title AS gf_title,
+                 gf.id AS gf_id, gf.authority_tier AS gf_tier, gf.source_url AS gf_source, gf.title AS gf_title, gf.review_state AS gf_review,
                  cf.id AS cf_id, cf.provenance_tier AS cf_tier
           FROM synthesis_claim sc
           LEFT JOIN element_dependency ed
@@ -206,20 +207,20 @@ export const traceInterrogationTool: Tool = {
             claimRes.set(cid, cr);
           }
           const anchorQuote = (row.ed_anchor_quote as string) ?? null;
-          if (row.gf_id) cr.support.push({ kind: "ground_fact", id: String(row.gf_id), tier: (row.gf_tier as string) ?? null, source_url: (row.gf_source as string) ?? null, anchor_quote: anchorQuote, document_title: (row.gf_title as string) ?? null });
-          else if (row.cf_id) cr.support.push({ kind: "claim_figure", id: String(row.cf_id), tier: (row.cf_tier as string) ?? null, source_url: null, anchor_quote: anchorQuote, document_title: null });
+          if (row.gf_id) cr.support.push({ kind: "ground_fact", id: String(row.gf_id), tier: (row.gf_tier as string) ?? null, source_url: (row.gf_source as string) ?? null, anchor_quote: anchorQuote, document_title: (row.gf_title as string) ?? null, review_state: (row.gf_review as string) ?? null });
+          else if (row.cf_id) cr.support.push({ kind: "claim_figure", id: String(row.cf_id), tier: (row.cf_tier as string) ?? null, source_url: null, anchor_quote: anchorQuote, document_title: null, review_state: null });
         }
       }
 
       if (factIds.length > 0) {
         const tFact = Date.now();
         const r = await ctx.supabase.rpc("execute_raw_sql", {
-          query: `SELECT id, authority_tier, source_url, title FROM ground_fact WHERE id IN (${sqlList(factIds)})`,
+          query: `SELECT id, authority_tier, source_url, title, review_state FROM ground_fact WHERE id IN (${sqlList(factIds)})`,
         });
         resolveTiming.fact_query_ms = Date.now() - tFact;
         if (r.error) return fail(`ground_fact resolution failed: ${r.error.message}`);
         for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
-          factRes.set(String(row.id), { tier: (row.authority_tier as string) ?? null, source_url: (row.source_url as string) ?? null, title: (row.title as string) ?? null });
+          factRes.set(String(row.id), { tier: (row.authority_tier as string) ?? null, source_url: (row.source_url as string) ?? null, title: (row.title as string) ?? null, review_state: (row.review_state as string) ?? null });
         }
       }
 
@@ -239,6 +240,29 @@ export const traceInterrogationTool: Tool = {
     }
     resolveTiming.total_ms = Date.now() - tResolveStart;
 
+    // GENERAL-SCOPE OPERATOR CURATION (baton 53897bcc). An ungrounded_claim an operator ADDED on their own
+    // knowledge (act='add') is not withheld — it is a CURATED_OPERATOR claim: attributed to the curator,
+    // carrying their stated basis, a class ORTHOGONAL to the tier axis (it is not source-grounded; its
+    // authority rests on the curator's credibility). We surface ONLY general-scope entries here (identity_key
+    // IS NULL): the interrogation IS the general Dossier view, and a PERSONAL curation (identity_key non-null)
+    // must NEVER surface in it. Withdrawn entries are excluded. dossierId is the dossier_instance_id (the
+    // sealed scope) — guarded as a UUID before interpolation.
+    const normClaim = (t: string) => (t || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const curatedByText = new Map<string, { curator: string; basis: string }>();
+    if (UUID_RE.test(dossierId)) {
+      const cur = await ctx.supabase.rpc("execute_raw_sql", {
+        query: "SELECT claim_text, curator, stated_basis FROM operator_curation_log "
+          + "WHERE dossier_instance_id = '" + dossierId + "' AND identity_key IS NULL "
+          + "AND withdrawn_at IS NULL AND act = 'add'",
+      });
+      if (!cur.error) {
+        for (const row of (Array.isArray(cur.data) ? cur.data : []) as Array<Record<string, unknown>>) {
+          const ct = normClaim(String(row.claim_text ?? ""));
+          if (ct) curatedByText.set(ct, { curator: String(row.curator ?? ""), basis: String(row.stated_basis ?? "") });
+        }
+      }
+    }
+
     // Adjudicate each segment against what the graph actually returned. The verdict is the server's.
     const GAP_MODEL_VOICE = "[Withheld: this is an inference in the assistant's own voice; no source in the Dossier makes this claim.]";
     const GAP_UNGROUNDED_CLAIM = "no source in the Dossier grounds this claim";
@@ -250,7 +274,7 @@ export const traceInterrogationTool: Tool = {
     // per-branch narrowing, and keeps the audit rows self-describing.
     interface LedgerEntry {
       index: number;
-      disposition: "kept" | "withheld";
+      disposition: "kept" | "withheld" | "curated";  // curated = CURATED_OPERATOR (baton 53897bcc)
       reason: string;
       tier: string | null;
       text: string;
@@ -259,10 +283,13 @@ export const traceInterrogationTool: Tool = {
       anchor_quote: string | null;
       source_document: string | null;
       source_url: string | null;
+      disputed: boolean;          // a supporting ground_fact is review_state='disputed' — surface it
+      curator: string | null;     // CURATED_OPERATOR: the resolved identity that vouched for this claim
+      basis: string | null;       // CURATED_OPERATOR: the operator's stated basis
     }
     const withhold = (index: number, reason: string, rendered: string, text: string): LedgerEntry => ({
       index, disposition: "withheld", reason, tier: null, text, rendered, attribution: null,
-      anchor_quote: null, source_document: null, source_url: null,
+      anchor_quote: null, source_document: null, source_url: null, disputed: false, curator: null, basis: null,
     });
 
     const ledger: LedgerEntry[] = segs.map((s): LedgerEntry => {
@@ -277,7 +304,16 @@ export const traceInterrogationTool: Tool = {
         const cr = claimRes.get(s.ref_id);
         if (!cr || !cr.found) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
         if (cr.support.length === 0) {
-          // The claim exists in the record but rests on nothing. State present-and-absent, not "unsupported".
+          // The claim exists in the record but rests on nothing. If an operator has ACCEPTED it (general
+          // scope), it is a CURATED_OPERATOR claim — attributed to the curator, not withheld (baton 53897bcc).
+          const curated = curatedByText.get(normClaim(cr.claim_text ?? s.text));
+          if (curated) {
+            return { index: s.index, disposition: "curated", reason: "curated_operator", tier: null,
+                     text: s.text, rendered: s.text, attribution: null,
+                     anchor_quote: null, source_document: null, source_url: null,
+                     disputed: false, curator: curated.curator || null, basis: curated.basis || null };
+          }
+          // Otherwise a real GAP IN THE RECORD (present-and-absent, not "unsupported").
           return withhold(s.index, "ungrounded_claim", `[Withheld: the Dossier records this claim, but ${GAP_UNGROUNDED_CLAIM}.]`, s.text);
         }
         // Grounded. Tier = the strongest thing that grounds it (first support's tier is representative).
@@ -288,21 +324,26 @@ export const traceInterrogationTool: Tool = {
         // support that actually carries a verbatim anchor quote (the persuasive object for a live reader);
         // fall back to the first support with a tier. The quote is the edge's, not the fact's.
         const rep = cr.support.find(x => x.anchor_quote) ?? cr.support.find(x => x.tier) ?? cr.support[0];
+        // Disputed surfacing (baton 53897bcc): if ANY supporting fact is review_state='disputed', the line
+        // is drawn on a disputed record and must carry the dispute.
+        const disputed = cr.support.some(x => x.review_state === "disputed");
         return { index: s.index, disposition: "kept", reason: contested ? "grounded_attribution" : "grounded",
                  tier, text: s.text, rendered: s.text, attribution,
                  anchor_quote: rep?.anchor_quote ?? null,
                  source_document: rep?.document_title ?? null,
-                 source_url: rep?.source_url ?? null };
+                 source_url: rep?.source_url ?? null,
+                 disputed, curator: null, basis: null };
       }
 
       if (s.grounding === "ground_fact") {
         const f = factRes.get(s.ref_id);
         if (!f) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
         // A directly-cited fact has no claim_on_fact edge in play, so no anchor quote — but it does carry its
-        // source document + url + tier as its receipt.
+        // source document + url + tier as its receipt, and surfaces its dispute if review_state='disputed'.
         return { index: s.index, disposition: "kept", reason: "grounded", tier: f.tier,
                  text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
-                 anchor_quote: null, source_document: f.title, source_url: f.source_url };
+                 anchor_quote: null, source_document: f.title, source_url: f.source_url,
+                 disputed: f.review_state === "disputed", curator: null, basis: null };
       }
 
       // claim_figure — directly cited; provenance is the tier (no edge, so no anchor quote or document here).
@@ -310,42 +351,59 @@ export const traceInterrogationTool: Tool = {
       if (!fg) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
       return { index: s.index, disposition: "kept", reason: "grounded", tier: fg.tier,
                text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
-               anchor_quote: null, source_document: null, source_url: null };
+               anchor_quote: null, source_document: null, source_url: null,
+               disputed: false, curator: null, basis: null };
     });
 
     const kept = ledger.filter(l => l.disposition === "kept").length;
-    const withheld = ledger.length - kept;
+    const curated = ledger.filter(l => l.disposition === "curated").length;
+    const withheld = ledger.filter(l => l.disposition === "withheld").length;
 
     // The vetted answer: kept segments carry their (attribution/tier) framing; withheld ones become the
     // gap-note in place, so the answer's shape is preserved and the reader sees exactly where a source ran out.
     // Every KEPT line carries its provenance — anchor quote + source + tier (baton 4fb28d1c Part 2). The
     // surface renders the verbatim span as the receipt; a conclusion without its receipt is the failure this
     // closes one level in, inside the answer panel.
-    const vetted_answer = ledger.map(l =>
-      l.disposition === "kept"
-        ? {
-            text: l.rendered,
-            tier: l.tier,
-            ...(l.anchor_quote ? { anchor_quote: l.anchor_quote } : {}),
-            ...(l.source_document || l.source_url ? { source: { document: l.source_document, url: l.source_url } } : {}),
-            ...(l.attribution ? { attributed_to: l.attribution } : {}),
-            ...(l.reason === "grounded_attribution" ? { framing: "attribution" } : {}),
-          }
-        // Withheld carries its reason so the surface can SPLIT the two kinds (Eames 0967275d item 1e):
-        // model_voice = narration correctly not asserted (count only — never surface the model's own
-        // discarded inference); ungrounded_claim = a real GAP IN THE RECORD, so we carry its `subject` (the
-        // recorded claim's own text — already published Dossier content, not model invention) so the surface
-        // can NAME the gap ("no source for X") instead of repeating a boilerplate note.
-        : {
-            withheld: true, note: l.rendered, reason: l.reason,
-            ...(l.reason === "ungrounded_claim" ? { subject: l.text } : {}),
-          }
-    );
+    const vetted_answer = ledger.map(l => {
+      // CURATED_OPERATOR (baton 53897bcc): an operator-vouched claim — a DISTINCT class, not source-grounded.
+      // attributed_to is NON-NULLABLE here (the resolved curator); its absence is a resolver error, surfaced.
+      if (l.disposition === "curated") {
+        return {
+          curated_operator: true,
+          text: l.rendered,
+          attributed_to: l.curator || "[resolver error: curated entry with no curator]",
+          ...(l.basis ? { basis: l.basis } : {}),
+        };
+      }
+      if (l.disposition === "kept") {
+        return {
+          text: l.rendered,
+          tier: l.tier,
+          ...(l.anchor_quote ? { anchor_quote: l.anchor_quote } : {}),
+          ...(l.source_document || l.source_url ? { source: { document: l.source_document, url: l.source_url } } : {}),
+          ...(l.attribution ? { attributed_to: l.attribution } : {}),
+          ...(l.reason === "grounded_attribution" ? { framing: "attribution" } : {}),
+          // A grounded line drawn on a disputed ground_fact surfaces the dispute (baton 53897bcc).
+          ...(l.disputed ? { disputed: true } : {}),
+        };
+      }
+      // Withheld carries its reason so the surface can SPLIT the two kinds (Eames 0967275d item 1e):
+      // model_voice = narration correctly not asserted (count only — never surface the model's own discarded
+      // inference); ungrounded_claim = a real GAP IN THE RECORD, so we carry its `subject` (the recorded
+      // claim's own text — already published Dossier content) so the surface can NAME the gap.
+      return {
+        withheld: true, note: l.rendered, reason: l.reason,
+        ...(l.reason === "ungrounded_claim" ? { subject: l.text } : {}),
+      };
+    });
 
+    const curatedNote = curated > 0
+      ? ` ${curated} operator-CURATED (attributed to the curator, not source-grounded — a distinct class).`
+      : "";
     const systemNote =
       withheld === 0
-        ? `All ${kept} segment(s) resolved to supporting evidence in the graph. Deliver vetted_answer verbatim — every line is grounded (attributions tiered as attributions).`
-        : `${kept} grounded, ${withheld} WITHHELD below the model. Deliver vetted_answer verbatim: the withheld lines are gap-notes stating absence-of-source, not absence-of-truth. Do NOT re-assert a withheld claim in your prose, and do NOT soften a gap-note into a hedge — the server has ruled these are the model's own leaps or unresolved citations, and that ruling stands.`;
+        ? `All ${kept} grounded segment(s) resolved to supporting evidence in the graph.${curatedNote} Deliver vetted_answer verbatim — every line is grounded (attributions tiered as attributions).`
+        : `${kept} grounded, ${withheld} WITHHELD below the model.${curatedNote} Deliver vetted_answer verbatim: the withheld lines are gap-notes stating absence-of-source, not absence-of-truth. Do NOT re-assert a withheld claim in your prose, and do NOT soften a gap-note into a hedge — the server has ruled these are the model's own leaps or unresolved citations, and that ruling stands.`;
 
     // Persist the adjudication so the interrogation is ROW-AUDITABLE from the DB connector. The Integrity
     // Test (rubric 6e5c5f6d) scores the trace's kept/withheld ROWS, but this tool's {kept, withheld,
@@ -360,6 +418,7 @@ export const traceInterrogationTool: Tool = {
         question,
         kept,
         withheld,
+        curated,
         vetted_answer,
         ledger,
         // Part 1 instrumentation (baton 4fb28d1c): the resolve stage times ITSELF here (one batched walk,
@@ -375,6 +434,7 @@ export const traceInterrogationTool: Tool = {
       dossier_id: dossierId,
       kept,
       withheld,
+      curated,
       vetted_answer,
       ledger,
       resolve_timing: resolveTiming,

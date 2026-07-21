@@ -299,6 +299,7 @@ a.av-doc:hover { color: var(--accent); }
 .ans-summary { display: flex; gap: 14px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
                color: var(--text-muted); margin-bottom: 10px; }
 .ans-count-kept { color: var(--accent); }
+.ans-count-curated { color: var(--text-muted); }
 /* Withheld is ABSENCE-of-source, not danger (Eames ruling 11b073fb pt5): the tally stays in the quiet header
    — the prominent withheld BLOCKS below carry the finding. No alarm colour. */
 .ans-count-withheld.has-withheld { color: var(--text-muted); font-weight: 600; }
@@ -313,6 +314,18 @@ a.av-doc:hover { color: var(--accent); }
 .ans-source { color: var(--text-light); font-size: 11px; }
 .ans-source a { color: var(--text-muted); text-decoration: none; border-bottom: 1px dotted var(--border); }
 .ans-source a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* CURATED_OPERATOR (baton 53897bcc): an operator-vouched claim — a distinct class from source-grounded. Its
+   authority rests on the curator, so the attribution is load-bearing and always shown. A quiet distinct
+   surface (dotted left rule), never dressed as a sourced receipt. */
+.ans-curated { margin: 0 0 1.1em; max-width: 72ch; padding-left: 12px; border-left: 2px dotted var(--text-light); }
+.ans-cur-basis { font-family: 'Lora', Georgia, serif; font-size: 13px; font-style: italic; color: var(--text-muted);
+                 line-height: 1.5; margin-top: 4px; }
+.ans-cur-mark { font-size: 11px; letter-spacing: 0.03em; color: var(--text-muted); margin-top: 5px; }
+/* DISPUTED — a grounded line resting on a disputed fact. Unlike withheld (absence), a dispute is a real
+   caution, so it is marked (amber rule), not recessive. */
+.ans-disputed { font-size: 12px; color: var(--status-amber, #9a6a00); line-height: 1.5; margin: 5px 0 0;
+                padding-left: 10px; border-left: 2px solid var(--status-amber, #d0972a); }
+
 /* WITHHELD — recessive, neutral, AGGREGATED (Eames ruling 0967275d). Withholding is a FINDING, but it is an
    ABSENCE, not a danger: a correct refusal must not read as system failure. One quiet line below the answer,
    lighter than the grounded content, a dashed glyph — never red, never a stacked block per item. */

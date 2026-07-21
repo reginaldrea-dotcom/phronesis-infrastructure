@@ -48,7 +48,7 @@ async function graphVersion(supabase: any, tid: string): Promise<string | null> 
     + "UNION ALL "
     + "SELECT sc.id::text||':'||md5(coalesce(sc.claim_text,'')) AS sig FROM synthesis_claim sc JOIN synthesis sy ON sy.id = sc.synthesis_id WHERE sy.theo_session_id = '" + tid + "' "
     + "UNION ALL "
-    + "SELECT gf.id::text||':'||coalesce(gf.authority_tier,'') AS sig FROM ground_fact gf WHERE gf.id IN (SELECT ed2.depends_on_ground_fact_id FROM element_dependency ed2 JOIN synthesis_claim sc2 ON sc2.id=ed2.dependent_synthesis_claim_id JOIN synthesis sy2 ON sy2.id=sc2.synthesis_id WHERE sy2.theo_session_id='" + tid + "') "
+    + "SELECT gf.id::text||':'||coalesce(gf.authority_tier,'')||':'||coalesce(gf.review_state,'') AS sig FROM ground_fact gf WHERE gf.id IN (SELECT ed2.depends_on_ground_fact_id FROM element_dependency ed2 JOIN synthesis_claim sc2 ON sc2.id=ed2.dependent_synthesis_claim_id JOIN synthesis sy2 ON sy2.id=sc2.synthesis_id WHERE sy2.theo_session_id='" + tid + "') "
     + "UNION ALL "
     + "SELECT cf.id::text||':'||coalesce(cf.provenance_tier,'') AS sig FROM claim_figure cf WHERE cf.id IN (SELECT ed3.depends_on_claim_figure_id FROM element_dependency ed3 JOIN synthesis_claim sc3 ON sc3.id=ed3.dependent_synthesis_claim_id JOIN synthesis sy3 ON sy3.id=sc3.synthesis_id WHERE sy3.theo_session_id='" + tid + "')"
     + ") t";
@@ -57,7 +57,7 @@ async function graphVersion(supabase: any, tid: string): Promise<string | null> 
   const row = (Array.isArray(r.data) ? r.data[0] : null) as { gv?: string } | null;
   // GV_VERSION prefix (keep in lock-step with dossier-interrogate / -chips): v2 = withheld entries carry
   // `subject` for record-gaps. Bumping invalidates every cache row so answers recompute in the new shape.
-  return row?.gv ? "v2:" + row.gv : null;
+  return row?.gv ? "v3:" + row.gv : null;
 }
 
 Deno.serve(async (req: Request) => {

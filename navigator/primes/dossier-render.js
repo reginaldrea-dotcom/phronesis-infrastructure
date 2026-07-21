@@ -505,10 +505,29 @@
         ? '<a href="' + esc(s.source.url) + '" target="_blank" rel="noopener">' + label + '</a>'
         : label) + '</span>';
     }
+    // A grounded line drawn on a DISPUTED fact carries the dispute (baton 53897bcc). Unlike withheld (an
+    // absence), a dispute IS a genuine caution — the record the line rests on is contested — so it is marked,
+    // not recessive.
+    var disp = s && s.disputed
+      ? '<div class="ans-disputed">Under dispute — a source this rests on is marked disputed in the record.</div>' : '';
     return '<div class="ans-kept">' +
       '<p class="ans-kept-text">' + esc((s && s.text) || '') + '</p>' +
-      quote +
+      quote + disp +
       '<div class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + src + '</div>' +
+    '</div>';
+  }
+
+  // A CURATED_OPERATOR line (baton 53897bcc): a claim an operator vouched for on their own knowledge. A
+  // DISTINCT class — not source-grounded — so its authority rests on the curator's credibility, and the
+  // attribution is load-bearing (the reader must always be able to tell "a source says this" from "the
+  // curator knows this"). Attributed_to is always present (a resolver invariant).
+  function renderCurated(s) {
+    var who = esc((s && s.attributed_to) || '');
+    var basis = s && s.basis ? '<div class="ans-cur-basis">' + esc(s.basis) + '</div>' : '';
+    return '<div class="ans-curated">' +
+      '<p class="ans-kept-text">' + esc((s && s.text) || '') + '</p>' +
+      basis +
+      '<div class="ans-cur-mark">Curated by ' + who + ' — operator knowledge, not a sourced record</div>' +
     '</div>';
   }
 
@@ -558,13 +577,21 @@
   // aggregated into one recessive line beneath — a finding, never an alarm, never repeated per item.
   function renderVettedAnswer(res) {
     var segs = res.vetted_answer || [];
-    var kept = [], withheld = [];
-    segs.forEach(function (s) { if (s && s.withheld) withheld.push(s); else kept.push(s); });
+    // Three distinct classes (baton 53897bcc): grounded (source-backed), curated (operator-vouched), withheld
+    // (a gap). Grounded + curated are SHOWN inline in answer order; withheld is aggregated below. Counts are
+    // derived from the entries so a cache hit (which may not return a curated count) is always consistent.
+    var shown = [], withheld = [], grounded = 0, curated = 0;
+    segs.forEach(function (s) {
+      if (s && s.withheld) { withheld.push(s); }
+      else if (s && s.curated_operator) { shown.push(s); curated++; }
+      else { shown.push(s); grounded++; }
+    });
     var summary = '<div class="ans-summary">' +
-      '<span class="ans-count-kept">' + (res.kept || 0) + ' grounded</span>' +
-      '<span class="ans-count-withheld' + ((res.withheld || 0) ? ' has-withheld' : '') + '">' + (res.withheld || 0) + ' withheld</span>' +
+      '<span class="ans-count-kept">' + grounded + ' grounded</span>' +
+      (curated ? '<span class="ans-count-curated">' + curated + ' operator-curated</span>' : '') +
+      '<span class="ans-count-withheld' + (withheld.length ? ' has-withheld' : '') + '">' + withheld.length + ' withheld</span>' +
     '</div>';
-    var body = kept.map(renderKept).join('');
+    var body = shown.map(function (s) { return (s && s.curated_operator) ? renderCurated(s) : renderKept(s); }).join('');
     return summary + body + renderWithheldAggregate(withheld);
   }
 
