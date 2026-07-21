@@ -980,6 +980,7 @@ Deno.serve(async (req: Request) => {
       if (toolUseBlocks.length === 0 || anthropicData.stop_reason === "end_turn") { finishedCleanly = true; break; }
 
       const toolResults: any[] = [];
+      let terminalReached = false; // baton 39ea928f item 2: a terminal tool (trace_interrogation) ran → stop the loop
       for (const toolUse of toolUseBlocks) {
         const tTool = Date.now();
         let content: string;
@@ -994,6 +995,7 @@ Deno.serve(async (req: Request) => {
           const runResult = await runTool(toolUse.name, toolUse.input, { supabase, directArtefacts, lineageName: lineage_name, userId, sessionId: activeSessionId, instanceId: resolvedInstanceId, siblingGrant });
           content = runResult.content;
           deniedCapability = runResult.deniedCapability; // non-null iff the sealed-sibling belt refused it
+          if (runResult.terminal) terminalReached = true; // trace_interrogation: the audit gate — no post-trace turn
         }
         const dg = digestToolCall(toolUse.name, toolUse.input, content);
         toolLog.push(dg);
@@ -1039,6 +1041,13 @@ Deno.serve(async (req: Request) => {
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
       loopMessages.push({ role: "user", content: toolResults });
+
+      // TERMINAL-TOOL STOP (Napoleon baton 39ea928f, item 2 — a SAFETY ruling). trace_interrogation is the
+      // audit gate; a frontier turn after it is unaudited egress (the model could re-introduce, as connective
+      // prose, the very material the trace withheld). So once a terminal tool has run, end the loop here — no
+      // further model call. The vetted segments are the deliverable; the surface assembles them deterministically.
+      // finishedCleanly=true also skips the closing pass (we WANT no more generation).
+      if (terminalReached) { finishedCleanly = true; break; }
     }
 
     // Closing pass: if the loop hit MAX_LOOPS with tool results still unanswered,

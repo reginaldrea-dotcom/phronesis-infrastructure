@@ -92,7 +92,15 @@ Deno.serve(async (req: Request) => {
   if (!tmpl) return json({ ok: true, available: false }, 200);
 
   // 2. Fresh ephemeral seal on a unique session (race-free read-back; no cross-reader thread bleed).
-  const askSession = crypto.randomUUID();
+  // The client may supply a progress_id (a uuid it generated) so it can POLL dossier-interrogate-status for
+  // REAL stage state while this request runs (baton 39ea928f item 1). We use it AS the interrogation session
+  // id, so the execution_ledger + interrogation_run rows this run writes are keyed to it. It is only a
+  // correlation handle: authorization is the template seal existing for this Dossier; the seal is minted
+  // fresh on this id and revoked after, and the status endpoint exposes only derived progress. Validated as a
+  // uuid; absent/malformed -> a server-minted random id (the pre-existing behaviour, no progress polling).
+  const providedProgressId = typeof body?.progress_id === "string" && UUID_RE.test(body.progress_id.trim())
+    ? body.progress_id.trim() : null;
+  const askSession = providedProgressId ?? crypto.randomUUID();
   const tSealMint = Date.now();
   const seal = await supabase.rpc("seal_sibling_grant", {
     p_session_id: askSession,

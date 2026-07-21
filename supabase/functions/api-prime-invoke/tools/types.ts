@@ -46,4 +46,11 @@ export interface Tool {
   available?: (opts: { isNewSession: boolean }) => boolean;
   summarize?: (input: any) => string;
   run: (input: any, ctx: ToolContext) => Promise<string>;
+  // TERMINAL tool (Napoleon baton 39ea928f, item 2): when set, the invoke loop STOPS after this tool runs —
+  // no further model turn. This is a SAFETY property, not an optimisation: trace_interrogation is the audit
+  // gate, and any frontier generation AFTER it is unaudited egress (the model could smooth/bridge/connect
+  // material the trace just withheld, re-entering downstream of the gate). The vetted segments are assembled
+  // deterministically by the surface (kept text + withheld gap-notes, 1:1), so no post-trace narration is
+  // needed or permitted. Standing Primes calling a terminal tool simply end the turn (they resume next turn).
+  terminal?: boolean;
 }

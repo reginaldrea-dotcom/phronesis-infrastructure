@@ -105,6 +105,11 @@ export const traceInterrogationTool: Tool = {
 
   available: ({ isNewSession }) => !isNewSession,
 
+  // TERMINAL (Napoleon baton 39ea928f, item 2): the trace IS the audit gate; the loop stops here so no
+  // frontier generation runs downstream of it. The vetted_answer segments are the deliverable — the surface
+  // assembles them deterministically. See the `terminal` note in tools/types.ts.
+  terminal: true,
+
   summarize: (input) => {
     const segs = (input as { segments?: unknown[] })?.segments;
     return `trace_interrogation: ${Array.isArray(segs) ? segs.length : 0} segment(s)`;

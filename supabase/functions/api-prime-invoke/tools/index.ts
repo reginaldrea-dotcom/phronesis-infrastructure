@@ -145,16 +145,19 @@ export function summarizeToolUse(name: string, input: any): string {
 export interface ToolRunResult {
   content: string;
   deniedCapability: string | null;
+  // TERMINAL (Napoleon baton 39ea928f, item 2): true iff this tool ends the loop — no further model turn.
+  // The loop reads it to stop after the audit gate (trace_interrogation), closing the post-trace egress.
+  terminal: boolean;
 }
 
 export async function runTool(name: string, input: any, ctx: ToolContext): Promise<ToolRunResult> {
   const t = BY_NAME[name];
-  if (!t) return { content: `Unknown tool: ${name}`, deniedCapability: null };
+  if (!t) return { content: `Unknown tool: ${name}`, deniedCapability: null, terminal: false };
   // Execution-layer capability gate (baton b28d6e36 / SP 67b43866): for a SEALED sibling (Delphia), refuse
   // below the model any tool its permit does not map to (deny-by-default). No-op for standing Primes.
   const denial = enforceCapability(name, ctx);
-  if (denial) return { content: denial.message, deniedCapability: denial.deniedCapability };
-  return { content: await t.run(input, ctx), deniedCapability: null };
+  if (denial) return { content: denial.message, deniedCapability: denial.deniedCapability, terminal: false };
+  return { content: await t.run(input, ctx), deniedCapability: null, terminal: t.terminal === true };
 }
 
 export type { ToolContext };

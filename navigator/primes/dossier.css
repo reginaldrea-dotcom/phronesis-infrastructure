@@ -248,6 +248,16 @@ a.av-doc:hover { color: var(--accent); }
 .ans-error   { font-size: 13px; color: var(--status-red, #b3423a); }
 .ans-note    { font-size: 13.5px; color: var(--text-muted); }
 .ans-model   { margin-top: 8px; font-size: 13.5px; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
+/* Live progress (baton 39ea928f, item 1): real stage state during the wait — the record being read, the
+   answer drafted, and the reveal of how many statements were checked and withheld. The wait is the proof. */
+.ans-progress { display: flex; align-items: flex-start; gap: 11px; padding: 4px 0; }
+.ans-progress-spin { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent); animation: ans-spin 0.8s linear infinite; }
+@keyframes ans-spin { to { transform: rotate(360deg); } }
+.ans-progress-text { display: flex; flex-direction: column; gap: 2px; }
+.ans-progress-stage { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.ans-progress-detail { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .ans-progress-spin { animation: none; } }
 .ans-question { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; color: var(--text);
                 margin-bottom: 10px; }
 /* Kept vs withheld tallies — the withheld count only lights up when there IS withheld material. */

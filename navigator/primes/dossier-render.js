@@ -640,8 +640,42 @@
     }
   }
 
-  // The ASK side wiring: submit a question to dossier-interrogate, render the trace-vetted answer. The EF
-  // can take a little while (it drives a sealed interrogate djinn synchronously), so a loading state holds.
+  // A uuid the client controls, so it can POLL for real progress while the interrogation runs (baton
+  // 39ea928f). crypto.randomUUID needs a secure context (https) — clarev.ai + the share page both are; a
+  // rare fallback keeps the ASK working (just without progress polling) if it is ever unavailable.
+  function newProgressId() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    return null;
+  }
+  // The live progress line. Stages come from REAL execution rows (dossier-interrogate-status), never a timer.
+  // "The wait is the proof" (Napoleon): show the record being read, the answer drafted, and — the reveal —
+  // the real count of statements checked and withheld. Honest at every step; nothing here is faked.
+  function progressHTML(st) {
+    var label, detail;
+    if (st && st.stage === 'checked') {
+      var total = (st.assertion_count != null) ? st.assertion_count : ((st.kept || 0) + (st.withheld || 0));
+      label = 'Checking each statement against the record';
+      detail = total + ' statement' + (total === 1 ? '' : 's') + ' checked — ' +
+        (st.kept || 0) + ' supported, ' + (st.withheld || 0) + ' withheld. Assembling the answer…';
+    } else if (st && st.stage === 'checking') {
+      label = 'Checking each statement against the record';
+      detail = 'Weighing each drafted statement against the grounded facts…';
+    } else if (st && st.stage === 'drafting') {
+      label = 'Drafting a grounded answer';
+      detail = 'Then every statement is checked against the record — this can take up to a minute.';
+    } else {
+      label = 'Reading the grounded record';
+      detail = 'Then drafting an answer and checking each statement against it — this can take up to a minute.';
+    }
+    return '<div class="ans-progress">' +
+      '<div class="ans-progress-spin" aria-hidden="true"></div>' +
+      '<div class="ans-progress-text"><span class="ans-progress-stage">' + esc(label) + '</span>' +
+      '<span class="ans-progress-detail">' + esc(detail) + '</span></div>' +
+    '</div>';
+  }
+
+  // The ASK side wiring: submit a question to dossier-interrogate, showing REAL progress (polled from the
+  // status EF, driven by actual execution rows) during the wait, then render the trace-vetted answer.
   function wireAsk() {
     var panel = root.querySelector('.ask-panel');
     if (!panel) return;
@@ -649,21 +683,46 @@
     var input = panel.querySelector('.ask-input');
     var out = panel.querySelector('.ask-answer');
     var endpoint = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateUrl) ? RENDER_CONFIG.interrogateUrl : '';
+    var statusUrl = (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.interrogateStatusUrl) ? RENDER_CONFIG.interrogateStatusUrl : '';
     if (!form || !endpoint) return;
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var q = (input.value || '').trim();
       if (!q) return;
       var sid = panel.getAttribute('data-session');
+      var progressId = newProgressId();
       out.hidden = false;
-      out.innerHTML = '<div class="ans-loading">Tracing the answer through the grounded record…</div>';
+      out.innerHTML = progressHTML(null);
       panel.classList.add('is-asking');
       var submit = form.querySelector('.ask-submit'); if (submit) submit.disabled = true;
-      function done() { panel.classList.remove('is-asking'); if (submit) submit.disabled = false; }
+
+      // Poll REAL stage state while the answer computes. Only runs if we have a progress_id + status URL;
+      // otherwise the initial honest message holds. Stops as soon as the answer arrives.
+      var finished = false;
+      var pollTimer = null;
+      function stopPoll() { if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
+      function poll() {
+        if (finished || !progressId || !statusUrl) return;
+        fetch(statusUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
+          body: JSON.stringify({ progress_id: progressId, theo_session_id: sid }),
+        }).then(function (r) { return r.json(); }).then(function (st) {
+          if (finished) return;
+          if (st && st.ok) out.innerHTML = progressHTML(st);
+        }).catch(function () { /* a dropped poll is harmless — the last message holds */ }).then(function () {
+          if (!finished) pollTimer = setTimeout(poll, 1500);
+        });
+      }
+      if (progressId && statusUrl) pollTimer = setTimeout(poll, 1200);
+
+      function done() { finished = true; stopPoll(); panel.classList.remove('is-asking'); if (submit) submit.disabled = false; }
+      var reqBody = { theo_session_id: sid, question: q };
+      if (progressId) reqBody.progress_id = progressId;
       fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
-        body: JSON.stringify({ theo_session_id: sid, question: q }),
+        body: JSON.stringify(reqBody),
       }).then(function (r) { return r.json(); }).then(function (res) {
         done();
         if (!res || res.ok === false) { out.innerHTML = '<div class="ans-error">The interrogation could not be completed. Please try again.</div>'; return; }

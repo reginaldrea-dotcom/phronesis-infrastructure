@@ -46,6 +46,14 @@ verify_jwt = false
 [functions.dossier-interrogate]
 verify_jwt = false
 
+# dossier-interrogate-status is the REAL-progress poll for the ASK panel (baton 39ea928f, item 1). Given a
+# progress_id (the interrogation session id), it derives the current stage (reading/drafting/checked) + the
+# real kept/withheld counts from execution_ledger + interrogation_run, so the surface shows genuine stage
+# state during the ~45s wait instead of a dead screen (no faked progress). Public/token-gated at the surface,
+# reads with the service credential. MUST deploy with --no-verify-jwt.
+[functions.dossier-interrogate-status]
+verify_jwt = false
+
 # dossier-curate-link is the supporting-link accept/reject write (Theo b63ec6d5). INTERIM model "B"
 # (Reg, 7 Jul 2026): Cloudflare-edge-trusted, UUID-addressed (section_id), called from the internal
 # dossier page with the publishable key and no JWT; writes synthesis_section.support_links with the

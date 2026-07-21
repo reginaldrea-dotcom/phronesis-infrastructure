@@ -10,6 +10,10 @@ var RENDER_CONFIG = {
   // The reader-facing ASK side of the Dossier surface (interrogate surface v2). Returns the
   // trace_interrogation-vetted answer for a natural-language question of a Dossier.
   interrogateUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/dossier-interrogate',
+  // Real-progress poll for the ASK panel: derives the live stage (reading/drafting/checked) + real
+  // kept/withheld counts while an interrogation runs, so the wait shows the integrity machinery, not a
+  // dead screen (Napoleon baton 39ea928f, item 1).
+  interrogateStatusUrl: 'https://vysenpymsfhgionqfulf.supabase.co/functions/v1/dossier-interrogate-status',
   // interactive=false: read-only (Napoleon's reading-first). The action affordances
   // (Confirm and dispatch / Commit synthesis / Retry) render as historical records.
   // Flip to true when the write path is wired into the surface (Eames §9).
