@@ -466,6 +466,32 @@
   }
   function truncate(t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; }
 
+  // contentTerms / termMatches — a faithful JS port of the anchor gate's clause-scoped extractor
+  // (lib/coLocationGate.ts), so the typed-question matcher uses the SAME subject-term logic that grounds a
+  // claim (Eames 0967275d item 3). Runs client-side against the chips' term profiles: instant, no per-key
+  // network. Keep the STOP list in sync with dossier-interrogate-chips.
+  var TA_STOP = {};
+  ('the a an of to in for on at by and or was were is are be been approximately about totalled totaled ' +
+   'reached stood recorded estimated reported revised representing which that with under from between per ' +
+   'year ending same release main plus there total according subsequently upward before after during when ' +
+   'as it its their this these those one two people cases person nationals reflecting targeted associated ' +
+   'measures what does each can actually achieve certify how').split(/\s+/).forEach(function (w) { TA_STOP[w] = 1; });
+  function contentTerms(text) {
+    var stripped = String(text || '').replace(/[£$]?\d[\d,.]*\s*(%|percent|million|billion|bn|m)?/gi, ' ');
+    var words = stripped.match(/[A-Za-z][A-Za-z\-']+/g) || [];
+    var out = [], seen = {};
+    for (var i = 0; i < words.length; i++) {
+      var lw = words[i].toLowerCase();
+      if (lw.length > 2 && !TA_STOP[lw] && !seen[lw]) { seen[lw] = 1; out.push(lw); }
+    }
+    return out;
+  }
+  function termMatches(t, terms) {
+    var ts = t.slice(0, 6);
+    for (var i = 0; i < terms.length; i++) { var p = terms[i]; if (p.indexOf(ts) >= 0 || t.indexOf(p.slice(0, 6)) >= 0) return true; }
+    return false;
+  }
+
   // A KEPT segment: grounded prose + its receipt (the verbatim anchor quote) + a quiet tier/source trim.
   function renderKept(s) {
     var attr = s && s.attributed_to ? '<span class="ans-attr">attributed to ' + esc(s.attributed_to) + '</span>' : '';
@@ -770,9 +796,65 @@
     if (!form || !endpoint) return;
     var sid = panel.getAttribute('data-session');
 
+    // Typed-question matching (Eames 0967275d item 3). As the reader types, match their text against the
+    // answerable questions' term profiles (loaded with the chips). Surface up to 3 CLOSE answerable questions
+    // — visibly different, under the same "This dossier can evidence:" framing, never "Did you mean", never
+    // auto-replacing the input. THE HIGH-VALUE HALF: when nothing in the record overlaps, SAY SO before they
+    // ask — a sub-second lookup that prevents a 45-second wait for a wall of withheld.
+    var chipList = [];
+    var ta = document.createElement('div');
+    ta.className = 'ask-typeahead'; ta.hidden = true;
+    form.parentNode.insertBefore(ta, out);
+    function clearTa() { ta.hidden = true; ta.innerHTML = ''; }
+    function matchTyped(q) {
+      var typed = contentTerms(q);
+      if (typed.length < 2 || !chipList.length) return { suggestions: [], warn: false };
+      var scored = [];
+      for (var i = 0; i < chipList.length; i++) {
+        var terms = chipList[i].terms || [];
+        var m = 0;
+        for (var j = 0; j < typed.length; j++) { if (termMatches(typed[j], terms)) m++; }
+        if (m >= 1) scored.push({ c: chipList[i], score: m });
+      }
+      scored.sort(function (a, b) { return b.score - a.score; });
+      var suggestions = scored.slice(0, 3).map(function (x) { return x.c; });
+      return { suggestions: suggestions, warn: suggestions.length === 0 && typed.length >= 3 };
+    }
+    function renderTypeahead(res) {
+      if (res.warn) {
+        ta.innerHTML = '<div class="ask-ta-warn">Nothing in the record closely matches this — asking will likely return mostly withheld.</div>';
+        ta.hidden = false; return;
+      }
+      if (res.suggestions.length) {
+        ta.innerHTML = '<div class="ask-ta-head">This dossier can evidence:</div>' +
+          res.suggestions.map(function (c) {
+            var t = (c && c.question_text) || '';
+            return '<button type="button" class="ask-ta-item" title="' + esc(t) + '">' + esc(t) + '</button>';
+          }).join('');
+        ta.hidden = false;
+        var items = ta.querySelectorAll('.ask-ta-item');
+        for (var i = 0; i < items.length; i++) {
+          (function (idx) {
+            items[idx].addEventListener('click', function () {
+              input.value = res.suggestions[idx].question_text; clearTa(); runAsk(res.suggestions[idx].question_text);
+            });
+          })(i);
+        }
+        return;
+      }
+      clearTa();
+    }
+    var taTimer = null;
+    input.addEventListener('input', function () {
+      if (taTimer) clearTimeout(taTimer);
+      var q = input.value;
+      taTimer = setTimeout(function () { renderTypeahead(matchTyped(q)); }, 300);
+    });
+
     function runAsk(q) {
       q = (q || '').trim();
       if (!q) return;
+      clearTa();
       var progressId = newProgressId();
       out.hidden = false;
       out.innerHTML = progressHTML(null);
@@ -832,7 +914,10 @@
         headers: { 'Content-Type': 'application/json', 'apikey': RENDER_CONFIG.supabaseKey, 'Authorization': 'Bearer ' + RENDER_CONFIG.supabaseKey },
         body: JSON.stringify({ theo_session_id: sid }),
       }).then(function (r) { return r.json(); }).then(function (res) {
-        if (res && res.ok) renderChips(panel, form, res, function (text) { input.value = text; runAsk(text); });
+        if (res && res.ok) {
+          chipList = res.chips || [];   // term profiles for the typed-question matcher
+          renderChips(panel, form, res, function (text) { input.value = text; runAsk(text); });
+        }
       }).catch(function () { /* chips are additive; a failure just omits them */ });
     }
   }

@@ -40,6 +40,27 @@ function questionNorm(q: string): string {
   return q.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// contentTerms — the anchor gate's clause-scoped extractor (lib/coLocationGate.ts), copied so the match
+// index the surface uses to warn "nothing in the record matches this" is built with the SAME subject-term
+// logic that grounds a claim (Eames 0967275d item 3). Keep in sync with coLocationGate.contentTerms.
+const STOP = new Set(
+  ("the a an of to in for on at by and or was were is are be been approximately about totalled totaled " +
+   "reached stood recorded estimated reported revised representing which that with under from between per " +
+   "year ending same release main plus there total according subsequently upward before after during when " +
+   "as it its their this these those one two people cases person nationals reflecting targeted associated " +
+   "measures what does each can actually achieve certify how").split(/\s+/),
+);
+function contentTerms(text: string): string[] {
+  const stripped = (text || "").replace(/[£$]?\d[\d,.]*\s*(%|percent|million|billion|bn|m)?/gi, " ");
+  const words = stripped.match(/[A-Za-z][A-Za-z\-']+/g) || [];
+  const out: string[] = [];
+  for (const w of words) {
+    const lw = w.toLowerCase();
+    if (lw.length > 2 && !STOP.has(lw) && !out.includes(lw)) out.push(lw);
+  }
+  return out;
+}
+
 // deno-lint-ignore no-explicit-any -- internal helper; the rpc path is untyped repo-wide
 async function graphVersion(supabase: any, tid: string): Promise<string | null> {
   const q = "SELECT md5(coalesce(string_agg(sig, '|' ORDER BY sig), '')) AS gv FROM ("
@@ -78,12 +99,27 @@ Deno.serve(async (req: Request) => {
   // (never assert grounding we cannot verify). The gap line still reports every known question.
   const rq = await supabase
     .from("research_question")
-    .select("question_index, question_text")
+    .select("id, question_index, question_text")
     .eq("theo_session_id", theoSessionId)
     .order("question_index", { ascending: true });
   if (rq.error) return json({ error: `research_question: ${rq.error.message}` }, 500);
-  const known = ((rq.data ?? []) as Array<{ question_index: number; question_text: string }>)
+  const known = ((rq.data ?? []) as Array<{ id: string; question_index: number; question_text: string }>)
     .filter((r) => typeof r.question_text === "string" && r.question_text.trim().length > 0);
+
+  // Grounded claim text per question — the richer half of the match index: a reader typing a specific subject
+  // the record covers (e.g. "ISO 14064-1") should match even when the question_text does not contain it.
+  const claimsByQid = new Map<string, string[]>();
+  const syn = await supabase.from("synthesis").select("id").eq("theo_session_id", theoSessionId)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const synId = (syn.data as { id?: string } | null)?.id ?? null;
+  if (synId) {
+    const cl = await supabase.from("synthesis_claim").select("claim_text, question_id").eq("synthesis_id", synId);
+    for (const c of ((cl.data ?? []) as Array<{ claim_text: string | null; question_id: string | null }>)) {
+      if (!c.question_id) continue;
+      if (!claimsByQid.has(c.question_id)) claimsByQid.set(c.question_id, []);
+      if (c.claim_text) claimsByQid.get(c.question_id)!.push(c.claim_text);
+    }
+  }
 
   let eligibleNorms = new Map<string, { kept: number }>();
   if (gv) {
@@ -100,10 +136,16 @@ Deno.serve(async (req: Request) => {
   }
 
   // Chips in the Dossier's natural question order; label is the VERBATIM question_text (Eames: never a
-  // rewritten label — display exactly what is sent, which also makes the cache key match).
+  // rewritten label — display exactly what is sent, which also makes the cache key match). Each carries its
+  // `terms` (question + grounded claims) so the surface can match a reader's typed text locally — surfacing
+  // close answerable questions, or warning BEFORE the wait when nothing in the record overlaps.
   const chips = known
     .filter((k) => eligibleNorms.has(questionNorm(k.question_text)))
-    .map((k) => ({ question_text: k.question_text, kept: eligibleNorms.get(questionNorm(k.question_text))!.kept }));
+    .map((k) => ({
+      question_text: k.question_text,
+      kept: eligibleNorms.get(questionNorm(k.question_text))!.kept,
+      terms: contentTerms(k.question_text + " " + (claimsByQid.get(k.id) ?? []).join(" ")),
+    }));
 
   // Gap = known questions with no grounded answer (traced-empty OR not yet grounded). A FINDING, surfaced quietly.
   const gapCount = known.length - chips.length;
