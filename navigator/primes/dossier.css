@@ -256,10 +256,16 @@ a.av-doc:hover { color: var(--accent); }
 .ans-count-kept { color: var(--accent); }
 .ans-count-withheld.has-withheld { color: var(--status-red, #b3423a); font-weight: 600; }
 /* Kept lines — grounded prose with a quiet tier stamp trailing. */
-.ans-kept { font-size: 15px; line-height: 1.7; color: var(--text); margin: 0 0 0.7em; max-width: 70ch; }
-.ans-trim { margin-left: 6px; font-size: 11px; white-space: nowrap; }
-.ans-attr { color: var(--text-muted); font-style: italic; margin-left: 4px; }
-.ans-framing { color: var(--text-light); font-style: italic; margin-left: 4px; }
+.ans-kept { margin: 0 0 1.1em; max-width: 72ch; }
+.ans-kept-text { font-size: 15px; line-height: 1.7; color: var(--text); margin: 0; }
+/* The receipt: the anchor quote sits just under its claim, a touch smaller and recessive so the claim leads. */
+.ans-quote { margin: 6px 0 0; font-size: 14px; border-left-color: var(--accent); }
+.ans-trim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 5px; font-size: 11px; }
+.ans-attr { color: var(--text-muted); font-style: italic; }
+.ans-framing { color: var(--text-light); font-style: italic; }
+.ans-source { color: var(--text-light); font-size: 11px; }
+.ans-source a { color: var(--text-muted); text-decoration: none; border-bottom: 1px dotted var(--border); }
+.ans-source a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 /* WITHHELD — an explicit, prominent block. Withholding is a FINDING; the reader should SEE the djinn
    declining to assert, not find a silent gap. Loud by design. */
 .ans-withheld { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 0.7em;

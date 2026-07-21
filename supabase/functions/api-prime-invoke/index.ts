@@ -870,8 +870,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ── Per-loop latency instrumentation (Napoleon baton 4fb28d1c Part 1) ────────────────────────────────
+    // Additive, non-behavioural: time each Anthropic call and each tool run so the interrogate breakdown
+    // shows where the minute goes (model turns vs resolve). Returned as `timings` in the response; the
+    // dossier-interrogate orchestrator folds it into interrogation_run. Every Prime call carries it; nothing
+    // else changes. (Date.now() is the EF runtime clock — available; the sandbox ban is script-only.)
+    const tLoopStart = Date.now();
+    const loopTimings: Array<{ pass: number; anthropic_ms: number; tools: Array<{ name: string; ms: number }> }> = [];
+    let closingMs = 0;
+
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       console.log("CHECKPOINT 3: calling Anthropic, pass:", loop);
+      const tAnthropic = Date.now();
 
       let anthropicResponse: Response;
       try {
@@ -944,6 +954,8 @@ Deno.serve(async (req: Request) => {
       }
 
       const anthropicData = await anthropicResponse.json();
+      const passRec = { pass: loop, anthropic_ms: Date.now() - tAnthropic, tools: [] as Array<{ name: string; ms: number }> };
+      loopTimings.push(passRec);
       totalInputTokens         += anthropicData.usage?.input_tokens ?? 0;
       totalOutputTokens        += anthropicData.usage?.output_tokens ?? 0;
       totalCacheCreationTokens += anthropicData.usage?.cache_creation_input_tokens ?? 0;
@@ -969,6 +981,7 @@ Deno.serve(async (req: Request) => {
 
       const toolResults: any[] = [];
       for (const toolUse of toolUseBlocks) {
+        const tTool = Date.now();
         let content: string;
         // Denial instrumentation (baton 7f71b2df): the machine-auditable reason a call was REFUSED below the
         // model, recorded on the ledger row so a refusal is a ROW not a prose self-report. null = not refused.
@@ -1021,6 +1034,7 @@ Deno.serve(async (req: Request) => {
             juncture: extractLedgerJuncture(toolUse.input),
           });
         } catch (e) { console.error("execution_ledger (loop) write failed:", e); }
+        passRec.tools.push({ name: toolUse.name, ms: Date.now() - tTool });
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
       }
       loopMessages.push({ role: "assistant", content: anthropicData.content });
@@ -1032,6 +1046,7 @@ Deno.serve(async (req: Request) => {
     // a dangling tool-use preamble (the "narrates but does nothing" symptom).
     if (!finishedCleanly) {
       console.log("CHECKPOINT 3b: closing pass (tool budget exhausted)");
+      const tClosing = Date.now();
       try {
         const closingRes = await fetchAnthropicWithRetry(
           "https://api.anthropic.com/v1/messages",
@@ -1090,6 +1105,7 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         console.error("Closing pass failed:", err);
       }
+      closingMs = Date.now() - tClosing;
     }
 
     let { response: cleanResponse, artifacts: inlineArtifacts } = extractArtifacts(assistantContent);
@@ -1354,6 +1370,8 @@ Deno.serve(async (req: Request) => {
         context_tokens:        lastCallContextTokens, // true current context — the honest figure for the token bar
       },
       model: model,
+      // Per-loop latency breakdown (baton 4fb28d1c Part 1) — additive; consumed by the interrogate orchestrator.
+      timings: { loop_count: loopTimings.length, closing_ms: closingMs, total_ms: Date.now() - tLoopStart, loops: loopTimings },
       orientation_preloaded: isOrientedSession,
       super_t_filed: retire ? superTFiled : undefined,           // invariant 64e92800: chain-derived landing THIS turn
       super_t_sequence: (retire && superTFiled) ? superTSeq : undefined,

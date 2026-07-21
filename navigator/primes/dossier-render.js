@@ -481,8 +481,22 @@
       }
       var attr = s && s.attributed_to ? '<span class="ans-attr">attributed to ' + esc(s.attributed_to) + '</span>' : '';
       var framing = s && s.framing === 'attribution' ? '<span class="ans-framing">as an attribution</span>' : '';
-      return '<p class="ans-kept">' + esc((s && s.text) || '') +
-        '<span class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + '</span></p>';
+      // The RECEIPT (baton 4fb28d1c Part 2): the verbatim anchor quote is the persuasive object — render it
+      // as the serif source span below the claim, with the source document as the quiet attribution line.
+      var quote = s && s.anchor_quote
+        ? '<blockquote class="av-quote ans-quote">' + esc(s.anchor_quote) + '</blockquote>' : '';
+      var src = '';
+      if (s && s.source && (s.source.document || s.source.url)) {
+        var label = esc(s.source.document || 'source');
+        src = '<span class="ans-source">' + (s.source.url
+          ? '<a href="' + esc(s.source.url) + '" target="_blank" rel="noopener">' + label + '</a>'
+          : label) + '</span>';
+      }
+      return '<div class="ans-kept">' +
+        '<p class="ans-kept-text">' + esc((s && s.text) || '') + '</p>' +
+        quote +
+        '<div class="ans-trim">' + tierStamp(s && s.tier) + attr + framing + src + '</div>' +
+      '</div>';
     }).join('');
     return summary + body;
   }

@@ -50,14 +50,23 @@ function fail(msg: string): string {
   return `trace_interrogation error: ${msg}\n[SYSTEM: surface to Reg, do not retry.]`;
 }
 
-// A claim/fact/figure the answer rests on, as the graph reports it.
+// A claim/fact/figure the answer rests on, as the graph reports it. Each support carries the EDGE's
+// anchor_quote (the verbatim co-locating span — provenance belongs to the edge, not the fact, per-edge ruling
+// 83163028) and the source document, so a KEPT line can show its receipt (baton 4fb28d1c Part 2).
 interface ClaimResolution {
   claim_id: string;
   found: boolean;
   claim_text: string | null;
   assertion_contestability: string | null;
   claim_role: string | null;
-  support: Array<{ kind: "ground_fact" | "claim_figure"; id: string; tier: string | null; source_url: string | null }>;
+  support: Array<{
+    kind: "ground_fact" | "claim_figure";
+    id: string;
+    tier: string | null;
+    source_url: string | null;
+    anchor_quote: string | null;
+    document_title: string | null;
+  }>;
 }
 
 export const traceInterrogationTool: Tool = {
@@ -132,10 +141,24 @@ export const traceInterrogationTool: Tool = {
     const figureIds = [...new Set(segs.filter(s => s.grounding === "claim_figure" && s.ref_valid).map(s => s.ref_id))];
 
     const claimRes = new Map<string, ClaimResolution>();
-    const factRes = new Map<string, { tier: string | null; source_url: string | null }>();
+    const factRes = new Map<string, { tier: string | null; source_url: string | null; title: string | null }>();
     const figureRes = new Map<string, { tier: string | null; value: number | null; unit: string | null }>();
 
     const sqlList = (ids: string[]) => ids.map(id => `'${id}'`).join(","); // ids are UUID_RE-validated
+
+    // Per-stage RESOLVE timing (baton 4fb28d1c Part 1): the graph walk is ONE batched pass, not per-assertion.
+    // Time each IN-list query and the total, so the row shows where the resolve cost actually is (Date.now()
+    // is the EF runtime clock, not the sandboxed script clock — available here).
+    const resolveTiming = {
+      total_ms: 0,
+      claim_query_ms: 0,
+      fact_query_ms: 0,
+      figure_query_ms: 0,
+      claim_ids: claimIds.length,
+      fact_ids: factIds.length,
+      figure_ids: figureIds.length,
+    };
+    const tResolveStart = Date.now();
 
     try {
       // Reverse graph walk: for each cited synthesis_claim, its claim_on_fact support (fact or figure),
@@ -145,8 +168,12 @@ export const traceInterrogationTool: Tool = {
         // spaces but NOT newlines — so the query MUST start with SELECT (no leading newline/indent) or it is
         // misclassified as a write and returns a non-iterable {rows_affected} instead of rows. (Caught in the
         // first live interrogate run, baton bac007e0: this template literal began with a newline.)
+        // anchor_quote (the edge's verbatim co-locating span) + gf.title (source document) join the walk so a
+        // KEPT line carries its receipt (baton 4fb28d1c Part 2). The quote is on element_dependency, not the
+        // fact — a claim shows the span that anchors IT (per-edge ruling 83163028).
         const q = `SELECT sc.id AS claim_id, sc.claim_text, sc.assertion_contestability, sc.claim_role,
-                 gf.id AS gf_id, gf.authority_tier AS gf_tier, gf.source_url AS gf_source,
+                 ed.anchor_quote AS ed_anchor_quote,
+                 gf.id AS gf_id, gf.authority_tier AS gf_tier, gf.source_url AS gf_source, gf.title AS gf_title,
                  cf.id AS cf_id, cf.provenance_tier AS cf_tier
           FROM synthesis_claim sc
           LEFT JOIN element_dependency ed
@@ -154,7 +181,9 @@ export const traceInterrogationTool: Tool = {
           LEFT JOIN ground_fact gf ON gf.id = ed.depends_on_ground_fact_id
           LEFT JOIN claim_figure cf ON cf.id = ed.depends_on_claim_figure_id
           WHERE sc.id IN (${sqlList(claimIds)})`;
+        const tClaim = Date.now();
         const r = await ctx.supabase.rpc("execute_raw_sql", { query: q });
+        resolveTiming.claim_query_ms = Date.now() - tClaim;
         if (r.error) return fail(`claim resolution failed: ${r.error.message}`);
         // Fail-safe: a non-array response (never expected for a SELECT) degrades to zero rows -> the segment
         // withholds as unresolved, the gate's safe direction — it never crashes the whole interrogation.
@@ -171,25 +200,30 @@ export const traceInterrogationTool: Tool = {
             };
             claimRes.set(cid, cr);
           }
-          if (row.gf_id) cr.support.push({ kind: "ground_fact", id: String(row.gf_id), tier: (row.gf_tier as string) ?? null, source_url: (row.gf_source as string) ?? null });
-          else if (row.cf_id) cr.support.push({ kind: "claim_figure", id: String(row.cf_id), tier: (row.cf_tier as string) ?? null, source_url: null });
+          const anchorQuote = (row.ed_anchor_quote as string) ?? null;
+          if (row.gf_id) cr.support.push({ kind: "ground_fact", id: String(row.gf_id), tier: (row.gf_tier as string) ?? null, source_url: (row.gf_source as string) ?? null, anchor_quote: anchorQuote, document_title: (row.gf_title as string) ?? null });
+          else if (row.cf_id) cr.support.push({ kind: "claim_figure", id: String(row.cf_id), tier: (row.cf_tier as string) ?? null, source_url: null, anchor_quote: anchorQuote, document_title: null });
         }
       }
 
       if (factIds.length > 0) {
+        const tFact = Date.now();
         const r = await ctx.supabase.rpc("execute_raw_sql", {
-          query: `SELECT id, authority_tier, source_url FROM ground_fact WHERE id IN (${sqlList(factIds)})`,
+          query: `SELECT id, authority_tier, source_url, title FROM ground_fact WHERE id IN (${sqlList(factIds)})`,
         });
+        resolveTiming.fact_query_ms = Date.now() - tFact;
         if (r.error) return fail(`ground_fact resolution failed: ${r.error.message}`);
         for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
-          factRes.set(String(row.id), { tier: (row.authority_tier as string) ?? null, source_url: (row.source_url as string) ?? null });
+          factRes.set(String(row.id), { tier: (row.authority_tier as string) ?? null, source_url: (row.source_url as string) ?? null, title: (row.title as string) ?? null });
         }
       }
 
       if (figureIds.length > 0) {
+        const tFig = Date.now();
         const r = await ctx.supabase.rpc("execute_raw_sql", {
           query: `SELECT id, provenance_tier, value, unit FROM claim_figure WHERE id IN (${sqlList(figureIds)})`,
         });
+        resolveTiming.figure_query_ms = Date.now() - tFig;
         if (r.error) return fail(`claim_figure resolution failed: ${r.error.message}`);
         for (const row of (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>) {
           figureRes.set(String(row.id), { tier: (row.provenance_tier as string) ?? null, value: (row.value as number) ?? null, unit: (row.unit as string) ?? null });
@@ -198,58 +232,80 @@ export const traceInterrogationTool: Tool = {
     } catch (err) {
       return fail(`graph walk failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+    resolveTiming.total_ms = Date.now() - tResolveStart;
 
     // Adjudicate each segment against what the graph actually returned. The verdict is the server's.
     const GAP_MODEL_VOICE = "[Withheld: this is an inference in the assistant's own voice; no source in the Dossier makes this claim.]";
     const GAP_UNGROUNDED_CLAIM = "no source in the Dossier grounds this claim";
     const GAP_UNRESOLVED = "[Withheld: the cited record could not be resolved in this Dossier; it grounds nothing.]";
 
-    const ledger = segs.map((s) => {
+    // Uniform ledger-entry shape (baton 4fb28d1c Part 2): every row carries anchor_quote/source_document/
+    // source_url (null where a segment has none — a withheld gap-note, or a directly-cited fact/figure that
+    // has no edge and so no anchor quote). Uniformity lets the vetted_answer map read provenance without
+    // per-branch narrowing, and keeps the audit rows self-describing.
+    interface LedgerEntry {
+      index: number;
+      disposition: "kept" | "withheld";
+      reason: string;
+      tier: string | null;
+      text: string;
+      rendered: string;
+      attribution: string | null;
+      anchor_quote: string | null;
+      source_document: string | null;
+      source_url: string | null;
+    }
+    const withhold = (index: number, reason: string, rendered: string, text: string): LedgerEntry => ({
+      index, disposition: "withheld", reason, tier: null, text, rendered, attribution: null,
+      anchor_quote: null, source_document: null, source_url: null,
+    });
+
+    const ledger: LedgerEntry[] = segs.map((s): LedgerEntry => {
       // 1. Own-voice / uncited factual segment — the model becoming the claimant. Withheld.
       if (s.grounding === "model_voice" || !s.ref_id) {
-        return { index: s.index, disposition: "withheld", reason: "model_voice", tier: null,
-                 text: s.text, rendered: GAP_MODEL_VOICE, attribution: null as string | null };
+        return withhold(s.index, "model_voice", GAP_MODEL_VOICE, s.text);
       }
       // 2. Malformed / unresolvable citation — never trusted as grounded.
-      if (!s.ref_valid) {
-        return { index: s.index, disposition: "withheld", reason: "unresolved_ref", tier: null,
-                 text: s.text, rendered: GAP_UNRESOLVED, attribution: null };
-      }
+      if (!s.ref_valid) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
 
       if (s.grounding === "synthesis_claim") {
         const cr = claimRes.get(s.ref_id);
-        if (!cr || !cr.found) {
-          return { index: s.index, disposition: "withheld", reason: "unresolved_ref", tier: null,
-                   text: s.text, rendered: GAP_UNRESOLVED, attribution: null };
-        }
+        if (!cr || !cr.found) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
         if (cr.support.length === 0) {
           // The claim exists in the record but rests on nothing. State present-and-absent, not "unsupported".
-          const note = `[Withheld: the Dossier records this claim, but ${GAP_UNGROUNDED_CLAIM}.]`;
-          return { index: s.index, disposition: "withheld", reason: "ungrounded_claim", tier: null,
-                   text: s.text, rendered: note, attribution: null };
+          return withhold(s.index, "ungrounded_claim", `[Withheld: the Dossier records this claim, but ${GAP_UNGROUNDED_CLAIM}.]`, s.text);
         }
         // Grounded. Tier = the strongest thing that grounds it (first support's tier is representative).
         const tier = cr.support.find(x => x.tier)?.tier ?? null;
         const contested = (cr.assertion_contestability && cr.assertion_contestability !== "settled") || s.as_attribution;
         const attribution = s.as_attribution ? (s.attributed_to || cr.claim_role || null) : null;
+        // Provenance for the KEPT line (baton 4fb28d1c Part 2): the receipt the surface shows. Prefer the
+        // support that actually carries a verbatim anchor quote (the persuasive object for a live reader);
+        // fall back to the first support with a tier. The quote is the edge's, not the fact's.
+        const rep = cr.support.find(x => x.anchor_quote) ?? cr.support.find(x => x.tier) ?? cr.support[0];
         return { index: s.index, disposition: "kept", reason: contested ? "grounded_attribution" : "grounded",
-                 tier, text: s.text, rendered: s.text, attribution };
+                 tier, text: s.text, rendered: s.text, attribution,
+                 anchor_quote: rep?.anchor_quote ?? null,
+                 source_document: rep?.document_title ?? null,
+                 source_url: rep?.source_url ?? null };
       }
 
       if (s.grounding === "ground_fact") {
         const f = factRes.get(s.ref_id);
-        if (!f) return { index: s.index, disposition: "withheld", reason: "unresolved_ref", tier: null,
-                         text: s.text, rendered: GAP_UNRESOLVED, attribution: null };
+        if (!f) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
+        // A directly-cited fact has no claim_on_fact edge in play, so no anchor quote — but it does carry its
+        // source document + url + tier as its receipt.
         return { index: s.index, disposition: "kept", reason: "grounded", tier: f.tier,
-                 text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null };
+                 text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
+                 anchor_quote: null, source_document: f.title, source_url: f.source_url };
       }
 
-      // claim_figure
+      // claim_figure — directly cited; provenance is the tier (no edge, so no anchor quote or document here).
       const fg = figureRes.get(s.ref_id);
-      if (!fg) return { index: s.index, disposition: "withheld", reason: "unresolved_ref", tier: null,
-                        text: s.text, rendered: GAP_UNRESOLVED, attribution: null };
+      if (!fg) return withhold(s.index, "unresolved_ref", GAP_UNRESOLVED, s.text);
       return { index: s.index, disposition: "kept", reason: "grounded", tier: fg.tier,
-               text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null };
+               text: s.text, rendered: s.text, attribution: s.as_attribution ? (s.attributed_to || null) : null,
+               anchor_quote: null, source_document: null, source_url: null };
     });
 
     const kept = ledger.filter(l => l.disposition === "kept").length;
@@ -257,9 +313,19 @@ export const traceInterrogationTool: Tool = {
 
     // The vetted answer: kept segments carry their (attribution/tier) framing; withheld ones become the
     // gap-note in place, so the answer's shape is preserved and the reader sees exactly where a source ran out.
+    // Every KEPT line carries its provenance — anchor quote + source + tier (baton 4fb28d1c Part 2). The
+    // surface renders the verbatim span as the receipt; a conclusion without its receipt is the failure this
+    // closes one level in, inside the answer panel.
     const vetted_answer = ledger.map(l =>
       l.disposition === "kept"
-        ? { text: l.rendered, tier: l.tier, ...(l.attribution ? { attributed_to: l.attribution } : {}), ...(l.reason === "grounded_attribution" ? { framing: "attribution" } : {}) }
+        ? {
+            text: l.rendered,
+            tier: l.tier,
+            ...(l.anchor_quote ? { anchor_quote: l.anchor_quote } : {}),
+            ...(l.source_document || l.source_url ? { source: { document: l.source_document, url: l.source_url } } : {}),
+            ...(l.attribution ? { attributed_to: l.attribution } : {}),
+            ...(l.reason === "grounded_attribution" ? { framing: "attribution" } : {}),
+          }
         : { withheld: true, note: l.rendered, reason: l.reason }
     );
 
@@ -283,6 +349,10 @@ export const traceInterrogationTool: Tool = {
         withheld,
         vetted_answer,
         ledger,
+        // Part 1 instrumentation (baton 4fb28d1c): the resolve stage times ITSELF here (one batched walk,
+        // not per-assertion); the orchestrator folds in orchestration + model_loop after read-back.
+        assertion_count: segs.length,
+        stage_timings: { resolve: resolveTiming },
       });
     } catch (_e) { /* audit write is best-effort; the interrogation answer is unaffected */ }
 
@@ -294,6 +364,7 @@ export const traceInterrogationTool: Tool = {
       withheld,
       vetted_answer,
       ledger,
+      resolve_timing: resolveTiming,
       "[SYSTEM]": systemNote,
     });
   },

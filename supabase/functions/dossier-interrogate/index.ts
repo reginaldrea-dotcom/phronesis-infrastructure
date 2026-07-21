@@ -69,12 +69,21 @@ Deno.serve(async (req: Request) => {
   // the Edge gateway when this EF calls api-prime-invoke; the invoke uses its own service client for the DB.
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "sb_publishable_sx8JQVtRhBQCgsvvDYI8RQ_6PlZxs4Y";
 
+  // Per-stage orchestration timing (Napoleon baton 4fb28d1c Part 1): the reader waits on THIS wall clock, so
+  // measure each stage here and fold the model-loop breakdown (from api-prime-invoke) + the resolve breakdown
+  // (from trace_interrogation's row) into one interrogation_run record. This is what tells us where the minute
+  // actually goes — measured, not guessed.
+  const tTotal = Date.now();
+  const timing = { seal_lookup_ms: 0, seal_mint_ms: 0, invoke_ms: 0, readback_ms: 0, revoke_ms: 0 };
+
   // 1. Template interrogation seal for this Dossier. theoSessionId is UUID_RE-validated, safe to interpolate.
+  const tSealLookup = Date.now();
   const tmplRes = await supabase.rpc("execute_raw_sql", {
     query: "SELECT lineage_name, permit, cargo FROM sibling_grant "
       + "WHERE revoked_at IS NULL AND cargo->>'theo_session_id' = '" + theoSessionId + "' "
       + "AND permit @> ARRAY['trace_interrogation']::text[] ORDER BY sealed_at DESC LIMIT 1",
   });
+  timing.seal_lookup_ms = Date.now() - tSealLookup;
   if (tmplRes.error) return json({ error: `seal lookup: ${tmplRes.error.message}` }, 500);
   const tmpl = (Array.isArray(tmplRes.data) ? tmplRes.data[0] : null) as
     | { lineage_name: string; permit: string[]; cargo: Record<string, unknown> }
@@ -84,6 +93,7 @@ Deno.serve(async (req: Request) => {
 
   // 2. Fresh ephemeral seal on a unique session (race-free read-back; no cross-reader thread bleed).
   const askSession = crypto.randomUUID();
+  const tSealMint = Date.now();
   const seal = await supabase.rpc("seal_sibling_grant", {
     p_session_id: askSession,
     p_lineage_name: tmpl.lineage_name,
@@ -91,10 +101,12 @@ Deno.serve(async (req: Request) => {
     p_cargo: tmpl.cargo,
     p_spawner: "heph",
   });
+  timing.seal_mint_ms = Date.now() - tSealMint;
   if (seal.error) return json({ error: `seal failed: ${seal.error.message}` }, 500);
 
   try {
     // 3. Drive the sealed interrogate djinn synchronously.
+    const tInvoke = Date.now();
     const invokeResp = await fetch(env("SUPABASE_URL") + "/functions/v1/api-prime-invoke", {
       method: "POST",
       headers: {
@@ -110,21 +122,26 @@ Deno.serve(async (req: Request) => {
     });
     let invokeJson: Record<string, unknown> = {};
     try { invokeJson = await invokeResp.json(); } catch { /* non-JSON body — leave empty */ }
+    timing.invoke_ms = Date.now() - tInvoke;
     if (!invokeResp.ok) {
       return json({ ok: false, available: true, error: `interrogation failed (HTTP ${invokeResp.status})` }, 502);
     }
+    // The model-loop breakdown (per-Anthropic-call + per-tool ms) from api-prime-invoke — the bulk of the wait.
+    const modelLoop = (invokeJson?.timings as Record<string, unknown>) ?? null;
 
     // 4. Read back THIS session's trace row (unambiguous — one session, one run).
+    const tReadback = Date.now();
     const rb = await supabase
       .from("interrogation_run")
-      .select("question, kept, withheld, vetted_answer, ledger, created_at")
+      .select("id, question, kept, withheld, vetted_answer, ledger, stage_timings, created_at")
       .eq("session_id", askSession)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    timing.readback_ms = Date.now() - tReadback;
     if (rb.error) return json({ error: `read-back: ${rb.error.message}` }, 500);
     const row = rb.data as
-      | { question: string; kept: number; withheld: number; vetted_answer: unknown; ledger: unknown }
+      | { id: string; question: string; kept: number; withheld: number; vetted_answer: unknown; ledger: unknown; stage_timings: Record<string, unknown> | null }
       | null;
 
     // The djinn produced no traced answer (e.g. it declined as out of scope). Surface its prose as context;
@@ -134,8 +151,19 @@ Deno.serve(async (req: Request) => {
         ok: true, available: true, traced: false,
         question,
         response: (invokeJson?.response as string) ?? null,
+        timings: { total_ms: Date.now() - tTotal, orchestration: timing, model_loop: modelLoop },
       }, 200);
     }
+
+    // Fold orchestration + model-loop timings into the interrogation_run row (trace_interrogation already wrote
+    // stage_timings.resolve). Best-effort: a timing-write failure must never fail the answer.
+    const fullTimings = { ...(row.stage_timings ?? {}), orchestration: timing, model_loop: modelLoop };
+    const totalMs = Date.now() - tTotal;
+    try {
+      await supabase.from("interrogation_run")
+        .update({ stage_timings: fullTimings, total_ms: totalMs })
+        .eq("id", row.id);
+    } catch (_e) { /* timing enrichment is best-effort */ }
 
     return json({
       ok: true, available: true, traced: true,
@@ -144,11 +172,14 @@ Deno.serve(async (req: Request) => {
       withheld: row.withheld,
       vetted_answer: row.vetted_answer,
       response: (invokeJson?.response as string) ?? null,
+      timings: { total_ms: totalMs, ...fullTimings },
     }, 200);
   } finally {
     // 5. Revoke the ephemeral seal (best-effort; service client bypasses RLS).
+    const tRevoke = Date.now();
     try {
       await supabase.from("sibling_grant").update({ revoked_at: new Date().toISOString() }).eq("session_id", askSession);
     } catch (_e) { /* orphaned ephemeral seal is harmless (revoked on next sweep); never fail the answer */ }
+    timing.revoke_ms = Date.now() - tRevoke;
   }
 });
