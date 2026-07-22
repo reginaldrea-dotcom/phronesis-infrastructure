@@ -63,10 +63,10 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
   };
 }
 
-// Ground ONE claim. Judge success by whether a claim_on_fact edge exists AFTER the invocation, never by the
-// model's words. Returns grounded + a short note (the model's reason on a miss, for Theo's triage).
+// Ground ONE claim. Judge success by whether a VERIFIED claim_on_fact edge exists AFTER the invocation, never
+// by the model's words. Returns grounded + a short note (the model's reason on a miss, for Theo's triage).
 async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded: boolean; note: string }> {
-  if (await hasEdge(supabase, r.claim_id)) return { grounded: true, note: "already grounded" };
+  if (await hasVerifiedEdge(supabase, r.claim_id)) return { grounded: true, note: "already grounded" };
 
   let respText = "";
   try {
@@ -92,13 +92,20 @@ async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded:
     respText = `prime invoke error: ${e instanceof Error ? e.message : String(e)}`;
   }
 
-  const grounded = await hasEdge(supabase, r.claim_id);
+  const grounded = await hasVerifiedEdge(supabase, r.claim_id);
   return { grounded, note: grounded ? "grounded" : excerpt(respText) };
 }
 
-async function hasEdge(supabase: SupabaseClient, claimId: string): Promise<boolean> {
+// A claim counts as GROUNDED only when its claim_on_fact edge is VERIFIED - anchored (numeric co-location) or
+// screenshot_review (qualitative, awaiting a human) - NOT a bare cited_not_verified edge. Judging mere
+// edge-EXISTENCE let a first attempt that wrote an UNANCHORED edge short-circuit every retry ("already
+// grounded"), so the anchor could never land (repro: claim 47ffb727 stuck cited_not_verified across 4
+// re-queues - the worker skipped Angelia on the pre-existing bare edge). Now a bare edge is a MISS: the worker
+// re-grounds up to max_attempts, then routes to Theo (decision 4) rather than silently marking it done.
+async function hasVerifiedEdge(supabase: SupabaseClient, claimId: string): Promise<boolean> {
   const { data } = await supabase.from("element_dependency")
-    .select("id").eq("dependent_synthesis_claim_id", claimId).eq("edge_kind", "claim_on_fact").limit(1);
+    .select("id").eq("dependent_synthesis_claim_id", claimId).eq("edge_kind", "claim_on_fact")
+    .in("verification_state", ["anchored", "screenshot_review"]).limit(1);
   return Array.isArray(data) && data.length > 0;
 }
 
