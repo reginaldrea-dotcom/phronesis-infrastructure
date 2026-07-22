@@ -2,7 +2,22 @@
 // subject_term_gate.py + the temporal fix he specified + a provenance clause-split for real-corpus claims).
 // Run: deno test --no-check coLocationGate.test.ts
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { subjectCoLocate, runCoLocationGate, clauseContaining, contentTerms, figureIn } from "./coLocationGate.ts";
+import { subjectCoLocate, runCoLocationGate, clauseContaining, contentTerms, figureIn, stripApparatus } from "./coLocationGate.ts";
+
+// --- Leading-citation APPARATUS exclusion (Eames ratification 07e30e99, 4th exclusion class) --------------
+Deno.test("apparatus: the full bloated Jiang-et-al claim now anchors (citation + method stripped)", () => {
+  const r = runCoLocationGate({
+    claimText: "Jiang et al. (2023, Environmental Science & Technology, DOI 10.1021/acs.est.3c06180) find that in 2019, machinery production required 8% of global carbon emissions, using input-output analysis integrated with dynamic material flow analysis; this figure covers the full lifecycle supply-chain carbon footprint.",
+    pageContent: "machinery production required 30% of global\nmetal production and 8% of global carbon emissions.",
+    anchorQuote: "machinery production required 30% of global\nmetal production and 8% of global carbon emissions",
+    claimFigure: "8%", hasScreenshot: true,
+  });
+  assertEquals(r.verificationState, "anchored", r.reason);
+});
+Deno.test("apparatus: a LEADING INSTITUTION actor is NEVER stripped (IPCC, NAO survive)", () => {
+  assert(contentTerms(stripApparatus("IPCC AR6 WG3 reports the industrial sector accounted for 24% of direct global GHG emissions in 2019")).includes("ipcc"), "IPCC actor must survive");
+  assert(contentTerms(stripApparatus("The NAO estimated the marginal cost at £182,000")).includes("nao"), "NAO actor must survive");
+});
 
 // --- Single-digit percent regression (the 8% bug: "8%" collapsed to "8" and failed the length>=2 guard) --
 Deno.test("figure: a single-digit percent anchors when subject + figure co-locate", () => {

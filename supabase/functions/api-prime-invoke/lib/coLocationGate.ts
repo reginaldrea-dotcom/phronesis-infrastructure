@@ -112,6 +112,27 @@ export function contentTerms(text: string): string[] {
   return out;
 }
 
+// Leading-citation APPARATUS exclusion — the FOURTH exclusion class (Eames ratification 07e30e99, additive to
+// measure-nouns / temporal / trailing-attribution). Citation MACHINERY — author-year, journal/DOI, method
+// boilerplate — is provenance/how-derived, not subject, and no page span repeats it, so it dilutes the coverage
+// denominator and sinks a genuinely-sourced claim. Strip it STRUCTURALLY (patterns, never a name blocklist) so a
+// NAMED INSTITUTION that LEADS the clause as the subject-bearing actor (IPCC, NAO, ONS) is NEVER removed — the
+// same actor-preserving invariant as the trailing-attribution rule (0d6af588). Institutions carry no "et al", sit
+// in no year-parenthetical, are no DOI, and are not a method noun, so none of these patterns can reach them. If in
+// doubt the pattern KEEPS the token: a false-negative costs a human review, a false-positive lets a wrong subject anchor.
+const METHOD_NOUN = "analysis|methodology|method|model|modelling|modeling|framework|approach|estimation|simulation|regression";
+export function stripApparatus(text: string): string {
+  return (text || "")
+    // parenthetical block containing a 4-digit year: "(2023, Environmental Science & Technology, DOI 10.1021/...)"
+    .replace(/\([^)]*\b(?:19|20)\d{2}\b[^)]*\)/g, " ")
+    // author-year: a surname (or "X and Y") followed by "et al" — an institution never carries "et al"
+    .replace(/\b[A-Z][a-z]+(?:\s+(?:and|&)\s+[A-Z][a-z]+)*\s+et\s+al\.?/g, " ")
+    // a DOI outside a parenthetical
+    .replace(/\bdoi:?\s*10\.\d{4,}\/\S+/gi, " ")
+    // method boilerplate: a derivation verb + a method noun ("using input-output analysis", "integrated with ... analysis")
+    .replace(new RegExp("\\b(?:using|via|based on|through|drawing on|integrated with)\\b[^.;]*?\\b(?:" + METHOD_NOUN + ")\\b", "gi"), " ");
+}
+
 // 6-char bidirectional stem/substring match, as in Eames' gate().
 function termMatches(t: string, pageTerms: string[]): boolean {
   const ts = t.slice(0, 6);
@@ -172,7 +193,7 @@ export function runCoLocationGate(inp: GateInput): GateResult {
   }
   // 3. Subject co-location — Eames v2: distinctive >= 1 AND coverage >= 0.5, over clause-scoped terms.
   const clause = clauseContaining(inp.claimText, figure);
-  const claimTerms = contentTerms(clause);
+  const claimTerms = contentTerms(stripApparatus(clause));  // 4th exclusion class: drop citation apparatus, keep the actor
   if (claimTerms.length === 0) {
     return none("cited_not_verified", "pending", "no subject terms could be extracted from the figure's clause");
   }
