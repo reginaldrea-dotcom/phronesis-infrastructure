@@ -18,6 +18,23 @@ Deno.test("apparatus: a LEADING INSTITUTION actor is NEVER stripped (IPCC, NAO s
   assert(contentTerms(stripApparatus("IPCC AR6 WG3 reports the industrial sector accounted for 24% of direct global GHG emissions in 2019")).includes("ipcc"), "IPCC actor must survive");
   assert(contentTerms(stripApparatus("The NAO estimated the marginal cost at £182,000")).includes("nao"), "NAO actor must survive");
 });
+// Eames' leadcite.py discriminator cases, ported verbatim (07e30e99): apparatus dropped, subject KEPT, a leading
+// institution actor never stripped. [clause, must-keep subject terms, must-be-dropped apparatus terms]
+const LEADCITE: [string, string[], string[]][] = [
+  ["Jiang et al. (2023, Environmental Science & Technology, DOI 10.1021/acs.est.3c01234) find that global steel production accounts for 8% of industrial emissions using input-output analysis integrated with dynamic material flow analysis",
+    ["steel", "production", "industrial", "emissions"], ["jiang", "environmental", "science", "technology", "doi"]],
+  ["IPCC AR6 WG3 reports the industrial sector accounted for 24% of direct global GHG emissions",
+    ["ipcc", "industrial", "sector", "direct", "ghg", "emissions"], []],
+  ["The National Audit Office estimated the marginal cost at £182,000",
+    ["national", "audit", "office", "marginal", "cost"], []],
+];
+for (const [clause, keep, drop] of LEADCITE) {
+  Deno.test(`leadcite: ${clause.slice(0, 42)}...`, () => {
+    const after = contentTerms(stripApparatus(clause));
+    for (const k of keep) assert(after.includes(k), `subject '${k}' must survive: ${after}`);
+    for (const d of drop) assert(!after.includes(d), `apparatus '${d}' must be dropped: ${after}`);
+  });
+}
 
 // --- Single-digit percent regression (the 8% bug: "8%" collapsed to "8" and failed the length>=2 guard) --
 Deno.test("figure: a single-digit percent anchors when subject + figure co-locate", () => {

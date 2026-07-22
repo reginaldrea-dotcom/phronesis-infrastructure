@@ -120,17 +120,32 @@ export function contentTerms(text: string): string[] {
 // same actor-preserving invariant as the trailing-attribution rule (0d6af588). Institutions carry no "et al", sit
 // in no year-parenthetical, are no DOI, and are not a method noun, so none of these patterns can reach them. If in
 // doubt the pattern KEEPS the token: a false-negative costs a human review, a false-positive lets a wrong subject anchor.
-const METHOD_NOUN = "analysis|methodology|method|model|modelling|modeling|framework|approach|estimation|simulation|regression";
+// Apparatus regexes ported from Eames' tested discriminator (leadcite.py, ratification 07e30e99). Structural,
+// never a name blocklist: author-year ("Jiang et al"), a year-LEADING parenthetical (journal + DOI live inside
+// it), and DOI — none of which a named-institution actor (IPCC, NAO, ONS) can match. (et-al widened to
+// multi-author "X and Y et al", still actor-safe: an institution carries no "et al".)
+const APPARATUS_PATTERNS: RegExp[] = [
+  /\b[A-Z][a-z]+(?:\s+(?:and|&)\s+[A-Z][a-z]+)*\s+et\s+al\.?/g,
+  /\(\s*\d{4}[^)]*\)/g,
+  /\bdoi\b:?\s*\S*/gi,
+  /\b10\.\d{4,}\/\S+/g,
+];
+// Method boilerplate — curated multi-word phrases + derivation connectives (how-derived, not subject). Seeded
+// from leadcite.py's METHOD_PHRASES; EXPANDABLE like PROVENANCE_MARKERS (the invariant is "method machinery,
+// not subject", not the exact list). Removed only where a phrase appears VERBATIM, so an unlisted method phrase
+// merely dilutes coverage → a human review (fail-safe), never a wrong anchor.
+const METHOD_PHRASES: string[] = [
+  "input-output analysis", "input output analysis", "dynamic material flow analysis", "material flow analysis",
+  "life cycle assessment", "life-cycle assessment", "lifecycle assessment", "regression analysis",
+  "sensitivity analysis", "meta-analysis", "monte carlo simulation", "econometric analysis", "systematic review",
+  "using", "integrated with", "based on", "drawing on",
+];
+function escapeRe(s: string): string { return s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"); }
 export function stripApparatus(text: string): string {
-  return (text || "")
-    // parenthetical block containing a 4-digit year: "(2023, Environmental Science & Technology, DOI 10.1021/...)"
-    .replace(/\([^)]*\b(?:19|20)\d{2}\b[^)]*\)/g, " ")
-    // author-year: a surname (or "X and Y") followed by "et al" — an institution never carries "et al"
-    .replace(/\b[A-Z][a-z]+(?:\s+(?:and|&)\s+[A-Z][a-z]+)*\s+et\s+al\.?/g, " ")
-    // a DOI outside a parenthetical
-    .replace(/\bdoi:?\s*10\.\d{4,}\/\S+/gi, " ")
-    // method boilerplate: a derivation verb + a method noun ("using input-output analysis", "integrated with ... analysis")
-    .replace(new RegExp("\\b(?:using|via|based on|through|drawing on|integrated with)\\b[^.;]*?\\b(?:" + METHOD_NOUN + ")\\b", "gi"), " ");
+  let c = text || "";
+  for (const p of APPARATUS_PATTERNS) c = c.replace(p, " ");
+  for (const m of METHOD_PHRASES) c = c.replace(new RegExp("\\b" + escapeRe(m) + "\\b", "gi"), " ");
+  return c;
 }
 
 // 6-char bidirectional stem/substring match, as in Eames' gate().
