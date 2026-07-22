@@ -2,7 +2,23 @@
 // subject_term_gate.py + the temporal fix he specified + a provenance clause-split for real-corpus claims).
 // Run: deno test --no-check coLocationGate.test.ts
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { subjectCoLocate, runCoLocationGate, clauseContaining, contentTerms } from "./coLocationGate.ts";
+import { subjectCoLocate, runCoLocationGate, clauseContaining, contentTerms, figureIn } from "./coLocationGate.ts";
+
+// --- Single-digit percent regression (the 8% bug: "8%" collapsed to "8" and failed the length>=2 guard) --
+Deno.test("figure: a single-digit percent anchors when subject + figure co-locate", () => {
+  const r = runCoLocationGate({
+    claimText: "Machinery production required 8% of global carbon emissions in 2019, according to Jiang et al. (2023).",
+    pageContent: "machinery production required 30% of global\nmetal production and 8% of global carbon emissions.",
+    anchorQuote: "machinery production required 30% of global\nmetal production and 8% of global carbon emissions",
+    claimFigure: "8%", hasScreenshot: true,
+  });
+  assertEquals(r.verificationState, "anchored", r.reason);
+});
+Deno.test("figure: '%' and 'percent' surface forms normalise alike", () => {
+  assert(figureIn("8 percent of global carbon emissions", "8%"), "8 percent should match 8%");
+  assert(figureIn("8% of global carbon emissions", "8 percent"), "8% should match 8 percent");
+  assert(!figureIn("the figure was 8 out of 10", "8%"), "a bare 8 must NOT match 8% (precision kept)");
+});
 
 // --- The provenance invariant (Eames 0d6af588): strip TRAILING attribution, keep a LEADING source -------
 Deno.test("invariant: trailing 'according to ONS' is stripped from the figure clause", () => {

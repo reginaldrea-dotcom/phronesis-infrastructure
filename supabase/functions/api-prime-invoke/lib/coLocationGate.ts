@@ -26,7 +26,13 @@ export function normFigure(s: string): string {
     .toLowerCase()
     .replace(/billion/g, "bn")
     .replace(/million/g, "m")
-    .replace(/[,\s£$€%]/g, "")
+    // Percentages -> a "pct" token, NOT stripped. Stripping the % collapsed a single-digit percent to a
+    // length-1 string ("8%" -> "8"), which figureIn's length>=2 guard then rejected: single-digit percents
+    // (0-9%) could NEVER anchor. Mapping %/percent to the same token both fixes that and unifies the two
+    // surface forms ("8%" == "8 percent") while keeping precision (an "8%" no longer matches a bare "8").
+    .replace(/percent/g, "pct")
+    .replace(/%/g, "pct")
+    .replace(/[,\s£$€]/g, "")
     .replace(/[^a-z0-9.]/g, "");
 }
 export function figureIn(haystack: string, figure: string): boolean {
