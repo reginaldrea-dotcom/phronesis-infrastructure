@@ -134,6 +134,11 @@ const APPARATUS_PATTERNS: RegExp[] = [
 // from leadcite.py's METHOD_PHRASES; EXPANDABLE like PROVENANCE_MARKERS (the invariant is "method machinery,
 // not subject", not the exact list). Removed only where a phrase appears VERBATIM, so an unlisted method phrase
 // merely dilutes coverage → a human review (fail-safe), never a wrong anchor.
+// STANDING RULE for additions (Eames 7767ac01): every entry must be a MULTIWORD method phrase whose removal
+// leaves a grammatical object behind (or a bare derivation connective like "based on"). NEVER add a bare method
+// NOUN — "analysis", "model", "assessment", "review" — on its own: those collide with subject usage. Matching
+// the WHOLE phrase is exactly what keeps those words untouched when they are the subject ("water saving systems
+// assessment", "asylum outcomes review"). Phrases only; erring short stays safe.
 const METHOD_PHRASES: string[] = [
   "input-output analysis", "input output analysis", "dynamic material flow analysis", "material flow analysis",
   "life cycle assessment", "life-cycle assessment", "lifecycle assessment", "regression analysis",
