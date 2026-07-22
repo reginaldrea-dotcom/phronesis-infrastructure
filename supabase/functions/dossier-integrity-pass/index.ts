@@ -174,6 +174,81 @@ function seedEscalation(original: string, sentence: string): string | null {
   return null;
 }
 
+// RESOLUTION CHECK (Napoleon ruling, msg c69a9843): resolved_reworded is a FACTUAL claim that the drift is
+// gone, so it must be EARNED BY RE-PASS, never asserted. When re-run with prior unresolved flags, the pass
+// re-adjudicates each prior flag's concern against the CURRENT prose + CURRENT grounded claims and resolves it
+// ONLY if the drift is genuinely gone (the assertion is now grounded, or was reworded out of the prose).
+// curation_required flags are NEVER auto-resolved here - they route to operator_curation_log or revert (Aegis).
+interface PriorFlag { id: string; sentence: string; gap: string; flag_type: string }
+interface ResolutionVerdict { flag_index: number; resolved: boolean; grounds_on_claim_id: string | null; reason: string }
+
+const RESOLUTION_TOOL = {
+  name: "report_resolution",
+  description: "For each previously-flagged concern, judge whether it is RESOLVED in the CURRENT state. Resolved "
+    + "means: the flagged assertion is now supported by a provided claim (grounded), OR the assertion no longer "
+    + "appears in the current edited prose (reworded out). NOT resolved means the drift still stands - the "
+    + "assertion is still present and still unsupported, or the prose still misstates what the record says "
+    + "(e.g. a wrong year, a figure the record does not carry). Be strict: a claim being FILED is not resolution "
+    + "if the PROSE still asserts something different from what that claim says.",
+  input_schema: {
+    type: "object",
+    properties: {
+      verdicts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            flag_index: { type: "integer", description: "0-based index into the provided prior-concerns list." },
+            resolved: { type: "boolean", description: "True ONLY if the drift is genuinely gone in the current state." },
+            grounds_on_claim_id: { type: ["string", "null"], description: "If resolved because now grounded: the provided claim id that supports it. Must be from the claims list. Null if resolved by rewording-out or if not resolved." },
+            reason: { type: "string", description: "One line: why resolved or why still standing (e.g. 'prose still says 2022 but claim says 2023')." },
+          },
+          required: ["flag_index", "resolved", "grounds_on_claim_id", "reason"],
+        },
+      },
+    },
+    required: ["verdicts"],
+  },
+};
+
+function resolutionUserPrompt(claims: Claim[], edited: string, priors: PriorFlag[]): string {
+  const claimLines = claims.length
+    ? claims.map((c) => `- [${c.id}]${c.grounded ? " (GROUNDED)" : " (in-record, ungrounded)"}: ${c.claim_text}`).join("\n")
+    : "(no claims in this section)";
+  const priorLines = priors.map((p, i) => `[${i}] (${p.flag_type}) SENTENCE: ${p.sentence}\n     ORIGINAL GAP: ${p.gap}`).join("\n");
+  return [
+    "CURRENT section claims (the record as it stands NOW):",
+    claimLines,
+    "",
+    "CURRENT edited prose (as it stands NOW):",
+    edited,
+    "",
+    "PRIOR flagged concerns - for each, judge resolved vs still-standing in the CURRENT state above:",
+    priorLines,
+  ].join("\n");
+}
+
+async function checkResolution(claims: Claim[], edited: string, priors: PriorFlag[]): Promise<ResolutionVerdict[]> {
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: 4000,
+      system: "You re-adjudicate previously-flagged editorial-drift concerns against the CURRENT state. A concern is "
+        + "RESOLVED only if the drift is genuinely gone. A claim merely being filed does NOT resolve a concern if the "
+        + "prose still asserts something the claim does not support. You report facts; the server decides the transition below you.",
+      tools: [RESOLUTION_TOOL], tool_choice: { type: "tool", name: "report_resolution" },
+      messages: [{ role: "user", content: resolutionUserPrompt(claims, edited, priors) }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`anthropic(resolution) ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+  const j = await resp.json();
+  const block = (j.content ?? []).find((b: Record<string, unknown>) => b.type === "tool_use");
+  const v = (block?.input as { verdicts?: ResolutionVerdict[] })?.verdicts;
+  if (!Array.isArray(v)) throw new Error("resolution tool_use missing verdicts[]");
+  return v;
+}
+
 async function callModel(system: string, user: string): Promise<ModelChange[]> {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -244,11 +319,9 @@ Deno.serve(async (req: Request) => {
       const edited = o.edited_content_md ?? "";
       const changes = await callModel(systemPrompt(), userPrompt(claims, original, edited));
 
-      // Idempotent re-run: clear this overlay's prior flags before writing the new set.
-      await supabase.from("integrity_flag").delete().eq("overlay_id", o.id);
-
-      // BELOW-THE-MODEL ADJUDICATION. Decide each flag here, from validated facts + deterministic gates.
-      const flags: Array<Record<string, unknown>> = [];
+      // BELOW-THE-MODEL ADJUDICATION of the delta. Decide each candidate flag here, from validated facts +
+      // deterministic gates. (No blanket delete of prior flags - resolution is EARNED below, never wiped.)
+      const newFlags: Array<Record<string, unknown>> = [];
       let modelVoice = 0;
       for (const s of changes) {
         if (s.classification === "model_voice") { modelVoice++; continue; }  // editorial change: the "no problem" disposition, no flag row
@@ -267,41 +340,72 @@ Deno.serve(async (req: Request) => {
         //     recognised hardening is classed as escalation, not absorbed into the substance-change bucket.
         const seed = seedEscalation(original, s.sentence);
         if (s.hardening || seed !== null) {
-          flags.push(mkFlag(o, passRunId, s, "ungrounded_claim", true, seed ?? s.hardening_pattern ?? "model-identified hardening", restId, 10,
+          newFlags.push(mkFlag(o, passRunId, s, "ungrounded_claim", true, seed ?? s.hardening_pattern ?? "model-identified hardening", restId, 10,
             s.gap || "The edit hardened softer source language beyond what any grounded claim supports."));
           continue;
         }
         // (2) ASSERT-BOUNDARY substance change (a changed figure, reversed position, swapped entity - NOT a
         //     linguistic hardening) -> curation_required (highest severity, non-overridable).
         if (s.assert_boundary_change) {
-          flags.push(mkFlag(o, passRunId, s, "curation_required", false, null, restId, 1,
+          newFlags.push(mkFlag(o, passRunId, s, "curation_required", false, null, restId, 1,
             s.gap || "The edit changes what a claim asserts about a named entity/event/finding/position."));
           continue;
         }
         // (3) plain ungrounded_claim.
-        flags.push(mkFlag(o, passRunId, s, "ungrounded_claim", false, null, restId, 50,
+        newFlags.push(mkFlag(o, passRunId, s, "ungrounded_claim", false, null, restId, 50,
           s.gap || "No grounded claim supports this assertion."));
       }
 
-      // Write flags + stamp the overlay rollup (I own resolution_status per Connie's rule).
-      if (flags.length) {
-        const ins = await supabase.from("integrity_flag").insert(flags);
+      // RESOLUTION - EARNED BY RE-PASS, NEVER ASSERTED (Napoleon ruling c69a9843). Re-adjudicate each PRIOR
+      // unresolved flag against the current state; write resolved_reworded ONLY when the drift is genuinely gone.
+      // curation_required priors are never auto-resolved here (Aegis: they route to curation or revert).
+      const priorRes = await supabase.from("integrity_flag")
+        .select("id, sentence, gap, flag_type").eq("overlay_id", o.id).is("resolution_status", null);
+      const priors = (priorRes.data ?? []) as PriorFlag[];
+      const eligible = priors.filter((p) => p.flag_type !== "curation_required");
+      const resolvedIds = new Set<string>();
+      if (eligible.length) {
+        const verdicts = await checkResolution(claims, edited, eligible);
+        for (const v of verdicts) {
+          const p = eligible[v.flag_index];
+          if (!p || !v.resolved) continue;
+          // GATE: a resolve-by-grounding must cite a real, grounded section claim (validated below the model).
+          const gid = v.grounds_on_claim_id && claimIds.has(v.grounds_on_claim_id) && grounded.has(v.grounds_on_claim_id)
+            ? v.grounds_on_claim_id : null;
+          const upd = await supabase.from("integrity_flag").update({
+            resolution_status: "resolved_reworded",
+            resolved_by: "integrity-pass", resolved_at: new Date().toISOString(),
+            resolution_note: (v.reason ?? "").slice(0, 500), pass_run_id: passRunId,
+            ...(gid ? { rests_on_claim_ids: [gid] } : {}),
+          }).eq("id", p.id);
+          if (!upd.error) resolvedIds.add(p.id);
+        }
+      }
+
+      // Insert genuinely-new drift only - skip a candidate that duplicates a STILL-unresolved prior sentence.
+      const stillUnresolved = new Set(priors.filter((p) => !resolvedIds.has(p.id)).map((p) => (p.sentence || "").trim()));
+      const toInsert = newFlags.filter((f) => !stillUnresolved.has(String(f.sentence ?? "").trim()));
+      if (toInsert.length) {
+        const ins = await supabase.from("integrity_flag").insert(toInsert);
         if (ins.error) throw new Error(`flag insert: ${ins.error.message}`);
       }
-      const hasCurationReq = flags.some((f) => f.flag_type === "curation_required");
+
+      // Rollup: overlay's current flag total + resolution_status (curation_required if any UNRESOLVED one remains).
+      const allF = await supabase.from("integrity_flag").select("flag_type, resolution_status").eq("overlay_id", o.id);
+      const allRows = (allF.data ?? []) as Array<{ flag_type: string; resolution_status: string | null }>;
+      const unresolvedRows = allRows.filter((r) => r.resolution_status === null);
+      const hasCurationReq = unresolvedRows.some((r) => r.flag_type === "curation_required");
       await supabase.from("synthesis_overlay").update({
         integrity_checked_at: new Date().toISOString(),
-        integrity_flag_count: flags.length,
+        integrity_flag_count: allRows.length,
         resolution_status: hasCurationReq ? "curation_required" : null,
       }).eq("id", o.id);
 
       results.push({
         overlay_id: o.id, section_id: o.section_id,
         changes: changes.length, model_voice: modelVoice,
-        flags_written: flags.length,
-        escalation: flags.filter((f) => f.escalation).length,
-        curation_required: flags.filter((f) => f.flag_type === "curation_required").length,
-        ungrounded: flags.filter((f) => f.flag_type === "ungrounded_claim").length,
+        new_flags: toInsert.length, resolved_reworded: resolvedIds.size,
+        unresolved_now: unresolvedRows.length,
       });
     } catch (e) {
       results.push({ overlay_id: o.id, error: e instanceof Error ? e.message : String(e) });
