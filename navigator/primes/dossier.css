@@ -363,3 +363,45 @@ a.av-doc:hover { color: var(--accent); }
 .engine-workings { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); }
 .engine-workings a { font-size: 13.5px; color: var(--text-muted); text-decoration: none; }
 .engine-workings a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── Honest evidence ladder (Eames SP 57480e66). Labels name what is TRUE, never only the absence.
+   The load-bearing choice: "evidence on file · review pending" and "sourced · not yet checked" read
+   NEUTRAL (muted), NOT as amber/red weakness — a frozen tiered capture is not thin, and the old
+   red "unverified" actively understated the Dossier. Only a genuine reject wears caution. */
+.ev-anchored  { color: var(--accent); }                                   /* figure verified in source */
+.ev-confirmed { color: var(--status-green, #2f7d4f); font-weight: 500; }  /* confirmed by <who> · <date> — the qualitative ceiling */
+.ev-review    { color: var(--text-muted); }                               /* evidence on file · review pending (neutral, not alarm) */
+.ev-sourced   { color: var(--text-muted); }                               /* sourced · not yet checked */
+.ev-rejected  { color: var(--status-red, #b3423a); font-style: italic; }  /* a reviewer judged it does not support the claim */
+
+/* ── Evidence review surface (Eames 57480e66 / 6d3d1c68): editor-only, claim beside capture, one at a time. */
+.review-surface { border: 1px solid var(--accent); border-radius: 8px; padding: 16px 18px; margin-bottom: 26px;
+                  background: var(--surface-2, rgba(0,0,0,0.02)); }
+.rv-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.rv-title { font-family: 'Cormorant SC', serif; font-size: 15px; letter-spacing: 1px; color: var(--text); }
+.rv-progress { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text-muted); }
+.rv-body { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 720px) { .rv-body { grid-template-columns: 1fr; } }
+.rv-lab { font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+          color: var(--text-muted); margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.rv-claim-text { font-size: 14.5px; line-height: 1.5; color: var(--text); }
+.rv-doc { color: var(--text); }
+.rv-quote { font-family: Georgia, 'Times New Roman', serif; font-size: 14px; line-height: 1.55; color: var(--text);
+            border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 0; background: transparent; }
+.rv-noquote { font-size: 13px; font-style: italic; color: var(--text-muted); }
+.rv-links { margin-top: 8px; font-size: 12.5px; }
+.rv-links a { color: var(--accent); text-decoration: none; }
+.rv-links a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.rv-q { margin: 16px 0 10px; font-size: 15px; font-weight: 600; color: var(--text); }
+.rv-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.rv-actions button, .rv-reject-do { font-family: 'Cormorant SC', serif; font-size: 12px; letter-spacing: 0.6px;
+          padding: 7px 16px; border-radius: 3px; cursor: pointer; border: 1px solid var(--border); background: var(--surface, #fff); color: var(--text); }
+.rv-confirm { border-color: var(--status-green, #2f7d4f); color: var(--status-green, #2f7d4f); }
+.rv-confirm:hover { background: var(--status-green, #2f7d4f); color: #fff; }
+.rv-reject-open:hover { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
+.rv-actions button:disabled, .rv-reject-do:disabled, .rv-reason:disabled { opacity: 0.5; cursor: default; }
+.rv-reject { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.rv-reason { flex: 1 1 260px; font-size: 13px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 3px;
+             background: var(--surface, #fff); color: var(--text); }
+.rv-reject-do { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
+.rv-clear { font-size: 14px; color: var(--status-green, #2f7d4f); font-style: italic; }

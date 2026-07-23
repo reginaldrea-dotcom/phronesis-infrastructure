@@ -247,7 +247,9 @@ Deno.serve(async (req: Request) => {
     // of gravity. Short co-locating spans only; the substrate already holds them (never bulk reproduction).
     const groundingByClaim = new Map<string, Array<Record<string, unknown>>>();
     if (ID_RE.test(String(synthesis.id))) {   // synthesis.id is our own UUID; guard the interpolation anyway
-      const q = "SELECT ed.dependent_synthesis_claim_id AS claim_id, ed.anchor_quote, ed.verification_state, ed.review_state, "
+      // edge_id + reviewed_by/at/note carry the REVIEW SURFACE (Eames 57480e66): the front-end needs the
+      // edge id to post a verdict, and the reviewer stamps to render "confirmed by <who> · <date>".
+      const q = "SELECT ed.id AS edge_id, ed.dependent_synthesis_claim_id AS claim_id, ed.anchor_quote, ed.verification_state, ed.review_state, ed.reviewed_by, ed.reviewed_at, ed.review_note, "
         + "gf.id AS fact_id, gf.title AS fact_title, gf.authority_tier AS fact_tier, gf.source_url AS fact_source_url, gf.source_document_id AS fact_doc_id, "
         + "cf.id AS figure_id, cf.provenance_tier AS figure_tier, cf.value AS figure_value, cf.unit AS figure_unit "
         + "FROM element_dependency ed "
@@ -262,9 +264,13 @@ Deno.serve(async (req: Request) => {
         if (!groundingByClaim.has(cid)) groundingByClaim.set(cid, []);
         const onFigure = row.figure_id != null;
         groundingByClaim.get(cid)!.push({
+          edge_id: (row.edge_id as string) ?? null,
           anchor_quote: (row.anchor_quote as string) ?? null,
           verification_state: (row.verification_state as string) ?? null,
           review_state: (row.review_state as string) ?? null,
+          reviewed_by: (row.reviewed_by as string) ?? null,
+          reviewed_at: (row.reviewed_at as string) ?? null,
+          review_note: (row.review_note as string) ?? null,
           source_kind: onFigure ? "claim_figure" : "ground_fact",
           tier: ((onFigure ? row.figure_tier : row.fact_tier) as string) ?? null,
           document_title: (row.fact_title as string) ?? null,

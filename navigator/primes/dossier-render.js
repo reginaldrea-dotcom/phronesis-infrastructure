@@ -36,6 +36,33 @@
     return (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.supabaseUrl)
       ? RENDER_CONFIG.supabaseUrl + '/functions/v1/dossier-curate-link' : '';
   }
+  // A REVIEWER is an EDITOR token (d.html sets RENDER_IS_EDITOR from the share's is_editor) OR the
+  // internal Access-gated editor page (DOSSIER_EDIT). Either may review evidence (Eames 57480e66).
+  function isReviewer() { return typeof window !== 'undefined' && (window.RENDER_IS_EDITOR === true || window.DOSSIER_EDIT === true); }
+  function reviewEndpoint() {
+    return (typeof RENDER_CONFIG !== 'undefined' && RENDER_CONFIG.supabaseUrl)
+      ? RENDER_CONFIG.supabaseUrl + '/functions/v1/dossier-review-edge' : '';
+  }
+  function fmtDateLong(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    try { return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+    catch (e) { return d.toISOString().slice(0, 10); }
+  }
+  function shortWho(who) { return who ? String(who).split('@')[0] : ''; }
+  // THE HONEST LADDER (Eames SP 57480e66 / 6d3d1c68). Labels name what is TRUE, never only the absence.
+  // For a QUALITATIVE claim there is no figure to co-locate, so screenshot_review + accepted is the
+  // CEILING — the strongest state reachable, not a lesser one. "unverified" is banished: a claim resting
+  // on a frozen, hashed, tiered capture is SOURCED, whatever its review state.
+  function honestLabel(state, review, who, when) {
+    if (state === 'anchored') return { cls: 'ev-anchored', label: 'figure verified in source', title: 'The stated figure was found verbatim in the source’s frozen page.' };
+    if (state === 'screenshot_review') {
+      if (review === 'accepted') return { cls: 'ev-confirmed', label: who ? ('confirmed by ' + shortWho(who) + (when ? ' · ' + fmtDateLong(when) : '')) : 'confirmed on review', title: 'A reviewer confirmed the frozen source supports this claim. For a qualitative claim this is the strongest state — there is no figure to machine-verify.' };
+      if (review === 'rejected') return { cls: 'ev-rejected', label: 'rejected on review', title: 'A reviewer judged the frozen source does not support this claim.' };
+      return { cls: 'ev-review', label: 'evidence on file · review pending', title: 'The source is captured, frozen and tiered; a reviewer confirms it supports the claim. This is NOT unverified — the evidence is on file.' };
+    }
+    return { cls: 'ev-sourced', label: 'sourced · not yet checked', title: 'Sourced to a frozen, tiered capture; not yet confirmed against the claim.' };
+  }
 
   /* Minimal GFM-subset prose renderer (headings, bold/italic/code, links, lists). Kept small and local for
      the Phase-1 shell; consolidates with theo-render.js's md() into a shared module in Phase 2. */
@@ -120,18 +147,10 @@
       //   screenshot_review — qualitative fact, screenshot frozen, a human confirms it supports the claim.
       //   cited_not_verified— capture failed or the figure was not on the page. Never reads as solid.
       var state = f.verification_state || 'cited_not_verified';
-      var stateCls, stateLabel, stateTitle;
-      if (state === 'anchored') {
-        stateCls = 'gf-anchored'; stateLabel = 'anchored';
-        stateTitle = 'The stated figure was found on the rendered, frozen page.';
-      } else if (state === 'screenshot_review') {
-        stateCls = 'gf-review'; stateLabel = 'needs review';
-        stateTitle = 'A full-page screenshot is frozen; a human confirms it supports the claim.';
-      } else {
-        stateCls = 'gf-unverified'; stateLabel = 'unverified';
-        stateTitle = 'The source could not be verified — figure not found on the page, or the page could not be captured.';
-      }
-      var stateBadge = '<span class="' + stateCls + '" title="' + esc(stateTitle) + '">' + stateLabel + '</span>';
+      // Honest ladder (Eames 57480e66). The fact NODE is a rollup — no per-edge reviewer attribution here
+      // (that lives on the anchor edge); the node shows the resting state honestly, never "unverified".
+      var hl = honestLabel(state, f.review_state, null, null);
+      var stateBadge = '<span class="' + hl.cls + '" title="' + esc(hl.title) + '">' + esc(hl.label) + '</span>';
 
       // Evidence links: the frozen screenshot (our permanent capture), the Wayback archive (neutral
       // third party), and the live source. Show whichever exist.
@@ -148,7 +167,6 @@
 
       var meta = '<span class="gf-tier ' + esc(tier) + '">' + esc(f.authority_tier || '?') + '</span>' +
         stateBadge +
-        (f.review_state === 'pending' ? '<span class="gf-review-pill" title="Awaiting Argos/Reg review">review</span>' : '') +
         (f.contestability ? '<span>' + esc(f.contestability) + '</span>' : '') +
         (f.in_conflict ? '<span class="gf-conflict">conflict</span>' : '') +
         (f.freshness_status && f.freshness_status !== 'current' && f.freshness_status !== 'still_valid' ? '<span class="gf-stale">' + esc(f.freshness_status) + '</span>' : '');
@@ -240,16 +258,16 @@
   // bytes; screenshot_review = a human still confirms the frozen screenshot; cited_not_verified = a real
   // weakness. QUIET IS NOT ABSENT — an anchored mark is present-but-recessive, never removed (an unmarked
   // claim is indistinguishable from an unassessed one).
-  function verificationMark(state) {
-    if (state === 'anchored')          return { cls: 'av-anchored',   label: 'anchored', title: 'The stated figure was found verbatim in the source’s frozen page.' };
-    if (state === 'screenshot_review') return { cls: 'av-review',     label: 'screenshot · pending review', title: 'A full-page screenshot is frozen; a human confirms it supports the claim.' };
-    return { cls: 'av-unverified', label: 'unverified', title: 'Not verified — the figure was not found on the page, or the page could not be captured.' };
+  // Review-aware (Eames 57480e66): the edge carries review_state + reviewer stamp, so a confirmed
+  // qualitative edge reads "confirmed by <who> · <date>" — its CEILING — not "pending" or "unverified".
+  function verificationMark(g) {
+    return honestLabel(g.verification_state, g.review_state, g.reviewed_by, g.reviewed_at);
   }
 
   // One anchoring edge: the verbatim quote (centre of gravity, rendered visibly as THE SOURCE'S WORDS —
   // quotation via a serif blockquote on a distinct surface) + a trim line of mark + tier + document.
   function renderAnchorEdge(g) {
-    var mark = verificationMark(g.verification_state);
+    var mark = verificationMark(g);
     var tier = String(g.tier || '').toLowerCase();
     var doc = g.document_title
       ? (g.source_url
@@ -319,11 +337,13 @@
     var weak     = edges.some(function (g) { return g.verification_state === 'cited_not_verified'; });
     var review   = edges.some(function (g) { return g.verification_state === 'screenshot_review'; });
     var hasClaims = (claims || []).length > 0;
-    if (weak)                                return { salience: 'warn',  label: 'unverified source', title: 'A source in this section could not be verified.' };
+    // Honest ladder (Eames 57480e66): a cited-not-yet-checked source is SOURCED, not a red weakness —
+    // quiet, not loud. Genuine caution is reserved for conflict. "unverified" is banished here too.
     if (confidenceState === 'tier_conflict') return { salience: 'warn',  label: 'sources conflict', title: 'Sources in this section disagree.' };
     if (anchored)                            return { salience: 'none' };   // anchored to verbatim bytes — wears nothing
-    if (review)                              return { salience: 'quiet', label: 'pending review', title: 'Frozen screenshots in this section await human confirmation.' };
-    if (hasClaims && edges.length === 0)     return { salience: 'quiet', label: 'not yet grounded', title: 'This section’s claims are not yet anchored to sources.' };
+    if (review)                              return { salience: 'quiet', label: 'evidence on file · review pending', title: 'Sources in this section are captured and frozen; a reviewer confirms they support the claims.' };
+    if (weak)                                return { salience: 'quiet', label: 'sourced · not yet checked', title: 'A source in this section is on file but not yet confirmed against its claim.' };
+    if (hasClaims && edges.length === 0)     return { salience: 'quiet', label: 'not yet grounded', title: 'This section’s claims are not yet linked to sources.' };
     return { salience: 'none' };
   }
   function renderSectionTab(claims, confidenceState) {
@@ -362,8 +382,8 @@
       var grows = grounded.map(function (f) {
         var tier = String(f.authority_tier || '').toLowerCase();
         var st = f.verification_state || 'cited_not_verified';
-        var cls = st === 'anchored' ? 'gf-anchored' : (st === 'screenshot_review' ? 'gf-review' : 'gf-unverified');
-        var lbl = st === 'anchored' ? 'anchored' : (st === 'screenshot_review' ? 'needs review' : 'unverified');
+        var shl = honestLabel(st, f.review_state, null, null);
+        var cls = shl.cls, lbl = shl.label;
         var links = [];
         if (f.screenshot_url) links.push('<a class="gf-link" href="' + esc(f.screenshot_url) + '" target="_blank" rel="noopener">frozen screenshot</a>');
         if (f.archive_url)    links.push('<a class="gf-link" href="' + esc(f.archive_url) + '" target="_blank" rel="noopener">web archive</a>');
@@ -602,10 +622,120 @@
     return summary + body + renderWithheldAggregate(withheld);
   }
 
+  // ── EVIDENCE REVIEW SURFACE (Eames SP 57480e66 / build order 6d3d1c68) ─────────────────────────────
+  // Editor-only. "Does THIS source support THIS claim?" one edge at a time. The verdict writes to the
+  // EDGE (dossier-review-edge), never the fact node — a fact serving five claims needs five verdicts
+  // (per-edge ruling 83163028). CONFIRM -> accepted, verification_state UNTOUCHED (a human eyeball
+  // confirms FIT, the ceiling a qualitative claim can reach; it does not machine-verify). REJECT ->
+  // rejected + reason; the front-end drops it from the claim's supporting set, the edge is not deleted.
+  var REVIEW = { queue: [], i: 0, done: 0 };
+  function buildReviewQueue(d) {
+    var factByDoc = {};
+    (d.ground_facts || []).forEach(function (f) { if (f.source_document_id) factByDoc[f.source_document_id] = f; });
+    var secTitle = {};
+    (d.sections || []).forEach(function (s) { secTitle[s.id] = s.title; });
+    var q = [];
+    (d.claims || []).forEach(function (c) {
+      (c.grounding || []).forEach(function (g) {
+        if (!g.edge_id || g.review_state !== 'pending') return;   // only the outstanding eyeball work
+        var f = g.source_document_id ? factByDoc[g.source_document_id] : null;
+        q.push({
+          edge_id: g.edge_id,
+          claim_text: c.claim_text || '',
+          section: secTitle[c.section_id] || '',
+          document_title: g.document_title || (f && f.title) || '',
+          anchor_quote: g.anchor_quote || '',
+          tier: g.tier || (f && f.authority_tier) || '',
+          source_url: g.source_url || (f && f.source_url) || '',
+          screenshot_url: (f && f.screenshot_url) || ''
+        });
+      });
+    });
+    return q;
+  }
+  function renderReviewSurface(d) {
+    if (!isReviewer()) return '';
+    REVIEW.queue = buildReviewQueue(d); REVIEW.i = 0; REVIEW.done = 0;
+    if (!REVIEW.queue.length) return '';
+    return '<div class="review-surface" id="reviewSurface">' + reviewCardHTML() + '</div>';
+  }
+  function reviewCardHTML() {
+    var total = REVIEW.queue.length;
+    if (REVIEW.i >= total) {
+      return '<div class="rv-head"><span class="rv-title">Verify sources</span>' +
+        '<span class="rv-progress">' + REVIEW.done + ' confirmed · queue clear</span></div>' +
+        '<div class="rv-clear">Every pending source has been reviewed. Reload to confirm the labels updated.</div>';
+    }
+    var e = REVIEW.queue[REVIEW.i];
+    var cap = [];
+    if (e.tier) cap.push('<span class="gf-tier ' + esc(String(e.tier).toLowerCase()) + '">' + esc(e.tier) + '</span>');
+    if (e.document_title) cap.push('<span class="rv-doc">' + esc(e.document_title) + '</span>');
+    var capLinks = [];
+    if (e.screenshot_url) capLinks.push('<a href="' + esc(e.screenshot_url) + '" target="_blank" rel="noopener">frozen capture</a>');
+    if (e.source_url) capLinks.push('<a href="' + esc(e.source_url) + '" target="_blank" rel="noopener">source</a>');
+    return '<div class="rv-head"><span class="rv-title">Verify sources</span>' +
+        '<span class="rv-progress">' + (REVIEW.i + 1) + ' of ' + total + ' · ' + REVIEW.done + ' confirmed</span></div>' +
+      '<div class="rv-body">' +
+        '<div class="rv-claim"><div class="rv-lab">Claim' + (e.section ? ' · ' + esc(e.section) : '') + '</div>' +
+          '<div class="rv-claim-text">' + esc(e.claim_text) + '</div></div>' +
+        '<div class="rv-capture"><div class="rv-lab">Source ' + cap.join(' ') + '</div>' +
+          (e.anchor_quote ? '<blockquote class="rv-quote">' + esc(e.anchor_quote) + '</blockquote>'
+                          : '<div class="rv-noquote">No co-locating span captured — open the frozen capture to judge.</div>') +
+          (capLinks.length ? '<div class="rv-links">' + capLinks.join('<span class="gf-link-sep">·</span>') + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="rv-q">Does this source support this claim?</div>' +
+      '<div class="rv-actions">' +
+        '<button type="button" class="rv-confirm" data-edge="' + esc(e.edge_id) + '">Confirm — it supports the claim</button>' +
+        '<button type="button" class="rv-reject-open">Reject…</button>' +
+        '<button type="button" class="rv-skip">Skip for now</button>' +
+      '</div>' +
+      '<div class="rv-reject" hidden>' +
+        '<input type="text" class="rv-reason" placeholder="Why does it not support the claim? (required)" maxlength="1000">' +
+        '<button type="button" class="rv-reject-do" data-edge="' + esc(e.edge_id) + '">Confirm reject</button>' +
+      '</div>';
+  }
+  function reviewAdvance() { REVIEW.i++; var el = document.getElementById('reviewSurface'); if (el) el.innerHTML = reviewCardHTML(); }
+  function reviewWrite(edgeId, verdict, reason, btn) {
+    var ep = reviewEndpoint();
+    var token = (typeof window !== 'undefined') ? window.RENDER_SHARE_TOKEN : '';
+    if (!ep || !token) { alert('Review is unavailable in this view (no editor token).'); return; }
+    var scope = btn && btn.closest ? btn.closest('.review-surface') : null;
+    var controls = scope ? scope.querySelectorAll('button, input') : [];
+    controls.forEach(function (x) { x.disabled = true; });
+    fetch(ep, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, edge_id: edgeId, verdict: verdict, reason: reason || undefined })
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (x) { throw new Error(x.error || ('HTTP ' + r.status)); });
+      return r.json();
+    }).then(function () {
+      if (verdict === 'confirm') REVIEW.done++;
+      reviewAdvance();
+    }).catch(function (err) {
+      controls.forEach(function (x) { x.disabled = false; });
+      alert('Could not save that verdict: ' + (err && err.message ? err.message : 'unknown error'));
+    });
+  }
+  function wireReview() {
+    var el = document.getElementById('reviewSurface'); if (!el) return;
+    el.addEventListener('click', function (e) {
+      var c = e.target.closest && e.target.closest('.rv-confirm');
+      if (c) { reviewWrite(c.getAttribute('data-edge'), 'confirm', null, c); return; }
+      var ro = e.target.closest && e.target.closest('.rv-reject-open');
+      if (ro) { var box = el.querySelector('.rv-reject'); if (box) { box.hidden = false; var inp = box.querySelector('.rv-reason'); if (inp) inp.focus(); } return; }
+      var rd = e.target.closest && e.target.closest('.rv-reject-do');
+      if (rd) { var inp2 = el.querySelector('.rv-reason'); var reason = inp2 ? inp2.value.trim() : ''; if (!reason) { if (inp2) inp2.focus(); return; } reviewWrite(rd.getAttribute('data-edge'), 'reject', reason, rd); return; }
+      var sk = e.target.closest && e.target.closest('.rv-skip');
+      if (sk) { reviewAdvance(); return; }
+    });
+  }
+
   function renderMain(d) {
     var secs = sectionsOrdered(d);
     var cbs = claimsBySection(d);
     return '<div class="dossier-main">' +
+      renderReviewSurface(d) +
       renderAskPanel(d) +
       renderL0(secs) +
       '<div class="layer-divider"><span>Full synthesis</span>' +
@@ -1010,6 +1140,7 @@
     root.innerHTML = html;
     wireInteractions();
     wireAsk();
+    wireReview();
   }
 
   // Session id from ?session= (page behind Cloudflare Access) OR window.RENDER_SESSION_ID (set by the

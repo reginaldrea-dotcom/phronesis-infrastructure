@@ -97,3 +97,9 @@ verify_jwt = false
 # resumable, service-role writes to link_verification. MUST deploy with --no-verify-jwt.
 [functions.link-verification-pass]
 verify_jwt = false
+
+# dossier-review-edge is the evidence-review verdict write (Eames 57480e66): an editor confirms/rejects
+# "does this source support this claim?" per EDGE. Editor-token gated server-side, writes review_state to
+# element_dependency (RLS deny-all) with the service-role credential. MUST deploy with --no-verify-jwt.
+[functions.dossier-review-edge]
+verify_jwt = false
