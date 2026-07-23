@@ -61,11 +61,17 @@
         // call can present it.
         window.RENDER_IS_EDITOR = res.is_editor === true;
         window.RENDER_SHARE_TOKEN = token;
-        // Renderer choice. DEFAULT = the legacy research-session render (theo-render.js) — this keeps every
-        // already-distributed share link (e.g. the ECHR interview-prep slice) rendering exactly as before.
-        // A DOSSIER share opts in with &view=dossier to get the universal Dossier page (§-section descent,
-        // grounded-source cards) — the new view. Opt-in, not default, so no existing link changes underfoot.
-        if (new URLSearchParams(location.search).get('view') === 'dossier') {
+        // Renderer choice (Reg, 23 Jul 2026 — default dossier shares to the Dossier page).
+        // A DOSSIER share (resolve returns a dossier_instance_id) DEFAULTS to the universal Dossier
+        // page (§-section descent, grounded-source cards, two-zone section-foot, editor affordances).
+        // A LEGACY SLICE share (no dossier_instance_id — e.g. the ECHR interview-prep slice) DEFAULTS
+        // to the legacy research-session render (theo-render.js), so every already-distributed slice
+        // link renders exactly as before. An explicit &view= OVERRIDES either way: view=dossier forces
+        // the Dossier page, any other value (e.g. view=legacy) forces the legacy render — so a dossier
+        // can still be inspected on the old renderer if ever needed, and the toggle is not lost.
+        var viewParam = new URLSearchParams(location.search).get('view');
+        var useDossier = viewParam ? (viewParam === 'dossier') : !!res.dossier_instance_id;
+        if (useDossier) {
           var css = document.createElement('link');
           css.rel = 'stylesheet'; css.href = 'primes/dossier.css?v=20260707n';
           document.head.appendChild(css);
