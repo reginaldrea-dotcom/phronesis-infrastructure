@@ -91,3 +91,9 @@ verify_jwt = false
 # surface, called with the publishable key and no JWT. MUST deploy with --no-verify-jwt.
 [functions.navigator-action-annotate]
 verify_jwt = false
+
+# link-verification-pass is C11 (Napoleon 03df2aae): the cheap point-in-time verification of
+# every engine-returned link. UUID-addressed (theo_session_id is the capability), bounded +
+# resumable, service-role writes to link_verification. MUST deploy with --no-verify-jwt.
+[functions.link-verification-pass]
+verify_jwt = false
