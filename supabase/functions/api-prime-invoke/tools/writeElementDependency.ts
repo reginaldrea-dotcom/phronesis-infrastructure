@@ -12,7 +12,7 @@
 // descend-to-evidence (claim -> fact -> frozen capture) and its tier-gated render states.
 
 import type { Tool, ToolContext } from "./types.ts";
-import { runCoLocationGate } from "../lib/coLocationGate.ts";
+import { indexPageSignals, runCoLocationGate } from "../lib/coLocationGate.ts";
 
 const DEPENDENT_COL: Record<string, string> = {
   synthesis_claim: "p_dependent_synthesis_claim_id",
@@ -125,6 +125,18 @@ export const writeElementDependencyTool: Tool = {
             hasScreenshot = !!(attn.screenshot_url || attn.retrievable_url || attn.archive_url);
           }
           const gate = runCoLocationGate({ claimText, pageContent, anchorQuote, claimFigure, hasScreenshot });
+          // C12 (Napoleon 16918c96): an anchored outcome on an INDEX-SUSPECT page demotes to
+          // screenshot_review — the co-location gate proves the span is on the page, but an
+          // index/FAQ/contents page can MENTION the claim (link title, summary blurb) without
+          // STATING it; only a human can draw that line. Content-shaped detection, never URL.
+          if (gate.verificationState === "anchored") {
+            const idx = indexPageSignals(pageContent);
+            if (idx.suspect) {
+              gate.verificationState = "screenshot_review";
+              gate.reviewState = "pending";
+              gate.reason += ` — BUT the page shape is index/landing-suspect (${idx.links_per_kchar} links/kchar, list/para ${idx.list_para_ratio}): it may MENTION rather than STATE. Demoted to human review; prefer following to the page that states the claim and re-linking there.`;
+            }
+          }
           await ctx.supabase.from("element_dependency").update({
             verification_state: gate.verificationState,
             anchor_quote: anchorQuote || null,

@@ -187,6 +187,36 @@ export interface GateResult {
   matchedTerms: string[];
 }
 
+// C12 — INDEX/LANDING-PAGE SUSPICION (Napoleon 16918c96; origin: the Scope-3 FAQ false landing,
+// Reg-observed). The distinction the co-location gate cannot draw alone: a page that MENTIONS a
+// claim vs a page that STATES it. An index/FAQ/contents/catalogue page can carry the figure and
+// subject in a link title or summary blurb — technically co-located in real bytes, still the
+// wrong artefact; the authoritative statement sits one click away. Detection is CONTENT-based,
+// never URL-based (Napoleon's sweep: URL patterns produced a false positive on a genuine
+// briefing under /resources/). Signals over the FROZEN capture (Firecrawl markdown): link
+// density and list-vs-prose structure. Thresholds calibrated against the 23 Jul grounded-corpus
+// audit — flags the Act's /contents page (18.1 links/kchar), the ISO catalogue pages (~15), the
+// Scope-3 FAQ (10.2 + list/para 3.27); passes the Guardian article (10.3 + 0.58), the NAO report
+// page (13.4), IPCC chapters (2-6), PDFs (~0). Suspicion NEVER blocks and never auto-anchors —
+// it demotes an anchored outcome to screenshot_review so a human draws the mentions/states line.
+export function indexPageSignals(pageContent: string): {
+  suspect: boolean; links: number; links_per_kchar: number; list_para_ratio: number;
+} {
+  const chars = Math.max(pageContent.length, 1);
+  const links = (pageContent.match(/\]\(/g) ?? []).length + (pageContent.match(/https?:\/\//g) ?? []).length;
+  const listLines = (pageContent.match(/(^|\n)\s*[-*•]\s/g) ?? []).length;
+  const paras = (pageContent.match(/\n\n/g) ?? []).length || 1;
+  const lpk = links / (chars / 1000);
+  const ratio = listLines / paras;
+  const suspect = chars > 1500 && (lpk >= 14 || (lpk >= 10 && ratio >= 1.5));
+  return {
+    suspect,
+    links,
+    links_per_kchar: Math.round(lpk * 10) / 10,
+    list_para_ratio: Math.round(ratio * 100) / 100,
+  };
+}
+
 export function runCoLocationGate(inp: GateInput): GateResult {
   const quote = (inp.anchorQuote || "").trim();
   const none = (state: GateResult["verificationState"], review: GateResult["reviewState"], reason: string):

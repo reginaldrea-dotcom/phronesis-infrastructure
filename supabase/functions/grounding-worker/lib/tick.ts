@@ -140,6 +140,11 @@ function groundingPrompt(claimId: string, hint: Record<string, unknown> | null):
     lines.push("No source URL was provided - identify the single most authoritative source yourself and capture it. Do not dispatch a web search.");
   }
   lines.push("If write_ground_fact returns cited_not_verified (source dead/blocked/figure absent), report that plainly and do NOT fabricate a source.");
+  // C12 (Napoleon 16918c96): FOLLOW TO CONTENT. An index/FAQ/contents/catalogue/landing page can
+  // MENTION the claim while the page that STATES it sits one click deeper (origin: the Scope-3 FAQ
+  // false landing). The tools detect this from the captured page's SHAPE and will demote instead of
+  // anchoring; the craft is to go one level deeper yourself.
+  lines.push("If write_ground_fact reports the page is INDEX/LANDING-SUSPECT (or you can see the capture is a contents/FAQ/catalogue/hub page): do NOT settle for it. Find within it the link to the page or document that actually STATES the claim (often the underlying PDF or section page), re-mint from THAT URL, and link the claim there. Never anchor to a page that merely mentions. If no deeper page exists, leave the fact in review honestly.");
   lines.push("Do exactly this ONE claim. Do not ground others.");
   return lines.join("\n");
 }

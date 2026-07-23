@@ -16,6 +16,7 @@
 
 import type { Tool, ToolContext } from "./types.ts";
 import { captureSource } from "../lib/captureSource.ts";
+import { indexPageSignals } from "../lib/coLocationGate.ts";
 
 function fail(msg: string): string {
   return `write_ground_fact error: ${msg}\n[SYSTEM: surface to Reg, do not retry.]`;
@@ -159,6 +160,23 @@ export const writeGroundFactTool: Tool = {
       if (!contentHash) contentHash = "unverified";
     }
 
+    // C12 (Napoleon 16918c96): index/landing-page suspicion from the CAPTURED bytes — content
+    // shape only, never the URL. Stamped into the capture's attestation (a property of the page,
+    // reused by later edges and audits). Origin case: the Scope-3 FAQ that carried the search
+    // term while the authoritative statement sat one click deeper.
+    const idx = renderedText ? indexPageSignals(renderedText) : { suspect: false, links: 0, links_per_kchar: 0, list_para_ratio: 0 };
+    if (sourceDocId && renderedText && !providedDocId) {
+      try {
+        const cur = await ctx.supabase.from("source_document").select("attestation").eq("id", sourceDocId).maybeSingle();
+        const att = ((cur.data as { attestation?: Record<string, unknown> } | null)?.attestation ?? {}) as Record<string, unknown>;
+        await ctx.supabase.from("source_document")
+          .update({ attestation: { ...att, index_suspect: idx.suspect, index_signals: { links: idx.links, links_per_kchar: idx.links_per_kchar, list_para_ratio: idx.list_para_ratio } } })
+          .eq("id", sourceDocId);
+      } catch (e) {
+        console.error(`write_ground_fact: index-signal stamp failed for ${sourceDocId}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     const ok200 = httpStatus === 0 ? !!sourceDocId : (httpStatus >= 200 && httpStatus < 300);
     let verificationState: "anchored" | "screenshot_review" | "cited_not_verified";
     let reviewState: "not_required" | "pending";
@@ -169,6 +187,11 @@ export const writeGroundFactTool: Tool = {
       figureFound = figurePresent(renderedText, canonical);
       verificationState = figureFound ? "anchored" : "cited_not_verified";
       reviewState = "not_required";
+      // A figure found on an index-suspect page may sit in a link title or summary blurb — the
+      // page MENTIONS it; the page that STATES it is a click deeper. Never a silent anchor.
+      if (verificationState === "anchored" && idx.suspect) {
+        verificationState = "screenshot_review"; reviewState = "pending";
+      }
     } else {
       // qualitative: reviewable if there is visible proof — a screenshot OR (operator-supplied) a
       // retrievable frozen document a human can open. Fact-level state is legacy; the per-edge co-location
@@ -220,8 +243,10 @@ export const writeGroundFactTool: Tool = {
       let sys: string;
       if (verificationState === "anchored") {
         sys = `PERSISTED + ANCHORED. ground_fact ${row.id} (numeric) — the figure '${canonical}' WAS found on the rendered page (HTTP ${httpStatus}); screenshot + rendered text frozen${archiveUrl ? ", Wayback archived" : ""}. Next: link it to the claim(s) via write_element_dependency (edge_kind claim_on_fact).`;
+      } else if (verificationState === "screenshot_review" && factKind === "numeric") {
+        sys = `PERSISTED + SCREENSHOT_REVIEW (index-page demotion, NOT an anchor). ground_fact ${row.id} (numeric) — the figure '${canonical}' IS on the rendered page, but the page's shape is index/landing-suspect (${idx.links_per_kchar} links/kchar, list/para ${idx.list_para_ratio}): it may merely MENTION the figure (link title, summary blurb) while the page that STATES it sits one click deeper. PREFERRED NEXT MOVE: open this page's own links, find the content page or document that actually states the figure, and re-mint from THAT URL — then link the claim there. If no deeper page exists, leave this for human review; do not force an anchor.`;
       } else if (verificationState === "screenshot_review") {
-        sys = `PERSISTED + SCREENSHOT_REVIEW. ground_fact ${row.id} (qualitative) — a full-page screenshot is frozen${archiveUrl ? " and Wayback archived" : ""}, flagged REQUIRES-HUMAN-REVIEW (Argos/Reg confirm the page supports the claim: '${canonical}'). This is NOT a fake anchor; it is honestly awaiting review. Link it to the claim(s) via write_element_dependency.`;
+        sys = `PERSISTED + SCREENSHOT_REVIEW. ground_fact ${row.id} (qualitative) — a full-page screenshot is frozen${archiveUrl ? " and Wayback archived" : ""}, flagged REQUIRES-HUMAN-REVIEW (Argos/Reg confirm the page supports the claim: '${canonical}').${idx.suspect ? ` NOTE: the page shape is index/landing-suspect (${idx.links_per_kchar} links/kchar) — it may MENTION rather than STATE; prefer re-minting from the content page it links to.` : ""} This is NOT a fake anchor; it is honestly awaiting review. Link it to the claim(s) via write_element_dependency.`;
       } else if (factKind === "numeric") {
         sys = `PERSISTED but CITED_NOT_VERIFIED. ground_fact ${row.id} (numeric) — the figure '${canonical}' was NOT found on the rendered page${sourceDocId ? ` (HTTP ${httpStatus})` : " (source could not be fetched/rendered)"}. Either the URL is wrong/dead, the figure is served in a way the render missed, or the number differs. Fix the URL/figure and re-mint; do NOT leave a load-bearing numeric claim on an unverified source.`;
       } else {
@@ -230,6 +255,7 @@ export const writeGroundFactTool: Tool = {
       return JSON.stringify({
         ok: true, ground_fact_id: row.id, verification_state: verificationState, review_state: reviewState,
         fact_kind: factKind, figure_found: factKind === "numeric" ? figureFound : undefined,
+        index_suspect: idx.suspect || undefined,
         source_document_id: sourceDocId, screenshot_url: screenshotUrl, archive_url: archiveUrl,
         http_status: httpStatus, authority_tier: row.authority_tier, contestability: row.contestability, "[SYSTEM]": sys,
       });
