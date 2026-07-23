@@ -165,178 +165,34 @@ id<html lang="en">
     .tile-refresh:hover{color:var(--muted)}
     .status-msg{font-size:14px;color:var(--light);font-style:italic;padding:8px 0}
     @media(max-width:600px){header{padding:20px 20px 16px}nav{padding:0 20px}.page{padding:24px 20px}}
-    /* ===== Baton board panel (Eames SP 76019f72; prototype 383aa695). Scoped to .bp. ===== */
-    .bp{--paper:#F4F2EA;--bp-surface:#FBFAF5;--surface-2:#EFEDE3;--sink:#E7E4D8;--bp-ink:#1E1B16;--ink-soft:#5A554C;--ink-faint:#8E897D;--rule:#DAD5C7;--rule-soft:#E6E2D5;
-      --k-blocked:#B0463A;--k-blocked-dim:rgba(176,70,58,0.10);--k-needs_ruling:#5A4A8A;--k-needs_ruling-dim:rgba(90,74,138,0.10);--k-spawned:#2E6B6B;--k-spawned-dim:rgba(46,107,107,0.10);
-      --k-failed:#9C6B2E;--k-failed-dim:rgba(156,107,46,0.12);--k-gated:#4A5A6B;--k-gated-dim:rgba(74,90,107,0.10);--k-unpicked:#6B6457;--k-unpicked-dim:rgba(107,100,87,0.10);
-      --stale:#9A7B1E;--stale-dim:rgba(154,123,30,0.10);--invoke:#2E5D4F;--bp-serif:'Spectral',Georgia,serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
-      max-width:760px;font-family:var(--bp-serif);color:var(--bp-ink);font-size:15px;line-height:1.5;}
-    .bp .iti{border:1.5px solid var(--bp-ink);border-radius:4px;background:var(--bp-surface);overflow:hidden;}
-    .bp .iti .h{display:flex;align-items:center;gap:9px;padding:9px 14px;background:var(--bp-ink);color:var(--paper);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.14em;}
-    .bp .iti .h .gen{margin-left:auto;opacity:0.7;text-transform:none;letter-spacing:0.04em;}
-    .bp .iti .body{padding:15px 16px;font-size:16px;line-height:1.55;}
-    .bp .iti .open{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--invoke);}
-    .bp .iti .aware{display:block;margin-top:7px;font-size:14px;color:var(--ink-soft);}
-    .bp .empty{padding:15px 16px;font-size:14px;color:var(--ink-faint);font-style:italic;}
-    .bp .copybar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--rule-soft);background:var(--surface-2);}
-    .bp .copy{font-family:var(--mono);font-size:12px;letter-spacing:0.04em;border:1px solid var(--bp-ink);background:var(--bp-ink);color:var(--paper);padding:7px 16px;border-radius:2px;cursor:pointer;}
-    .bp .copy:hover{opacity:0.88;} .bp .copy.ok{background:var(--invoke);border-color:var(--invoke);}
-    .bp .copyhint{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
-    .bp .next3{margin-top:14px;}
-    .bp .next3 .cap{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.13em;color:var(--ink-faint);margin-bottom:10px;}
-    .bp .nx{border:1px solid var(--rule);border-radius:3px;background:var(--bp-surface);margin-bottom:8px;overflow:hidden;}
-    .bp .nx .main{display:flex;align-items:flex-start;gap:11px;padding:11px 13px;}
-    .bp .nx .num{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--ink-faint);width:14px;flex-shrink:0;padding-top:5px;}
-    .bp .kind{flex-shrink:0;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600;font-size:14px;}
-    .bp .nxbody{flex:1;min-width:0;} .bp .nxline{font-size:14.5px;line-height:1.4;}
-    .bp .holder{font-family:var(--mono);font-weight:600;font-size:12px;} .bp .track{font-weight:500;}
-    .bp .kindlab{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:0.07em;padding:1px 6px;border-radius:2px;}
-    .bp .nxnote{margin-top:3px;font-size:13px;color:var(--ink-soft);font-style:italic;}
-    .bp .nxmeta{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
-    .bp .unblock{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;border:1px solid var(--invoke);color:var(--invoke);background:transparent;padding:5px 11px;border-radius:2px;cursor:pointer;}
-    .bp .unblock:hover{background:var(--invoke);color:var(--paper);}
-    .bp .unblock-iti{display:none;border-top:1px dashed var(--rule);background:var(--surface-2);padding:13px 14px;}
-    .bp .nx.open .unblock-iti,.bp .hrow.open .unblock-iti{display:block;}
-    .bp .unblock-iti .lbl{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:0.13em;color:var(--ink-faint);margin-bottom:7px;}
-    .bp .unblock-iti .txt{font-size:14px;line-height:1.5;} .bp .unblock-iti .copybar{margin:11px -14px -13px;border-radius:0;}
-    .bp .expand{margin-top:6px;}
-    .bp .expand .btn{width:100%;text-align:left;font-family:var(--mono);font-size:11.5px;letter-spacing:0.03em;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--rule);border-radius:3px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;}
-    .bp .expand .btn:hover{background:var(--sink);} .bp .expand .btn .tw{transition:transform .2s;} .bp .expand.open .btn .tw{transform:rotate(90deg);} .bp .expand .btn .ct{margin-left:auto;color:var(--ink-faint);}
-    .bp .fullboard{display:none;margin-top:14px;} .bp .expand.open + .fullboard{display:block;}
-    .bp details.lane{margin-top:12px;border:1px solid var(--rule-soft);border-radius:3px;overflow:hidden;}
-    .bp details.lane > summary{cursor:pointer;list-style:none;padding:10px 13px;background:var(--surface-2);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.12em;color:var(--ink-soft);display:flex;align-items:center;gap:9px;}
-    .bp details.lane > summary::-webkit-details-marker{display:none;} .bp details.lane > summary .tw{margin-left:auto;transition:transform .2s;color:var(--ink-faint);} .bp details.lane[open] > summary .tw{transform:rotate(90deg);}
-    .bp details.lane.routing > summary{color:var(--k-blocked);} .bp details.lane.possibly > summary{color:var(--stale);} .bp details.lane .lbody{padding:12px 13px;}
-    /* Possibly-halted check-in (baton 38e5d802 / SP 76019f72): route button -> file a halt without SQL */
-    .bp .hrow.poss .checkin{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;margin-left:10px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);color:var(--stale);cursor:pointer;}
-    .bp .ci-form{margin-top:9px;padding:9px 10px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--surface-2);}
-    .bp .ci-form[hidden]{display:none;}
-    .bp .ci-q{font-size:12.5px;color:var(--ink-soft);margin-bottom:7px;}
-    .bp .ci-row{display:flex;align-items:center;gap:9px;margin-bottom:7px;} .bp .ci-or{font-size:11.5px;color:var(--ink-faint);}
-    .bp .ci-halt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
-    .bp .ci-halt select,.bp .ci-halt input{font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);color:inherit;}
-    .bp .ci-halt .ci-note{flex:1 1 220px;} .bp .ci-halt .ci-needs{flex:1 1 220px;}
-    .bp .ci-onit,.bp .ci-file{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:4px 10px;border-radius:3px;cursor:pointer;}
-    .bp .ci-onit{border:1px solid var(--rule-soft);background:var(--bp-surface);color:var(--ink-soft);}
-    .bp .ci-file{border:1px solid var(--k-blocked);background:var(--k-blocked-dim,transparent);color:var(--k-blocked);}
-    .bp .arow{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--rule-soft);border-radius:3px;background:var(--bp-surface);margin-bottom:6px;font-size:13.5px;}
-    .bp .arow .who{font-family:var(--mono);font-size:11px;color:var(--ink-soft);min-width:84px;} .bp .arow .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .bp .arow .when{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);white-space:nowrap;} .bp .arow.staleflag .when{color:var(--stale);}
-    .bp .arow .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-faint);flex-shrink:0;} .bp .arow.staleflag .dot{background:var(--stale);}
-    .bp .hrow{border:1px solid var(--rule);border-left:3px solid var(--ink-faint);border-radius:3px;background:var(--bp-surface);margin-bottom:8px;overflow:hidden;}
-    .bp .hrow .main{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;} .bp .hbody{flex:1;min-width:0;} .bp .hline{font-size:14px;line-height:1.4;}
-    .bp .hnote{margin-top:3px;font-size:13px;color:var(--ink-soft);font-style:italic;}
-    .bp .hmeta{margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 11px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
-    .bp .age.stale{color:var(--k-blocked);font-weight:500;} .bp .watch{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);padding:4px 0;}
-    .bp .children{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;} .bp .child{font-family:var(--mono);font-size:10.5px;color:var(--k-spawned);border:1px solid var(--k-spawned);background:var(--k-spawned-dim);border-radius:2px;padding:2px 7px;}
-    .bp .hrow.poss{border-left-color:var(--stale);} .bp .hrow.poss .kind{background:var(--stale-dim);color:var(--stale);}
-    .bp .hrow.unpicked{border-left-color:var(--k-unpicked);} .bp .hrow.unpicked .kind{background:var(--k-unpicked-dim);color:var(--k-unpicked);}
-    .bp .lane-empty{font-size:13px;color:var(--ink-faint);font-style:italic;padding:4px 2px;}
-    .bp .arow.inproc{border-left:3px solid var(--k-gated);} /* Fix 2: calm steel in-process, not kind-coloured, not greyed */
-    .bp .arow.inproc.staleflag{border-left-color:var(--stale);}
-    .bp .promote{font-family:var(--mono);font-size:11px;border:1px solid var(--invoke);color:var(--invoke);background:transparent;padding:4px 10px;border-radius:2px;cursor:pointer;}
-    .bp .promote:hover{background:var(--invoke);color:var(--paper);} .bp .promote:disabled{opacity:0.6;cursor:default;}
-    .bp details.lane .lbody{max-height:340px;overflow-y:auto;} /* Fix 4: full unclaimed lane uncapped but scrollable, nothing buried */
-    .bp :focus-visible{outline:2px solid var(--invoke);outline-offset:2px;}
-    @media (prefers-reduced-motion:reduce){.bp *{transition:none!important;}}
-    /* ===== DELIVERABLE VIEW (cfaaa070; Eames SP f729d071). Outcome-oriented, legibility-first — older eyes, decision-at-a-glance. ===== */
-    #deliverables{max-width:940px}
-    .dv-banner{font-size:14.5px;color:var(--badge-amber);background:#FBF3E6;border:1px solid #EBD9B8;padding:11px 18px;border-radius:4px;margin-bottom:26px;font-style:italic}
-    .dv-banner code{font-family:'IBM Plex Mono',monospace;font-style:normal;font-size:13px}
-    .dv-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 24px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
-    .dv-card.done{opacity:.6}
-    .dv-card.done .dv-name{text-decoration:line-through;color:var(--muted);font-weight:500} /* v2.8 present-as-done: struck title */
-    .dv-card.dv-act{border-left:3px solid #1B2C4A}
-    .dv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-    .dv-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;line-height:1.12;color:var(--text)}
-    .dv-outcome{font-size:14.5px;line-height:1.45;color:var(--muted);margin-top:6px;max-width:64ch}
-    .dv-status{flex:none;font-family:'Cormorant SC',serif;font-size:15px;letter-spacing:1.5px;font-weight:600;padding:8px 16px;border-radius:4px;white-space:nowrap}
-    .dv-status.NOT_STARTED{background:var(--bg-dim);color:var(--muted)}
-    .dv-status.IN_PROGRESS{background:#E3ECF8;color:var(--badge-blue)}
-    .dv-status.BLOCKED{background:#F0E0DB;color:#9A5746}
-    .dv-status.DONE{background:#E2F1E7;color:var(--badge-green)}
-    /* THE NEXT STEP — visual loudness follows ACTIONABILITY, not alarm (Eames v2). */
-    .dv-next{margin-top:16px;font-size:18px;line-height:1.35;font-weight:600;display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:5px}
-    .dv-next.act{background:#1B2C4A;color:#FAFAF8}            /* actionable = hero. v2.7: deep blue (navy+gold), not strident black — dark-blue=your-move, light-blue=in-flight */
-    .dv-next.act .baton{color:#fff}
-    .dv-next.act .prime{color:#FFCF6E}
-    .dv-next.flight{background:#EAF0F8;color:var(--badge-blue);font-weight:500;font-size:16px} /* in-flight = calm */
-    .dv-next .arrow{font-size:21px;line-height:1}
-    /* BLOCKED band — quietest: nothing here for Reg to do. Muted clay; the note lives in Full chain. */
-    .dv-block{margin-top:14px;background:#F4EAE6;color:#7A4A3C;border:1px solid #E6D2CB;border-radius:5px;padding:11px 16px}
-    .dv-block .bhead{font-size:15px;font-weight:600;letter-spacing:.2px;display:flex;align-items:center;gap:9px}
-    .dv-block .bglyph{color:#B4493A;font-size:15px}
-    /* v2.2 PENDING_FOLD (Eames ruling, f729d071): a CATCH, not a throw — actionable band (loud, it IS
-       Reg's move) plus a light lilac "Sibling reported" tablet that does the discriminating work the band
-       can't. Plum (#5B3A6B on #E6DCEC) is distinct from every state colour, so it can't read as done. */
-    .dv-status.PENDING_FOLD{background:#E6DCEC;color:#5B3A6B}
-    .dv-tablet{display:inline-flex;align-items:center;gap:6px;background:#E6DCEC;color:#5B3A6B;font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1px;font-weight:600;padding:4px 11px;border-radius:3px;margin-bottom:11px}
-    .dv-tablet .tg{font-size:13px;line-height:1}
-    .dv-next.fold{flex-direction:column;align-items:flex-start;gap:5px}
-    .dv-next.fold .dv-fold-hero{font-size:18px;font-weight:600}
-    .dv-next.fold .dv-fold-sub{font-size:13.5px;font-weight:500;color:#E4D2A6;letter-spacing:.3px}
-    .dv-foldrep{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5B3A6B;background:#F2EBF5;border:1px solid #E0D2E8;border-radius:3px;padding:7px 11px;margin-bottom:10px;word-break:break-all}
-    /* v2.7 — colour legend: a one-line key (the bands encode WHO MUST ACT). The single refresh + stamp
-       now live in the page header (loadData), so there is no scoped Deliverables refresh control. */
-    .dv-legend{display:flex;align-items:center;gap:16px;margin:2px 0 14px;font-size:12px;color:var(--light)}
-    .dv-legend .dv-k{display:inline-flex;align-items:center;gap:6px}
-    .dv-legend .sw{width:11px;height:11px;border-radius:2px;display:inline-block}
-    .dv-legend .sw.act{background:#1B2C4A}
-    .dv-legend .sw.flight{background:#7FA8D9}
-    .dv-legend .sw.blocked{background:#C9A99E}
-    .dv-legend .sw.fold{background:#E6DCEC;border:1px solid #C9B6D6}
-    /* v2.6 — sitting-duration: NEUTRAL muted metadata, never a red/overdue alarm (letting work sit is legitimate). */
-    .dv-sitting{font-size:12.5px;color:var(--light);font-style:italic;border:1px solid var(--border-lt);border-radius:3px;padding:2px 9px}
-    /* v2.5 — just-cleared confirmation IN PLACE: grey + pulse where the cursor already is; persists till refresh. */
-    .dv-card.dv-cleared{opacity:.62;border-left:3px solid var(--badge-green)}
-    .dv-card.dv-cleared .dv-name{text-decoration:line-through;color:var(--muted);font-weight:500}
-    .dv-donemark{flex:none;font-family:'Cormorant SC',serif;font-size:15px;letter-spacing:1px;font-weight:600;color:var(--badge-green);background:#E2F1E7;padding:8px 16px;border-radius:4px;white-space:nowrap}
-    .dv-clearrow{margin-top:12px}
-    .dv-cleartidy{font-family:'IBM Plex Mono',monospace;font-size:11.5px;border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:4px 11px;border-radius:3px;cursor:pointer}
-    .dv-cleartidy:hover{background:var(--bg-dim)}
-    @keyframes dvpulse{0%{box-shadow:0 0 0 0 rgba(95,150,95,.55)}100%{box-shadow:0 0 0 16px rgba(95,150,95,0)}}
-    .dv-pulse{animation:dvpulse .9s ease-out}
-    /* v2.5/v2.6 deliberate actions — off the card face, in the Full-chain expansion (keeps the body clean, v2). */
-    .dv-xactions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-lt)}
-    .dv-xbtn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 12px;border-radius:3px;cursor:pointer}
-    .dv-xbtn.clear:hover{background:#E2F1E7;border-color:var(--badge-green);color:var(--badge-green)}
-    .dv-xbtn.dismiss:hover{background:#F4EAE6;border-color:#B4493A;color:#9A5746}
-    .dv-actions{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
-    .dv-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.3px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:5px 12px;border-radius:3px;cursor:pointer}
-    .dv-btn:hover{background:var(--bg-dim);border-color:var(--muted)}
-    .dv-meta{display:flex;align-items:center;gap:18px;margin-top:18px;font-size:14.5px;color:var(--muted);flex-wrap:wrap}
-    .dv-prog{font-weight:600;color:var(--text)}
-    .dv-progbar{flex:1;max-width:220px;height:8px;background:var(--bg-dim);border-radius:4px;overflow:hidden}
-    .dv-progbar i{display:block;height:100%;background:var(--badge-green)}
-    .dv-novalue{font-size:13px;color:var(--badge-amber);font-style:italic;border:1px solid #EBD9B8;background:#FBF3E6;padding:3px 11px;border-radius:3px}
-    .dv-expand{margin-top:16px}
-    .dv-expand summary{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1.2px;color:var(--light);cursor:pointer;list-style:none;padding:4px 0}
-    .dv-expand summary::-webkit-details-marker{display:none}
-    .dv-chain{margin-top:12px;border-top:1px solid var(--border-lt);padding-top:6px}
-    .dv-step{display:flex;align-items:center;gap:14px;padding:10px 0;font-size:15px;border-bottom:1px solid var(--border-lt)}
-    .dv-step:last-child{border-bottom:none}
-    .dv-step .pos{flex:none;width:27px;height:27px;border-radius:50%;background:var(--bg-dim);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
-    .dv-step.DONE .pos{background:#E2F1E7;color:var(--badge-green)}
-    .dv-step.ACTIVE .pos{background:#E3ECF8;color:var(--badge-blue)}
-    .dv-step.HALTED .pos{background:var(--badge-red);color:#fff}
-    .dv-step .stk{flex:1;color:var(--text)}
-    .dv-step .vk{font-size:11px;color:var(--light);font-style:italic}
-    .dv-step .sstate{font-size:12px;letter-spacing:.8px;font-variant:small-caps;color:var(--muted);min-width:74px;text-align:right}
-    .dv-step .sholder{font-size:13px;color:var(--light);min-width:96px;text-align:right}
-    .dv-step .shalt{display:block;margin-top:5px;font-size:12.5px;line-height:1.5;color:#8A5A4C;white-space:pre-wrap}
-    .dv-dismissed{margin-top:20px;border-top:1px solid var(--border-lt);padding-top:10px}
-    .dv-dismissed>summary{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1.2px;color:var(--light);cursor:pointer;list-style:none;padding:4px 0}
-    .dv-dismissed>summary::-webkit-details-marker{display:none}
-    .dv-dbody{margin-top:8px}
-    .dv-drow{display:flex;align-items:center;gap:12px;padding:7px 0;font-size:14px;border-bottom:1px solid var(--border-lt)}
-    .dv-drow:last-child{border-bottom:none}
-    .dv-drow .dvk{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--light);min-width:74px}
-    .dv-drow .dvl{flex:1;color:var(--muted)}
-    .dv-hint{font-size:12px;color:var(--light);font-style:italic;margin:2px 0 16px}
-    .dv-undo{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:120;display:none;align-items:center;gap:16px;background:#1A1916;color:#FAFAF8;padding:12px 20px;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.28);font-size:14px}
-    .dv-undobtn{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.4px;background:transparent;border:1px solid #6A675F;color:#FFCF6E;padding:4px 12px;border-radius:3px;cursor:pointer}
-    .dv-undobtn:hover{background:#2A2823}
-    .dv-empty{font-size:16px;color:var(--muted);font-style:italic;padding:48px 0;text-align:center}
+    /* ===== ACTION LINES (Napoleon 290853ae; replaces the retired baton + deliverables boards).
+       Two notice classes, two lifecycles: action lines are DERIVED and SELF-CLEARING — no dismiss
+       affordance exists here by design (snooze / soft-supersede only); alerts keep dismiss. ===== */
+    .al-sect-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+    .al-count{font-size:12px;color:var(--light);font-style:italic}
+    .al-item .al-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .al-item.expanded .al-title{display:block;-webkit-line-clamp:unset}
+    .al-notemark{color:var(--badge-blue);font-style:italic}
+    .al-note-show{font-size:13px;line-height:1.6;color:var(--text);background:var(--bg-dim);border:1px solid var(--border-lt);border-radius:3px;padding:10px 12px;margin-bottom:10px}
+    .al-detail{max-height:260px;overflow-y:auto}
+    .al-editrow{display:flex;gap:8px;margin-top:10px;align-items:flex-start}
+    .al-input{flex:1;font-family:'Lora',serif;font-size:12.5px;border:1px solid var(--border);padding:6px 10px;background:var(--bg);color:var(--text);border-radius:2px;outline:none}
+    .al-input:focus{border-color:var(--muted)}
+    .al-ta{flex:1;font-family:'Lora',serif;font-size:12.5px;border:1px solid var(--border);padding:6px 10px;background:var(--bg);color:var(--text);border-radius:2px;outline:none;resize:vertical;min-height:52px}
+    .al-btn{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:.8px;padding:5px 14px;border:1px solid var(--border);background:none;cursor:pointer;border-radius:2px;transition:all .15s;white-space:nowrap}
+    .al-btn:hover{background:var(--border-lt)}
+    .al-btn.warn:hover{background:var(--badge-amber);color:#fff;border-color:var(--badge-amber)}
+    .btn-snooze{font-family:'Cormorant SC',serif;font-size:11px;letter-spacing:.8px;padding:5px 14px;border:1px solid var(--border);background:none;cursor:pointer;border-radius:2px;transition:all .15s}
+    .btn-snooze:hover{background:var(--badge-blue);color:#fff;border-color:var(--badge-blue)}
+    .level-low .l-dot{background:var(--light)}
+    .al-aside{margin:6px 0 8px}
+    .al-aside>summary{font-family:'Cormorant SC',serif;font-size:12px;letter-spacing:1.2px;color:var(--light);cursor:pointer;list-style:none;padding:4px 0}
+    .al-aside>summary::-webkit-details-marker{display:none}
+    .al-arow{display:flex;align-items:center;gap:12px;padding:7px 0;font-size:13px;border-bottom:1px solid var(--border-lt)}
+    .al-arow:last-child{border-bottom:none}
+    .al-alab{color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .al-awhat{color:var(--light);font-style:italic;flex:1}
+    .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:120;display:none;align-items:center;background:#1A1916;color:#FAFAF8;padding:12px 20px;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.28);font-size:14px}
   </style>
 </head>
 <body>
@@ -344,15 +200,15 @@ id<html lang="en">
   <div class="header-left"><h1>Phronesis</h1><span class="header-sub">Navigator</span></div>
   <div class="header-right">
     <span class="last-refreshed" id="lastRefreshed">Loading…</span>
-    <button class="refresh-btn" onclick="loadData();loadDeliverables()">Refresh</button>
+    <button class="refresh-btn" onclick="loadData()">Refresh</button>
   </div>
 </header>
+<!-- Baton board + Deliverables RETIRED (Reg's call, Napoleon 290853ae): a register requiring a
+     separate act to close always drifts from the work. Notices is the single action surface. -->
 <nav>
-  <button class="active" onclick="showPage('deliverables',this)">Deliverables</button>
+  <button class="active" onclick="showPage('notices',this)">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
   <button onclick="showPage('roundtable',this)">Round Table</button>
   <button onclick="showPage('wheel',this)">Tiles</button>
-  <button onclick="showPage('notices',this)">Notices<span class="nav-badge" id="noticesBadge" style="display:none"></span></button>
-  <button onclick="showPage('batons',this)">Baton board</button>
 </nav>
 
 <!-- ROUND TABLE -->
@@ -385,49 +241,19 @@ id<html lang="en">
   <div class="tile-grid" id="otherTiles"></div>
 </div>
 
-<!-- NOTICES -->
-<div id="notices" class="page">
+<!-- NOTICES — the action surface (Napoleon 290853ae). TWO CLASSES, TWO LIFECYCLES:
+     action lines (derived from Connie's open_action_lines; self-clearing when the work completes;
+     snooze/supersede, never dismiss) and alerts (event-shaped wheel posts; read and dismiss). -->
+<div id="notices" class="page active">
   <div class="notices-head"><div class="notices-title">Notices</div><div class="notices-count" id="noticesCount"></div></div>
-  <div class="notices-desc">Wheel posts at moderate or urgent attention, not yet acknowledged.</div>
+  <div class="notices-desc">Action lines are derived from the substrate — each clears itself when the work completes, never when read. Snooze what's not for today; mark superseded (soft, recoverable) what's been overtaken. Alerts below are events: read and dismiss.</div>
+  <div class="al-sect-head"><span class="section-label" style="margin-bottom:0">Action lines — your move</span><span class="al-count" id="alCount"></span></div>
+  <div id="actionLines"><p class="status-msg">Loading…</p></div>
+  <div id="alAside"></div>
+  <div class="al-sect-head" style="margin-top:34px"><span class="section-label" style="margin-bottom:0">Alerts</span></div>
   <div id="noticesList"><p class="status-msg">Loading…</p></div>
 </div>
-
-<!-- BATON BOARD -->
-<div id="batons" class="page">
-  <div class="bp">
-    <div class="iti">
-      <div class="h">Next invocation <span class="gen" id="bpItiGen"></span></div>
-      <div class="body" id="bpItiBody"><div class="empty">Loading…</div></div>
-      <div class="copybar" id="bpItiCopybar" style="display:none">
-        <button class="copy" data-copy="iti-main">Copy invocation</button>
-        <span class="copyhint">read it, copy, open the Prime, paste, move on</span>
-      </div>
-    </div>
-    <div class="next3">
-      <div class="cap">Next 3 to move on</div>
-      <div id="bpNext3"><div class="lane-empty">Loading…</div></div>
-    </div>
-    <div class="expand" id="bpExpand">
-      <button class="btn" id="bpExpandBtn"><span class="tw">&#9656;</span> Full board <span class="ct" id="bpExpandCt"></span></button>
-    </div>
-    <div class="fullboard" id="bpFullboard">
-      <details class="lane"><summary>In progress <span id="bpCtActive"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpActiveList"></div></details>
-      <details class="lane routing" open><summary>Halted — needs routing <span id="bpCtRouting"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpRoutingList"></div></details>
-      <details class="lane possibly"><summary>Possibly halted — no halt filed <span id="bpCtPoss"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpPossiblyList"></div></details>
-      <details class="lane"><summary>Unclaimed — never picked up <span id="bpCtUnpicked"></span> <span class="tw">&#9656;</span></summary><div class="lbody" id="bpUnpickedList"></div></details>
-    </div>
-  </div>
-</div>
-
-<div id="deliverables" class="page active">
-  <div class="section-label">DELIVERABLES — what each outcome needs next, and how close it is to banking value</div>
-  <div class="dv-legend"><span class="dv-k"><span class="sw act"></span>your move</span><span class="dv-k"><span class="sw flight"></span>in flight</span><span class="dv-k"><span class="sw blocked"></span>blocked</span><span class="dv-k"><span class="sw fold"></span>to fold</span></div>
-  <div id="dvBanner"></div>
-  <div class="dv-hint">Refresh is the header button (top-right). Open <em>full chain</em> on a card for Clear (mark done) and Dismiss; double-clicking a card also dismisses it — you get an Undo.</div>
-  <div id="dvList"><div class="dv-empty">Loading…</div></div>
-  <div id="dvDismissed"></div>
-</div>
-<div id="dvUndo" class="dv-undo"></div>
+<div id="toast" class="toast"></div>
 
 <!-- INVOKE MODAL -->
 <div class="modal-overlay" id="invokeModal" style="display:none" onclick="handleOverlayClick(event)">
@@ -531,21 +357,11 @@ function updateRtTabs(){
 }
 
 async function sb(path,opts){
-  // opts lets a caller bypass the browser cache ({cache:'no-store'}) — see v2.4 (loadDeliverables).
+  // opts lets a caller bypass the browser cache ({cache:'no-store'}) — used by the live re-fetches.
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,Object.assign({headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}},opts||{}));
   if(!r.ok)throw new Error('Supabase '+r.status);
   return r.json();
 }
-// Dismiss/restore go ONLY through Connie's SECURITY DEFINER RPCs (the atomic dismissed_at + AC-flag).
-// The Navigator never writes dismissed_at directly. anon has EXECUTE on all four (verified).
-async function sbRpc(fn,body){
-  const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
-  if(!r.ok)throw new Error('RPC '+fn+' '+r.status);
-  const t=await r.text(); return t?JSON.parse(t):null;
-}
-let dvData={}; // id -> card model, so click handlers read data without embedding text in HTML attributes
-let dvCleared=new Set(); // v2.5: deliverable_ids cleared in this view; reset on every refresh (graduation)
-
 async function loadData(){
   document.getElementById('lastRefreshed').textContent='Refreshing…';
   try{
@@ -568,9 +384,7 @@ openConference = freshConf || confs[0];
     }
  conferenceNotices=confs.filter(c=>c.called_by&&c.called_by.toLowerCase()!=='reg');
     renderWheel();updateRtTabs();renderRtContent();renderMobile();renderNotices();
-    // FIX 3: an in-app refresh re-fetches the baton board too (incl NEXT INVOCATION), not only a full
-    // reload — so a spent invocation clears and pickups/halts reflect without a page reload.
-    if(document.getElementById('batons')&&document.getElementById('batons').classList.contains('active'))loadBatonPanel();
+    loadActionLines();  // the Notices action surface refreshes with everything else — one Refresh, one stamp
     const t=new Date();document.getElementById('lastRefreshed').textContent='Updated '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   }catch(e){document.getElementById('lastRefreshed').textContent='Error — check console';console.error(e);}
 }
@@ -764,17 +578,24 @@ function clearAll(){checkedPrimes.clear();renderPrimeGrid();}
 
 
 function toggleNotice(i){document.getElementById('notice-'+i).classList.toggle('expanded');}
-async function dismissNotice(idx,id){const el=document.getElementById('notice-'+idx);try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'dismiss'})});}catch(e){console.warn(e);}el.style.opacity='0';setTimeout(()=>{el.classList.add('dismissed');updateNoticesCount();},300);}
+async function dismissNotice(idx,id){const el=document.getElementById('notice-'+idx);try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'dismiss'})});}catch(e){console.warn(e);}el.style.opacity='0';setTimeout(()=>{el.classList.add('dismissed');updateBadge();},300);}
 async function fragNotice(idx,id){try{await fetch(DISMISS_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({id,action:'frag'})});}catch(e){console.warn(e);}document.getElementById('notice-'+idx).classList.add('fragged');document.getElementById('frag-'+idx).disabled=true;}
-function updateNoticesCount(){const v=document.querySelectorAll('.notice-item:not(.dismissed)').length;document.getElementById('noticesCount').textContent=v>0?`${v} item${v===1?'':'s'}`:'';const b=document.getElementById('noticesBadge');if(v>0){b.textContent=v>9?'9+':v;b.style.display='flex';}else b.style.display='none';if(v===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';}
+// ONE badge over BOTH notice classes: open action lines + undismissed alerts. Alerts-only empty
+// state is handled here too (a dismissed last alert leaves the action lines untouched above it).
+function updateBadge(){
+  const alerts=document.querySelectorAll('#noticesList .notice-item:not(.dismissed)').length;
+  const acts=document.querySelectorAll('#actionLines .al-item').length;
+  const total=alerts+acts;
+  document.getElementById('noticesCount').textContent=total>0?`${total} item${total===1?'':'s'}`:'';
+  const b=document.getElementById('noticesBadge');
+  if(total>0){b.textContent=total>9?'9+':total;b.style.display='flex';}else b.style.display='none';
+  if(alerts===0)document.getElementById('noticesList').innerHTML='<div class="notices-empty">No alerts.</div>';
+}
 
 function renderNotices(){
   const confCount=conferenceNotices.length;
   const count=noticesData.length+confCount;
-  document.getElementById('noticesCount').textContent=count>0?`${count} item${count===1?'':'s'}`:'';
-  const b=document.getElementById('noticesBadge');
-  if(count>0){b.textContent=count>9?'9+':count;b.style.display='flex';}else b.style.display='none';
- if(count===0){document.getElementById('noticesList').innerHTML='<div class="notices-empty">Nothing requiring attention.</div>';return;}
+ if(count===0){document.getElementById('noticesList').innerHTML='<div class="notices-empty">No alerts.</div>';updateBadge();return;}
   const confItems=conferenceNotices.map(conf=>{const dn=conf.called_by.charAt(0).toUpperCase()+conf.called_by.slice(1);const icon=ICONS[conf.called_by]||'';const av=icon?'<div class="notice-avatar"><img src="'+icon+'" alt="'+dn+'" onerror="this.parentElement.textContent=\''+dn[0]+'\'"></div>':'<div class="notice-avatar">'+dn[0]+'</div>';const date=new Date(conf.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'});return '<div class="notice-item"><div class="notice-main">'+av+'<div class="notice-content"><div class="notice-topic" style="cursor:default"><span>Conference: '+conf.topic+'</span></div><div class="notice-summary">Called by '+dn+' \u2014 open</div></div></div><div class="notice-meta"><div class="notice-prime-name">'+dn+'</div><div class="notice-date">'+date+'</div><div class="level-badge level-urgent"><div class="l-dot"></div><div class="l-text">urgent</div></div><div class="notice-actions"><button class="btn-frag" onclick="setRtView(\'conference\')">View</button></div></div></div>';}).join('');
 document.getElementById('noticesList').innerHTML=confItems+noticesData.map((item,idx)=>{
     const dn=item.posting_lineage.charAt(0).toUpperCase()+item.posting_lineage.slice(1);
@@ -785,6 +606,7 @@ document.getElementById('noticesList').innerHTML=confItems+noticesData.map((item
     const lv='level-'+(item.effective_attention_level||'moderate');
     return`<div class="notice-item" id="notice-${idx}"><div class="notice-main">${av}<div class="notice-content"><div class="notice-topic" onclick="toggleNotice(${idx})"><span>${item.topic}</span><span class="expand-arrow">▾</span></div><div class="notice-summary">${summary}</div><div class="notice-body">${(item.body||'').replace(/\n/g,'<br>')}</div></div></div><div class="notice-meta"><div class="notice-prime-name">${dn}</div><div class="notice-date">${date}</div><div class="level-badge ${lv}"><div class="l-dot"></div><div class="l-text">${item.effective_attention_level}</div></div><div class="with-ac">with Antechamber</div><div class="notice-actions"><button class="btn-dismiss" onclick="dismissNotice(${idx},'${item.id}')">Dismiss</button><button class="btn-frag" id="frag-${idx}" onclick="fragNotice(${idx},'${item.id}')">Frag</button></div></div></div>`;
   }).join('');
+  updateBadge();
 }
 /* INVOKE MODAL */  
 function setMode(mode,btn){
@@ -932,402 +754,126 @@ async function saveRtAdmin(){
     errEl.textContent='Error: '+e.message;
   }
 }
-function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');if(id==='batons')loadBatonPanel();if(id==='deliverables')loadDeliverables();}
+function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
 
-/* ===== BATON BOARD (Eames SP 76019f72; prototype 383aa695). Derive-from-rows; reads via sb() (anon + RLS). ===== */
-const BP_KINDS={
-  failed:{glyph:'✕',lab:'failed',tier:1},
-  needs_ruling:{glyph:'?',lab:'needs ruling',tier:1},
-  blocked:{glyph:'⊘',lab:'blocked',tier:2},
-  spawned:{glyph:'⑂',lab:'spawned',tier:2,watch:true},
-  gated:{glyph:'‖',lab:'gated',tier:9}
-};
-window.__bpCopy={};
-function bpEsc(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function bpTier(k){return (k==='failed'||k==='needs_ruling')?1:(k==='blocked'||k==='spawned')?2:3;}
-function bpTime(s){return s?new Date(s).getTime():0;}
-function bpAgo(s){if(!s)return '';const h=Math.floor((Date.now()-new Date(s).getTime())/3600000);if(h<1)return 'just now';if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago';}
-function bpFb(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){}document.body.removeChild(ta);}
-function bpCopy(text,btn){const done=function(){const o=btn.textContent;btn.textContent='Copied';btn.classList.add('ok');setTimeout(function(){btn.textContent=o;btn.classList.remove('ok');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(function(){bpFb(text,done);});}else bpFb(text,done);}
-function bpUnblockIti(iti,copyKey){
-  if(iti){window.__bpCopy[copyKey]=iti.body||'';return '<div class="unblock-iti"><div class="lbl">ready-to-paste invite</div><div class="txt">'+bpEsc(iti.body).replace(/\n/g,'<br>')+'</div><div class="copybar"><button class="copy" data-copy="'+copyKey+'">Copy invite</button><span class="copyhint">Antechamber-generated</span></div></div>';}
-  return '<div class="unblock-iti"><div class="lbl">ready-to-paste invite</div><div class="txt" style="color:var(--ink-faint);font-style:italic">No ITI generated for this baton yet — Antechamber templates it by halt_kind.</div></div>';
-}
-async function loadBatonPanel(){
-  // Bind to relay_baton directly (not relay_board): relay_board excludes done but does NOT expose
-  // halted_at, so the spec's halt-aware filters can't run on it. relay_baton has every column and is
-  // anon-readable; we replicate relay_board's ordering (attention urgent<moderate<low, then passed_at).
-  let open=[],poss=[],itis=[];
-  try{open=await sb('relay_baton?select=id,holder,track,halt_kind,halt_note,halt_needs,child_baton_ids,halted_at,passed_at,picked_up_at,attention,stale_after_hours&done_at=is.null&order=passed_at.asc');}
-  catch(e){console.warn('baton panel: relay_baton not readable',e);open=[];}
-  try{poss=await sb('baton_possibly_halted?select=id,holder,track,picked_up_at,stale_after_hours,hours_since_pickup&order=hours_since_pickup.desc');}catch(e){poss=[];}
-  try{itis=await sb('relay_iti?select=id,body,generated_by,generated_at,primary_baton_id&order=generated_at.desc');}catch(e){itis=[];}
-  window.__bpCopy={};
-  const itiByBaton={};itis.forEach(t=>{if(t.primary_baton_id&&!itiByBaton[t.primary_baton_id])itiByBaton[t.primary_baton_id]=t;});
-  const openById={};open.forEach(b=>openById[b.id]=b);
-  const attnRank=a=>a==='urgent'?1:a==='moderate'?2:3;
-  const boardOrder=(x,y)=>attnRank(x.attention)-attnRank(y.attention)||bpTime(x.passed_at)-bpTime(y.passed_at);
-  const halted=open.filter(b=>b.halted_at);
-  const unpicked=open.filter(b=>!b.picked_up_at&&!b.halted_at).sort(boardOrder);
-  const active=open.filter(b=>b.picked_up_at&&!b.halted_at);
-  // FIX 1: NEXT INVOCATION = relay_iti joined to a still-actionable baton (unclaimed, not halted,
-  // not done), top by relay_board order. Self-clears on pickup/halt/done — the baton drops the filter.
-  const liveItis=itis.filter(t=>{const b=openById[t.primary_baton_id];return b&&!b.picked_up_at&&!b.halted_at;})
-                     .sort((x,y)=>boardOrder(openById[x.primary_baton_id],openById[y.primary_baton_id]));
-  const cand=open.filter(b=>b.halt_kind!=='gated'&&(['failed','needs_ruling','blocked','spawned'].includes(b.halt_kind)||!b.picked_up_at));
-  cand.sort((a,b)=>bpTier(a.halt_kind)-bpTier(b.halt_kind)||(bpTime(a.halted_at||a.passed_at)-bpTime(b.halted_at||b.passed_at)));
-  bpRenderIti(liveItis[0]);
-  bpRenderNext3(cand.slice(0,3),itiByBaton);
-  bpRenderFull(active,halted,poss,unpicked,itiByBaton);
-  document.getElementById('bpExpandCt').textContent=halted.length+' halted, '+active.length+' in process, '+unpicked.length+' unclaimed';
-}
-function bpRenderIti(t){
-  const body=document.getElementById('bpItiBody'),gen=document.getElementById('bpItiGen'),cb=document.getElementById('bpItiCopybar');
-  if(!t){body.innerHTML='<div class="empty">No invocation queued. This lights up when Antechamber generates the first ITI.</div>';gen.textContent='';cb.style.display='none';return;}
-  body.innerHTML=bpEsc(t.body).replace(/\n/g,'<br>');
-  gen.textContent=(t.generated_by||'antechamber')+' · '+bpAgo(t.generated_at);
-  window.__bpCopy['iti-main']=t.body||'';cb.style.display='';
-}
-function bpRenderNext3(top,itiByBaton){
-  const el=document.getElementById('bpNext3');
-  if(!top.length){el.innerHTML='<div class="lane-empty">Nothing waiting to move on.</div>';return;}
-  el.innerHTML=top.map((b,i)=>{
-    const isHalt=!!b.halt_kind&&b.halt_kind!=='gated';
-    const kind=isHalt?b.halt_kind:'unpicked';const k=BP_KINDS[b.halt_kind];
-    const glyph=isHalt?(k?k.glyph:'?'):'·';const lab=isHalt?(k?k.lab:b.halt_kind):'unpicked';
-    const bg='var(--k-'+kind+'-dim)',fg='var(--k-'+kind+')';
-    const note=isHalt?(b.halt_note||''):'passed '+bpAgo(b.passed_at)+', never picked up';
-    const btn=isHalt?'&#8594; unblock':'&#8594; nudge: '+bpEsc(b.holder);
-    return '<div class="nx" style="border-left:3px solid '+fg+'"><div class="main"><div class="num">'+(i+1)+'</div>'+
-      '<div class="kind" style="background:'+bg+';color:'+fg+'">'+glyph+'</div><div class="nxbody">'+
-      '<div class="nxline"><span class="holder">'+bpEsc(b.holder)+'</span> '+(isHalt?'halted ':'')+'<span class="track">'+bpEsc(b.track)+'</span> <span class="kindlab" style="background:'+bg+';color:'+fg+'">'+bpEsc(lab)+'</span></div>'+
-      (note?'<div class="nxnote">'+bpEsc(note)+'</div>':'')+
-      '<div class="nxmeta"><button class="unblock">'+btn+'</button></div></div></div>'+
-      bpUnblockIti(itiByBaton[b.id],'nx-'+i)+'</div>';
-  }).join('');
-}
-function bpRenderFull(active,halted,poss,unpicked,itiByBaton){
-  document.getElementById('bpActiveList').innerHTML=active.length?active.map(a=>{
-    const stale=a.stale_after_hours&&a.picked_up_at&&(Date.now()-new Date(a.picked_up_at).getTime())>a.stale_after_hours*3600000;
-    return '<div class="arow inproc'+(stale?' staleflag':'')+'"><span class="dot"></span><span class="who">'+bpEsc(a.holder)+'</span><span class="what">'+bpEsc(a.track)+'</span><span class="when">in process since '+bpAgo(a.picked_up_at)+(stale?' · silent, possibly halted':'')+'</span></div>';
-  }).join(''):'<div class="lane-empty">Nothing in process.</div>';
-  document.getElementById('bpCtActive').textContent='· '+active.length;
-  document.getElementById('bpRoutingList').innerHTML=halted.length?halted.map((h,i)=>{
-    const k=BP_KINDS[h.halt_kind]||{glyph:'?',lab:h.halt_kind};const kind=h.halt_kind;const bg='var(--k-'+kind+'-dim)',fg='var(--k-'+kind+')';
-    let action,unblock='';
-    if(k.watch){const kids=Array.isArray(h.child_baton_ids)?h.child_baton_ids:[];action='<span class="watch">waiting on '+kids.length+' child '+(kids.length===1?'leg':'legs')+'</span>'+(kids.length?'<div class="children">'+kids.map(c=>'<span class="child">'+bpEsc((''+c).slice(0,8))+'</span>').join('')+'</div>':'');}
-    else{action='<button class="unblock"><span>&#8594;</span> unblock</button>';unblock=bpUnblockIti(itiByBaton[h.id],'hrow-'+i);}
-    return '<div class="hrow" style="border-left-color:'+fg+'"><div class="main"><div class="kind" style="background:'+bg+';color:'+fg+'">'+k.glyph+'</div><div class="hbody">'+
-      '<div class="hline"><span class="holder">'+bpEsc(h.holder)+'</span> halted <span class="track">'+bpEsc(h.track)+'</span> <span class="kindlab" style="background:'+bg+';color:'+fg+'">'+bpEsc(k.lab)+'</span></div>'+
-      (h.halt_note?'<div class="hnote">'+bpEsc(h.halt_note)+'</div>':'')+
-      '<div class="hmeta"><span class="age">halted '+bpAgo(h.halted_at)+'</span>'+action+'</div></div></div>'+unblock+'</div>';
-  }).join(''):'<div class="lane-empty">No halted batons.</div>';
-  document.getElementById('bpCtRouting').textContent='· '+halted.length;
-  document.getElementById('bpPossiblyList').innerHTML=poss.length?poss.map(p=>{
-    const over=Math.round((p.hours_since_pickup||0)-(p.stale_after_hours||0));
-    // Route button (baton 38e5d802): check in -> turn a silent stall into a filed halt, no SQL.
-    const kinds=['blocked','needs_ruling','failed','gated','spawned'];
-    const opts=kinds.map(k=>'<option value="'+k+'">'+bpEsc((BP_KINDS[k]||{}).lab||k)+'</option>').join('');
-    return '<div class="hrow poss"><div class="main"><div class="kind">?</div><div class="hbody">'+
-      '<div class="hline"><span class="holder">'+bpEsc(p.holder)+'</span> <span class="track">'+bpEsc(p.track)+'</span></div>'+
-      '<div class="hnote">picked up but quiet; no halt filed</div>'+
-      '<div class="hmeta"><span class="age stale" style="color:var(--stale)">stuck '+Math.round(p.hours_since_pickup)+'h'+(over>0?', '+over+'h over':'')+'</span>'+
-        '<button class="checkin" data-baton="'+p.id+'">&#8594; check in</button></div>'+
-      '<div class="ci-form" id="ci-'+p.id+'" hidden>'+
-        '<div class="ci-q">Still on it, or halted?</div>'+
-        '<div class="ci-row"><button class="ci-onit" data-baton="'+p.id+'">Still on it</button><span class="ci-or">or file a halt:</span></div>'+
-        '<div class="ci-halt">'+
-          '<select class="ci-kind" aria-label="halt kind">'+opts+'</select>'+
-          '<input class="ci-note" type="text" placeholder="halt note — why it is stuck (required)">'+
-          '<input class="ci-needs" type="text" placeholder="halt needs — the unblock route (optional)">'+
-          '<button class="ci-file" data-baton="'+p.id+'">File halt</button>'+
-        '</div>'+
-      '</div>'+
-      '</div></div></div>';
-  }).join(''):'<div class="lane-empty">Nothing possibly halted.</div>';
-  document.getElementById('bpCtPoss').textContent='· '+poss.length;
-  document.getElementById('bpUnpickedList').innerHTML=unpicked.length?unpicked.map(u=>'<div class="hrow unpicked"><div class="main"><div class="kind">·</div><div class="hbody"><div class="hline"><span class="holder">'+bpEsc(u.holder)+'</span> <span class="track">'+bpEsc(u.track)+'</span></div><div class="hnote">passed but never picked up</div><div class="hmeta"><span class="age">unpicked '+bpAgo(u.passed_at)+'</span><button class="promote" data-baton="'+u.id+'">&#8593; promote to next invocation</button></div></div></div></div>').join(''):'<div class="lane-empty">Nothing unclaimed.</div>';
-  document.getElementById('bpCtUnpicked').textContent='· '+unpicked.length;
-}
-document.getElementById('bpExpandBtn').addEventListener('click',function(){document.getElementById('bpExpand').classList.toggle('open');});
-document.getElementById('batons').addEventListener('click',function(e){
-  const ub=e.target.closest('.unblock');if(ub){const c=ub.closest('.nx,.hrow');if(c)c.classList.toggle('open');return;}
-  const cp=e.target.closest('.copy');if(cp){bpCopy(window.__bpCopy[cp.dataset.copy]||'',cp);return;}
-  const pr=e.target.closest('.promote');if(pr){bpPromote(pr);return;}
-  // Possibly-halted check-in (baton 38e5d802): toggle the form, or fire an outcome.
-  const ci=e.target.closest('.checkin');if(ci){const f=document.getElementById('ci-'+ci.dataset.baton);if(f)f.hidden=!f.hidden;return;}
-  const on=e.target.closest('.ci-onit');if(on){bpCheckin(on.dataset.baton,'on_it',on);return;}
-  const fl=e.target.closest('.ci-file');if(fl){bpFileHalt(fl);return;}
-});
-// FIX 5: promote-to-top — generate the baton's ITI (templated server-side per SC_ITI_HaltTemplates)
-// and surface it in NEXT INVOCATION. relay_iti is service-write only, so the write goes through the
-// relay-iti-promote EF; on success we reload so Fix 1 surfaces it. Idempotent on primary_baton_id.
-async function bpPromote(btn){
-  const id=btn.dataset.baton;if(!id)return;
-  const orig=btn.textContent;btn.textContent='Promoting…';btn.disabled=true;
-  try{
-    const r=await fetch(SUPABASE_URL+'/functions/v1/relay-iti-promote',{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({baton_id:id})});
-    if(!r.ok)throw new Error('promote '+r.status);
-    btn.textContent='Promoted ✓';
-    await loadBatonPanel();
-  }catch(e){console.error('promote failed',e);btn.textContent=orig;btn.disabled=false;}
-}
-// Possibly-halted check-in (baton 38e5d802 / SP 76019f72 ONE OPEN ITEM). The route action calls the
-// checkin_baton RPC: 'halted' files the halt properly (it then drops from this lane into Halted-needs-
-// routing on reload); 'on_it' records the holder is still working. No manual SQL.
-async function bpCheckin(id,outcome,btn,extra){
-  if(!id)return;const orig=btn.textContent;btn.disabled=true;btn.textContent='…';
-  try{
-    await sbRpc('checkin_baton',Object.assign({p_baton_id:id,p_outcome:outcome,p_actor:'reg'},extra||{}));
-    btn.textContent='✓';
-    await loadBatonPanel();
-  }catch(e){console.error('checkin failed',e);btn.textContent=orig;btn.disabled=false;alert('Check-in failed: '+e.message);}
-}
-function bpFileHalt(btn){
-  const id=btn.dataset.baton;const f=document.getElementById('ci-'+id);if(!f)return;
-  const kind=f.querySelector('.ci-kind').value;
-  const note=(f.querySelector('.ci-note').value||'').trim();
-  const needs=(f.querySelector('.ci-needs').value||'').trim();
-  if(!note){const n=f.querySelector('.ci-note');n.style.borderColor='var(--k-blocked)';n.focus();return;}
-  bpCheckin(id,'halted',btn,{p_halt_kind:kind,p_halt_note:note,p_halt_needs:needs||null});
-}
-/* ===== DELIVERABLES VIEW (cfaaa070; Eames SP f729d071). Renders the live deliverable_board view to the
-   legibility contract: one row per deliverable, contract precomputed, chain as jsonb. ===== */
 
-// Connie's deliverable_board is ONE ROW PER DELIVERABLE with the contract precomputed: status, status_order,
-// done_count/total_count, next_track/next_holder/next_state, blocked_at, halt_kind/halt_note,
-// banks_no_value_until_complete, and the chain as jsonb. So the reader maps her fields to the card — no
-// client-side computation. Samples below are reshaped to the same card model so layout review is faithful.
-function dvNextBand(status,nextState,track,holder,haltKind,haltNote,blockedAt){
-  // v2.8: a DONE card has NO actionable band — even if its front baton is still UNCLAIMED (a manual
-  // clear of an incomplete chain). done_at -> DONE -> present as done, not "done AND actionable". First,
-  // so it wins over the UNCLAIMED/PENDING_FOLD branches below.
-  if(status==='DONE')return null;
-  // v2.2: PENDING_FOLD renders ACTIONABLE (a finished result to absorb), never blocked. The report
-  // artifact id rides in halt_note; pull it for the Full-chain pointer (word-led tablet does the rest).
-  if(status==='PENDING_FOLD'||(''+(nextState||'')).toUpperCase()==='PENDING_FOLD'){
-    const m=(''+(haltNote||'')).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    return {kind:'fold',track:track||'',holder:holder||'',report_id:m?m[0]:null};
-  }
-  if(status==='BLOCKED')return {kind:'blocked',track:blockedAt||track||'',holder:holder||'',halt_kind:haltKind,halt_note:haltNote};
-  const ns=(''+(nextState||'')).toUpperCase();
-  if(ns==='ACTIVE')return {kind:'flight',track:track||'',holder:holder||''};
-  if(ns==='UNCLAIMED'||(track&&status!=='DONE'))return {kind:'act',track:track||'',holder:holder||''};
-  return null; // DONE / no next step
+/* ===== ACTION LINES (Napoleon 290853ae; substrate = Connie's open_action_lines view +
+   action_line_annotation table, her a0631afa). The load-bearing design point, kept literally:
+   an action line is a DERIVED FACT — true or false purely from substrate state — so it clears
+   when the WORK completes (is_open flips), never when read. No affordance below can clear a
+   line without the work being done: SNOOZE hides until tomorrow (a repeatedly-snoozed line is
+   itself signal), SUPERSEDE is soft + recoverable (Set aside), and title/note edits write to
+   the annotation table keyed on the stable message id — never to the derived row. The purpose
+   clause rides in action_line (title_override else Napoleon's subject, which carries the
+   consequence); Reg sharpens it in place via the title override. All writes go through the
+   navigator-action-annotate EF (service-role; client writes on the table are revoked). */
+const ANNOTATE_FN_URL=SUPABASE_URL+'/functions/v1/navigator-action-annotate';
+let alData={};
+function esc(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function alAge(h){if(h==null)return'';h=+h;if(h<1)return'just now';if(h<24)return Math.round(h)+'h open';return Math.round(h/24)+'d open';}
+async function alWrite(payload){
+  const r=await fetch(ANNOTATE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(payload)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
+  return d;
 }
-// v2 (Eames f729d071): order & loudness follow ACTIONABILITY, not alarm —
-// act (liftable now) → in-flight → blocked (waiting; muted) → done. Replaces v1 blocked-first.
-// v2.2: PENDING_FOLD sorts FIRST within the actionable band (0) — a completed-but-unfolded result is the
-// most perishable thing on the board (catch before you throw), above the throw-the-next-baton cards (1).
-function dvKey(status,next){ if(next&&next.kind==='fold')return 0; if(next&&next.kind==='act')return 1; if(next&&next.kind==='flight')return 2; if(status==='BLOCKED')return 3; if(status==='DONE')return 9; return 4; }
-function dvChain(arr){ return (Array.isArray(arr)?arr:[]).map(c=>({pos:(c.chain_position!=null?c.chain_position:(c.position!=null?c.position:0)),track:c.track||c.baton_track||'(step)',state:(''+(c.state||'UNCLAIMED')).toUpperCase(),holder:c.holder||c.baton_holder||'?',value_kind:c.value_kind||'chain_only',baton_id:c.baton_id||null,halt_kind:c.halt_kind||null,halt_note:c.halt_note||null})).sort((a,b)=>a.pos-b.pos); }
-// LIVE: a deliverable_board row -> the card model (consumes the view's precomputed fields directly).
-function dvFromRow(r){
-  const status=(''+(r.status||'NOT_STARTED')).toUpperCase();
-  return {id:r.deliverable_id,name:r.name||'(unnamed)',outcome:r.outcome||'',rank:(r.rank==null?null:+r.rank),status:status,
-    status_order:(r.status_order==null?dvKey(status,null):+r.status_order),done:+(r.done_count||0),total:+(r.total_count||0),
-    banks_no_value:!!r.banks_no_value_until_complete,next:dvNextBand(status,r.next_state,r.next_track,r.next_holder,r.halt_kind,r.halt_note,r.blocked_at),
-    next_baton_id:r.next_baton_id||null,next_action:r.next_action||'',
-    is_sitting:!!r.is_sitting,quiet_hours:(r.quiet_for_hours==null?null:+r.quiet_for_hours),
-    done_at:(r.deliverable_done_at||null), // v2.8: set => MANUALLY cleared (Reopen-able); null on a chain-complete done
-    chain:dvChain(r.chain)};
+async function loadActionLines(){
+  const el=document.getElementById('actionLines');
+  let rows=[];
+  // The view already filters acknowledged/superseded/snoozed; is_open=true drops lines whose work
+  // is observably done (completion_signal) — the self-clearing half of the anti-rot guarantee.
+  try{rows=await sb('open_action_lines?select=*&is_open=eq.true',{cache:'no-store'});}
+  catch(e){el.innerHTML='<div class="notices-empty">Couldn’t load action lines — check console.</div>';console.error(e);updateBadge();return;}
+  alData={};rows.forEach(r=>{alData[r.on_message]=r;});
+  document.getElementById('alCount').textContent=rows.length?rows.length+' open':'';
+  el.innerHTML=rows.length?rows.map(alCard).join(''):'<div class="notices-empty">Nothing waiting on you — every line has cleared.</div>';
+  loadAlAside();
+  updateBadge();
 }
-// Order: the ACTIONABILITY BAND is primary (dvKey: act → in-flight → blocked → done). Manual rank
-// orders WITHIN a band, not across it, so rank can't bury a card out of its band.
-function dvOrder(a,b){ return (dvKey(a.status,a.next)-dvKey(b.status,b.next))||((a.rank==null?9999:a.rank)-(b.rank==null?9999:b.rank))||((a.name||'')<(b.name||'')?-1:1); }
+function alCard(r){
+  const id=r.on_message,id8=id.slice(0,8);
+  const dn=dName(r.invoke_prime),icon=ICONS[r.invoke_prime]||'';
+  const av=icon?'<div class="notice-avatar"><img src="'+icon+'" alt="'+esc(dn)+'" onerror="this.parentElement.textContent=\''+esc(dn[0])+'\'"></div>':'<div class="notice-avatar">'+esc(dn[0])+'</div>';
+  const lv='level-'+(r.attention_level||'moderate');
+  const date=new Date(r.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  const noteFlag=r.note_md?' · <span class="al-notemark">note</span>':'';
+  return '<div class="notice-item al-item" id="al-'+id8+'">'
+   +'<div class="notice-main">'+av+'<div class="notice-content">'
+   +'<div class="notice-topic" onclick="alToggle(\''+id8+'\')"><span class="al-title">'+esc(r.action_line)+'</span><span class="expand-arrow">▾</span></div>'
+   +'<div class="notice-summary">Invoke <b>'+esc(dn)+'</b> on '+id8+' · '+alAge(r.hours_open)+noteFlag+'</div>'
+   +'<div class="notice-body">'
+     +(r.note_md?'<div class="al-note-show">'+esc(r.note_md).replace(/\n/g,'<br>')+'</div>':'')
+     +'<div class="al-detail">'+esc(r.task_detail||'').replace(/\n/g,'<br>')+'</div>'
+     +'<div class="al-editrow"><input class="al-input" id="al-ti-'+id8+'" placeholder="Title override — your aide-memoire name for this line" value="'+esc(r.action_line)+'"><button class="al-btn" onclick="alSaveTitle(\''+id8+'\')">Save title</button></div>'
+     +'<div class="al-editrow"><textarea class="al-ta" id="al-no-'+id8+'" placeholder="Note — where this sits in the overall scheme">'+esc(r.note_md||'')+'</textarea><button class="al-btn" onclick="alSaveNote(\''+id8+'\')">Save note</button></div>'
+     +'<div class="al-editrow"><input class="al-input" id="al-by-'+id8+'" placeholder="Superseded by (message id or 8-hex prefix)"><input class="al-input" id="al-rs-'+id8+'" placeholder="Reason (required)"><button class="al-btn warn" onclick="alSupersede(\''+id8+'\')">Mark superseded</button></div>'
+   +'</div>'
+   +'</div></div>'
+   +'<div class="notice-meta"><div class="notice-prime-name">'+esc(dn)+'</div><div class="notice-date">'+date+'</div>'
+   +'<div class="level-badge '+lv+'"><div class="l-dot"></div><div class="l-text">'+esc(r.attention_level||'')+'</div></div>'
+   +'<div class="notice-actions">'
+   +'<button class="btn-frag" onclick="alCopy(\''+id8+'\',this)">Copy invocation</button>'
+   +'<button class="btn-frag" onclick="alOpen(\''+id8+'\')">Open '+esc(dn)+'</button>'
+   +'<button class="btn-snooze" onclick="alSnooze(\''+id8+'\')" title="Not today — the line returns tomorrow; repeated snoozing is itself signal">Snooze</button>'
+   +'</div></div></div>';
+}
+function alToggle(id8){document.getElementById('al-'+id8)?.classList.toggle('expanded');}
+function alRow(id8){const id=Object.keys(alData).find(k=>k.startsWith(id8));return id?alData[id]:null;}
+function alCopy(id8,btn){
+  const r=alRow(id8);if(!r)return;
+  // Reg's own routing format, verbatim — paste straight into the Prime's chat.
+  const text='Prime message '+r.on_message+' → '+dName(r.invoke_prime)+' from Napoleon. Please action.';
+  navigator.clipboard.writeText(text).then(()=>{const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>{btn.textContent=o;},1400);}).catch(()=>toast('Copy blocked by browser'));
+}
+function alOpen(id8){const r=alRow(id8);if(!r)return;const url=(instances[r.invoke_prime]||{}).chat_url;if(url)window.open(url,'_blank','noopener');else toast('No chat URL on file for '+dName(r.invoke_prime));}
+async function alSnooze(id8){
+  const r=alRow(id8);if(!r)return;
+  const t=new Date();t.setHours(24,0,0,0);  // "not today" = next local midnight, not a fixed 24h
+  try{await alWrite({action:'snooze',message_id:r.on_message,snoozed_until:t.toISOString()});toast('Snoozed until tomorrow — it will come back');loadActionLines();}
+  catch(e){toast('Snooze failed: '+e.message);}
+}
+async function alSaveTitle(id8){
+  const r=alRow(id8);if(!r)return;
+  const v=document.getElementById('al-ti-'+id8).value.trim();
+  try{await alWrite({action:'annotate',message_id:r.on_message,title_override:v||null});toast('Title saved');loadActionLines();}
+  catch(e){toast('Save failed: '+e.message);}
+}
+async function alSaveNote(id8){
+  const r=alRow(id8);if(!r)return;
+  const v=document.getElementById('al-no-'+id8).value;
+  try{await alWrite({action:'annotate',message_id:r.on_message,note_md:v||null});toast('Note saved');loadActionLines();}
+  catch(e){toast('Save failed: '+e.message);}
+}
+async function alSupersede(id8){
+  const r=alRow(id8);if(!r)return;
+  const by=document.getElementById('al-by-'+id8).value.trim();
+  const rs=document.getElementById('al-rs-'+id8).value.trim();
+  if(!by||!rs){toast('Supersede needs the replacing message id and a reason');return;}
+  try{await alWrite({action:'supersede',message_id:r.on_message,superseded_by:by,reason:rs});toast('Marked superseded — recoverable under Set aside');loadActionLines();}
+  catch(e){toast('Supersede failed: '+e.message);}
+}
+// The soft half made visible: snoozed + superseded lines, recoverable — never a delete (the
+// absent-not-revoked failure is exactly what this bucket exists to prevent).
+async function loadAlAside(){
+  const el=document.getElementById('alAside');
+  let rows=[];
+  try{rows=await sb('action_line_annotation?select=message_id,title_override,snoozed_until,superseded_at,superseded_reason&or=(snoozed_until.gt.'+encodeURIComponent(new Date().toISOString())+',superseded_at.not.is.null)',{cache:'no-store'});}
+  catch(e){el.innerHTML='';return;}
+  if(!rows.length){el.innerHTML='';return;}
+  el.innerHTML='<details class="al-aside"><summary>&#9656; Set aside ('+rows.length+') — snoozed &amp; superseded, recoverable</summary><div>'
+   +rows.map(a=>{
+     const lab=a.title_override||('message '+a.message_id.slice(0,8));
+     const what=a.superseded_at?('superseded — '+esc(a.superseded_reason||'')):('snoozed until '+new Date(a.snoozed_until).toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
+     const act=a.superseded_at?'<button class="al-btn" onclick="alRestore(\''+a.message_id+'\')">Restore</button>':'<button class="al-btn" onclick="alWake(\''+a.message_id+'\')">Wake</button>';
+     return '<div class="al-arow"><span class="al-alab">'+esc(lab)+'</span><span class="al-awhat">'+what+'</span>'+act+'</div>';
+   }).join('')+'</div></details>';
+}
+async function alRestore(id){try{await alWrite({action:'unsupersede',message_id:id});toast('Restored');loadActionLines();}catch(e){toast('Restore failed: '+e.message);}}
+async function alWake(id){try{await alWrite({action:'snooze',message_id:id,snoozed_until:null});toast('Awake');loadActionLines();}catch(e){toast('Wake failed: '+e.message);}}
+let toastTimer=null;
+function toast(msg){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.style.display='flex';clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.style.display='none';},2600);}
 
-// v2.5: a card cleared this view renders its in-place greyed Done confirmation (until the next refresh).
-function dvClearedCard(d){
-  return '<div class="dv-card dv-cleared" data-id="'+d.id+'">'+
-    '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
-    '<div class="dv-donemark">&#10003; Done</div></div>'+
-    '<div class="dv-clearrow"><button class="dv-cleartidy" onclick="dvClearTidy(\''+d.id+'\')">&times; clear from view</button></div></div>';
-}
-function dvSitLabel(h){ if(h==null)return 'Sitting'; const days=Math.round(h/24); return h>=24?('Sitting '+days+'d'):('Sitting '+Math.max(1,Math.round(h))+'h'); }
-function dvCard(d){
-  if(dvCleared.has(d.id)) return dvClearedCard(d); // v2.5 just-cleared, in place
-  const act=d.next&&(d.next.kind==='act'||d.next.kind==='fold');
-  // v2.2: the lilac tablet (word-led; glyph is reinforcement only) marks this card a CATCH, and the
-  // report-artifact pointer lives in the Full-chain dropdown, not on the card face (keep the body clean).
-  const tablet=(d.next&&d.next.kind==='fold')?'<div class="dv-tablet"><span class="tg">&#8600;</span> Sibling reported</div>':'';
-  const foldrep=(d.next&&d.next.kind==='fold'&&d.next.report_id)?'<div class="dv-foldrep">Sibling report &rarr; artifact '+bpEsc(d.next.report_id)+'</div>':'';
-  let nextHtml='';
-  if(d.next&&d.next.kind==='fold')
-    nextHtml='<div class="dv-next act fold"><span class="dv-fold-hero">Invoke <span class="prime">'+bpEsc(d.next.holder)+'</span></span><span class="dv-fold-sub">fold the Sibling&rsquo;s report</span></div>';
-  else if(d.next&&d.next.kind==='act')
-    nextHtml='<div class="dv-next act"><span class="arrow">&#8594;</span><span>Next: lift <span class="baton">'+bpEsc(d.next.track)+'</span> &middot; invoke <span class="prime">'+bpEsc(d.next.holder)+'</span></span></div>';
-  else if(d.next&&d.next.kind==='flight')
-    nextHtml='<div class="dv-next flight"><span class="arrow">&#8594;</span><span>In flight with <strong>'+bpEsc(d.next.holder)+'</strong> &mdash; '+bpEsc(d.next.track)+'</span></div>';
-  else if(d.next&&d.next.kind==='blocked'){const k=BP_KINDS[d.next.halt_kind]||{glyph:'⊘'};
-    // Distilled: the card states only WHERE it's blocked; the full halt_note lives in Full chain.
-    nextHtml='<div class="dv-block"><div class="bhead"><span class="bglyph">'+k.glyph+'</span> Blocked at '+bpEsc(d.next.track)+'</div></div>';}
-  const actions=act?('<div class="dv-actions"><button class="dv-btn" onclick="dvCopyNext(\''+d.id+'\',event)">Copy next step</button>'+
-    (d.next.holder?'<button class="dv-btn" onclick="dvOpenPrime(\''+d.id+'\',event)">Open '+bpEsc(d.next.holder)+'</button>':'')+'</div>'):'';
-  // v2.8 Reopen: ONLY on a MANUALLY-cleared Done card (done_at set) — mirrors the Dismissed-bucket
-  // Restore. unclear_deliverable nulls done_at and the card returns to its real active status + steps.
-  const reopen=(d.status==='DONE'&&d.done_at)?('<div class="dv-actions"><button class="dv-btn" onclick="dvReopen(\''+d.id+'\',event)" title="Return this to its active status with its remaining steps">Reopen</button></div>'):'';
-  const noVal=(d.status!=='DONE'&&d.banks_no_value)?'<span class="dv-novalue">banks no value until complete</span>':'';
-  const sitting=(d.is_sitting&&d.status!=='DONE')?'<span class="dv-sitting">'+dvSitLabel(d.quiet_hours)+'</span>':''; // v2.6 neutral stamp
-  // v2.5/v2.6 deliberate actions live in the expansion (off the face): Clear (mark done) + Dismiss (reversible drop).
-  const xactions=(d.status!=='DONE')?('<div class="dv-xactions"><button class="dv-xbtn clear" onclick="dvClear(\''+d.id+'\',event)">&#10003; Clear (mark done)</button><button class="dv-xbtn dismiss" onclick="dvDismiss(\''+d.id+'\',null)">Dismiss &mdash; we won&rsquo;t do this</button></div>'):'';
-  const pct=d.total?Math.round(d.done/d.total*100):0;
-  const chain=d.chain.map(s=>{
-    const halt=(s.state==='HALTED'&&s.halt_note)?'<span class="shalt">'+((BP_KINDS[s.halt_kind]||{}).glyph||'⊘')+' '+bpEsc(s.halt_note)+'</span>':'';
-    const dbl=s.baton_id?(' ondblclick="dvDismissBaton(\''+s.baton_id+'\',event)" title="double-click to dismiss this step"'):'';
-    return '<div class="dv-step '+s.state+'"'+dbl+'><div class="pos">'+s.pos+'</div><div class="stk">'+bpEsc(s.track)+' <span class="vk">'+(s.value_kind==='standalone'?'standalone':'chain-only')+'</span>'+halt+'</div><span class="sstate">'+s.state.toLowerCase()+'</span><span class="sholder">'+bpEsc(s.holder)+'</span></div>';
-  }).join('');
-  return '<div class="dv-card'+(d.status==='DONE'?' done':'')+(act?' dv-act':'')+'" data-id="'+d.id+'" ondblclick="dvDismiss(\''+d.id+'\',event)" title="double-click to dismiss">'+tablet+
-    '<div class="dv-top"><div><div class="dv-name">'+bpEsc(d.name)+'</div><div class="dv-outcome">'+bpEsc(d.outcome)+'</div></div>'+
-    '<div class="dv-status '+d.status+'">'+d.status.replace('_',' ')+'</div></div>'+nextHtml+actions+reopen+
-    '<div class="dv-meta"><span class="dv-prog">'+d.done+'/'+d.total+' steps</span><span class="dv-progbar"><i style="width:'+pct+'%"></i></span>'+noVal+sitting+'</div>'+
-    '<details class="dv-expand"><summary>&#9656; full chain</summary><div class="dv-chain">'+foldrep+chain+'</div>'+xactions+'</details></div>';
-}
-function dvRender(list){
-  const el=document.getElementById('dvList');
-  dvData={};
-  if(!list.length){el.innerHTML='<div class="dv-empty">No deliverables yet.</div>';return;}
-  const sorted=list.slice().sort(dvOrder);
-  sorted.forEach(d=>{dvData[d.id]=d;});
-  const live=sorted.filter(d=>d.status!=='DONE'),done=sorted.filter(d=>d.status==='DONE');
-  let html=live.map(dvCard).join('')||'<div class="dv-empty">Nothing open — all deliverables done.</div>';
-  if(done.length)html+='<details class="dv-expand" style="margin-top:10px"><summary>&#9656; Done ('+done.length+')</summary><div style="margin-top:14px">'+done.map(dvCard).join('')+'</div></details>';
-  el.innerHTML=html;
-}
-function dvRenderDismissed(list){
-  const el=document.getElementById('dvDismissed'); if(!el)return;
-  if(!list||!list.length){el.innerHTML='';return;}
-  const rows=list.map(x=>'<div class="dv-drow"><span class="dvk">'+(x.kind==='baton'?'step':'deliverable')+'</span><span class="dvl">'+bpEsc(x.label||'(untitled)')+'</span><button class="dv-btn" onclick="dvRestore(\''+(x.kind==='baton'?'baton':'deliverable')+'\',\''+x.id+'\')">Restore</button></div>').join('');
-  el.innerHTML='<details class="dv-dismissed"><summary>&#9656; Dismissed ('+list.length+')</summary><div class="dv-dbody">'+rows+'</div></details>';
-}
-// v2.4: every load is a live RE-FETCH that BYPASSES the browser cache (no-store + cache-bust param) —
-// not a re-render off in-memory state, never location.reload. A spinner + "Updated HH:MM:SS" stamp make
-// a refresh visibly acknowledged even when nothing changed. A refresh also graduates v2.5 cleared cards.
-// v2.4/v2.7#4: ONE refresh — the global header Refresh (loadData) re-fetches the board too; the
-// scoped Deliverables refresh + its stamp are gone (collapsed to one control, one stamp in the header).
-// Every load BYPASSES the browser cache ({cache:'no-store'}; NO query param — PostgREST reads params
-// as column filters, so &_=Date.now() 400s). A refresh also graduates v2.5 cleared cards (dvCleared
-// reset) so they re-sort to their Done home.
-async function loadDeliverables(){
-  const el=document.getElementById('dvList');
-  dvCleared.clear();
-  const nostore={cache:'no-store'};
-  let rows;
-  try{ rows=await sb('deliverable_board?select=*',nostore); }
-  catch(e){ el.innerHTML='<div class="dv-empty">Couldn’t load the deliverable board (the view didn’t respond). <button class="refresh-btn" onclick="loadDeliverables()">Retry</button></div>'; return; }
-  if(Array.isArray(rows)&&rows.length) dvRender(rows.map(dvFromRow));
-  else { el.innerHTML='<div class="dv-empty">No deliverables on the board yet.</div>'; dvData={}; }
-  try{ const dis=await sb('deliverable_board_dismissed?select=*&order=dismissed_at.desc',nostore); dvRenderDismissed(Array.isArray(dis)?dis:[]); }
-  catch(e){ dvRenderDismissed([]); }
-}
-// v2.5 + v2.7#2: clear = mark done, PERSISTED. clear_deliverable sets done_at (Connie's RPC); it
-// survives refresh — the bug v2.7 found was Clear painting locally only. Confirmation stays IN PLACE:
-// the card greys + pulses where the cursor is, no re-sort, until the next refresh graduates it to the
-// Done stack. Undo via unclear_deliverable. (Reg's override: a leftover unclaimed baton is fine — done_at wins.)
-async function dvClear(id,e){
-  if(e)e.stopPropagation();
-  if(!dvData[id]||dvData[id].status==='DONE')return;
-  try{ await sbRpc('clear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t mark done'); return; }
-  dvCleared.add(id);
-  const card=document.querySelector('.dv-card[data-id="'+id+'"]');
-  if(card){ const tmp=document.createElement('div'); tmp.innerHTML=dvCard(dvData[id]); const nu=tmp.firstElementChild;
-    if(nu){ card.replaceWith(nu); nu.classList.add('dv-pulse'); setTimeout(()=>{nu.classList.remove('dv-pulse');},950); } }
-  dvUndo('Marked “'+((dvData[id]&&dvData[id].name)||'deliverable')+'” done',()=>dvUnclear(id));
-}
-async function dvUnclear(id){
-  try{ await sbRpc('unclear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t undo'); return; }
-  dvCleared.delete(id);
-  const u=document.getElementById('dvUndo'); if(u)u.style.display='none';
-  loadDeliverables();
-}
-function dvClearTidy(id){ const c=document.querySelector('.dv-card[data-id="'+id+'"]'); if(c)c.remove(); }
-// v2.8: Reopen a manually-cleared Done card — unclear_deliverable nulls done_at; the card returns to its
-// real active status with remaining steps. Mirror of the Dismissed-bucket Restore (dvRestore).
-async function dvReopen(id,e){
-  if(e)e.stopPropagation();
-  try{ await sbRpc('unclear_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t reopen'); return; }
-  dvToast('Reopened');
-  loadDeliverables();
-}
-// ---- dismiss / restore (RPC-only) + undo + actionable controls ----
-async function dvDismiss(id,e){
-  if(e){ if(e.target&&e.target.closest&&e.target.closest('button,summary,a,.dv-step'))return; e.stopPropagation(); }
-  const d=dvData[id],label=(d&&d.name)||'deliverable';
-  try{ await sbRpc('dismiss_deliverable',{p_deliverable_id:id,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t dismiss'); return; }
-  dvUndo('Dismissed “'+label+'”',()=>dvRestore('deliverable',id,true));
-  loadDeliverables();
-}
-async function dvDismissBaton(batonId,e){
-  if(e)e.stopPropagation();
-  try{ await sbRpc('dismiss_baton',{p_baton_id:batonId,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t dismiss step'); return; }
-  dvUndo('Dismissed a step',()=>dvRestore('baton',batonId,true));
-  loadDeliverables();
-}
-async function dvRestore(kind,id,quiet){
-  try{ await sbRpc(kind==='baton'?'restore_baton':'restore_deliverable', kind==='baton'?{p_baton_id:id,p_actor:'reg'}:{p_deliverable_id:id,p_actor:'reg'}); }
-  catch(_){ dvToast('Couldn’t restore'); return; }
-  const u=document.getElementById('dvUndo'); if(u)u.style.display='none';
-  if(!quiet)dvToast('Restored');
-  loadDeliverables();
-}
-async function dvCopyNext(id,e){
-  if(e)e.stopPropagation();
-  const d=dvData[id]; if(!d)return;
-  const holder=(d.next&&d.next.holder)||d.next_holder||'';
-  let invoke='';
-  if(d.next_baton_id){ try{ const r=await sb('relay_baton?id=eq.'+d.next_baton_id+'&select=invoke_with'); if(r&&r[0]&&r[0].invoke_with)invoke=(''+r[0].invoke_with).trim(); }catch(_){} }
-  // v2.3 copy-compose: guarantee a paste-ready invocation even when invoke_with is terse — prefix
-  // "<holder> — pick up baton <id>: " UNLESS invoke_with already self-addresses (so a well-authored
-  // line per the v2.3 microcopy isn't double-prefixed). Falls back to next_action / a built line.
-  let text;
-  if(invoke){
-    const addressed=(holder&&invoke.toLowerCase().startsWith(holder.toLowerCase()))||/pick up baton/i.test(invoke);
-    text=addressed?invoke:((holder?holder+' — pick up baton '+(d.next_baton_id||'')+': ':'')+invoke);
-  } else {
-    text=d.next_action||('lift '+((d.next&&d.next.track)||'')+' — invoke '+holder);
-  }
-  try{ await navigator.clipboard.writeText(text); dvToast('Copied invocation'); }
-  catch(_){ dvToast('Copy blocked by browser'); }
-  dvDispatch(id);
-}
-async function dvOpenPrime(id,e){
-  if(e)e.stopPropagation();
-  const d=dvData[id]; if(!d||!d.next||!d.next.holder)return;
-  const h=d.next.holder;
-  let url=(window.instances&&instances[h]&&instances[h].chat_url)||null;
-  if(!url){ try{ const r=await sb('instances?name=eq.'+encodeURIComponent(h)+'&select=chat_url'); if(r&&r[0])url=r[0].chat_url; }catch(_){} }
-  if(url)window.open(url,'_blank','noopener'); else dvToast('No chat URL on file for '+h);
-  dvDispatch(id);
-}
-// v2.9 (baton b7951c58 / SP f729d071): Copy/Open is the honest "in flight now" moment — stamp
-// picked_up_at on the card's FRONT baton so it moves actionable -> in-flight (next_state ACTIVE ->
-// status IN_PROGRESS, via the existing view). Idempotent server-side (only an UNCLAIMED front is
-// stamped). BEST-EFFORT: the copy/open the user asked for already happened; a dispatch-stamp failure
-// must never block it — log and move on. Reload so the card reflects the new state.
-async function dvDispatch(id){
-  try{ await sbRpc('dispatch_deliverable',{p_deliverable_id:id,p_actor:'reg'}); loadDeliverables(); }
-  catch(e){ console.error('dispatch_deliverable failed',e); }
-}
-let dvUndoTimer=null;
-function dvUndo(msg,fn){
-  const t=document.getElementById('dvUndo'); if(!t)return;
-  t.innerHTML='<span></span><button class="dv-undobtn">Undo</button>';
-  t.querySelector('span').textContent=msg;
-  t.querySelector('button').onclick=()=>{ t.style.display='none'; clearTimeout(dvUndoTimer); fn(); };
-  t.style.display='flex';
-  clearTimeout(dvUndoTimer); dvUndoTimer=setTimeout(()=>{t.style.display='none';},8000);
-}
-function dvToast(msg){
-  const t=document.getElementById('dvUndo'); if(!t)return;
-  t.innerHTML='<span></span>'; t.querySelector('span').textContent=msg;
-  t.style.display='flex'; clearTimeout(dvUndoTimer); dvUndoTimer=setTimeout(()=>{t.style.display='none';},2600);
-}
-
-document.addEventListener('DOMContentLoaded',()=>{loadData();loadDeliverables();});
+document.addEventListener('DOMContentLoaded',()=>{loadData();});
 </script>
 </body>
 </html>

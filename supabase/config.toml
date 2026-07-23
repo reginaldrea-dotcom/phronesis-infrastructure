@@ -84,3 +84,10 @@ verify_jwt = false
 # --no-verify-jwt. HARDENING (Aegis): move to a same-origin Access-verified proxy for provable Reg-only.
 [functions.dossier-curate-link]
 verify_jwt = false
+
+# navigator-action-annotate is the Notices action-surface write path (Napoleon 290853ae):
+# Reg's annotation layer (title/note/snooze/soft-supersede) over the derived action lines,
+# written with the service-role credential into Connie's action_line_annotation. Cloudflare-gated
+# surface, called with the publishable key and no JWT. MUST deploy with --no-verify-jwt.
+[functions.navigator-action-annotate]
+verify_jwt = false
