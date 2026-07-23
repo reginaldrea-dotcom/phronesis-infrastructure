@@ -73,11 +73,11 @@
         var useDossier = viewParam ? (viewParam === 'dossier') : !!res.dossier_instance_id;
         if (useDossier) {
           var css = document.createElement('link');
-          css.rel = 'stylesheet'; css.href = 'primes/dossier.css?v=20260723r';
+          css.rel = 'stylesheet'; css.href = 'primes/dossier.css?v=20260723v';
           document.head.appendChild(css);
           var host = document.getElementById('render-root'); if (host) host.id = 'dossier-root'; // dossier-render.js renders into #dossier-root
           var ds = document.createElement('script');
-          ds.src = 'primes/dossier-render.js?v=20260723r';
+          ds.src = 'primes/dossier-render.js?v=20260723v';
           document.body.appendChild(ds);
         } else {
           var s = document.createElement('script');

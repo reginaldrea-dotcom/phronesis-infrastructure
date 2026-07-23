@@ -44,12 +44,20 @@ Deno.serve(async (req: Request) => {
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const edgeId = typeof body?.edge_id === "string" ? body.edge_id.trim() : "";
   const verdict = body?.verdict === "reject" ? "reject" : body?.verdict === "confirm" ? "confirm" : "";
-  const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  // Reject reasons SPLIT into three (Eames 57480e66): one is a finding against the CLAIM, two are CAPTURE
+  // defects (Angelia's worklist, not a claim penalty). The class is stored structured in review_note so
+  // capture-defects are queryable — a re-extract worklist (paraphrase) and a re-capture worklist (not_on_page)
+  // fall out automatically. An optional free-text note rides alongside.
+  const REASON_CLASSES = ["source_no_support", "not_on_page", "paraphrase"];
+  const reasonClass = typeof body?.reason_class === "string" ? body.reason_class.trim() : "";
+  const note = typeof body?.note === "string" ? body.note.trim() : "";
   if (!token) return json({ error: "token is required" }, 400);
   if (!UUID_RE.test(edgeId)) return json({ error: "edge_id must be a full UUID" }, 400);
   if (!verdict) return json({ error: "verdict must be 'confirm' or 'reject'" }, 400);
-  if (verdict === "reject" && !reason) return json({ error: "a reject needs a reason" }, 400);
-  if (reason.length > MAX_REASON_LEN) return json({ error: `reason too long (${reason.length} > ${MAX_REASON_LEN})` }, 400);
+  if (verdict === "reject" && !REASON_CLASSES.includes(reasonClass)) {
+    return json({ error: `a reject needs reason_class ∈ ${REASON_CLASSES.join(" | ")}` }, 400);
+  }
+  if (note.length > MAX_REASON_LEN) return json({ error: `note too long (${note.length} > ${MAX_REASON_LEN})` }, 400);
 
   const supabase = createClient(env("SUPABASE_URL"), env("THEO_DISPATCH_SECRET_KEY"));
 
@@ -87,10 +95,11 @@ Deno.serve(async (req: Request) => {
   if (edge.tid !== s.theo_session_id) return json({ error: "this edge does not belong to the Dossier this token grants" }, 403);
 
   // 3. Write the verdict to the EDGE. verification_state is deliberately untouched (a human eyeball
-  // confirms FIT; it does not machine-verify). review_note carries the reject reason, null on confirm.
+  // confirms FIT; it does not machine-verify). review_note carries "<class>: <note>" on reject (the class
+  // first so Angelia's worklist queries can pattern-match it), null on confirm.
   const patch = verdict === "confirm"
     ? { review_state: "accepted", reviewed_by: identity, reviewed_at: new Date().toISOString(), review_note: null }
-    : { review_state: "rejected", reviewed_by: identity, reviewed_at: new Date().toISOString(), review_note: reason };
+    : { review_state: "rejected", reviewed_by: identity, reviewed_at: new Date().toISOString(), review_note: note ? `${reasonClass}: ${note}` : reasonClass };
   const upd = await supabase.from("element_dependency").update(patch).eq("id", edgeId).select("id, review_state, reviewed_by, reviewed_at, review_note").single();
   if (upd.error) return json({ error: `review write failed: ${upd.error.message}` }, 500);
 

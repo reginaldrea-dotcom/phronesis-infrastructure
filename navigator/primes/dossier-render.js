@@ -638,11 +638,17 @@
     (d.claims || []).forEach(function (c) {
       (c.grounding || []).forEach(function (g) {
         if (!g.edge_id || g.review_state !== 'pending') return;   // only the outstanding eyeball work
+        // The capture contract (Napoleon ab73864a): ONLY a screenshot_review edge is reviewable — it passed
+        // Check 1 (quote verbatim on the captured page) and has a frozen screenshot. A cited_not_verified
+        // edge failed Check 1 (paraphrase / wrong capture / no quote); it is NOT handed to a reviewer as if
+        // the evidence held — it goes to the re-extract / re-capture worklist, not the eyeball queue.
+        if (g.verification_state !== 'screenshot_review') return;
         var f = g.source_document_id ? factByDoc[g.source_document_id] : null;
         q.push({
           edge_id: g.edge_id,
           claim_text: c.claim_text || '',
           section: secTitle[c.section_id] || '',
+          section_index: (function () { var s = (d.sections || []).find(function (x) { return x.id === c.section_id; }); return s ? (s.section_index || 0) : 999; })(),
           document_title: g.document_title || (f && f.title) || '',
           anchor_quote: g.anchor_quote || '',
           tier: g.tier || (f && f.authority_tier) || '',
@@ -651,7 +657,20 @@
         });
       });
     });
+    // GROUP BY SECTION in document order (Eames 57480e66): the reviewer keeps context instead of
+    // rebuilding it every edge.
+    q.sort(function (a, b) { return (a.section_index - b.section_index); });
     return q;
+  }
+  // Deep-link the LIVE source straight to the span (Eames: "kills paging through a 50-page document").
+  // HTML -> scroll-to-text-fragment (#:~:text=); PDF -> the live link as-is (page fragment needs a page
+  // number we don't reliably hold yet — that rides with the capture-locus work).
+  function spanDeepLink(url, quote) {
+    if (!url) return '';
+    if (/\.pdf($|[?#])/i.test(url) || /\/pdf\//i.test(url)) return url;
+    var frag = quote ? String(quote).replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+    if (!frag) return url;
+    return url.split('#')[0] + '#:~:text=' + encodeURIComponent(frag);
   }
   function renderReviewSurface(d) {
     if (!isReviewer()) return '';
@@ -667,13 +686,16 @@
         '<div class="rv-clear">Every pending source has been reviewed. Reload to confirm the labels updated.</div>';
     }
     var e = REVIEW.queue[REVIEW.i];
+    var prev = REVIEW.i > 0 ? REVIEW.queue[REVIEW.i - 1] : null;
+    var sectionHead = (!prev || prev.section !== e.section) ? '<div class="rv-section">' + esc(e.section || 'Unsectioned') + '</div>' : '';
     var cap = [];
     if (e.tier) cap.push('<span class="gf-tier ' + esc(String(e.tier).toLowerCase()) + '">' + esc(e.tier) + '</span>');
     if (e.document_title) cap.push('<span class="rv-doc">' + esc(e.document_title) + '</span>');
     var capLinks = [];
+    if (e.source_url) capLinks.push('<a href="' + esc(spanDeepLink(e.source_url, e.anchor_quote)) + '" target="_blank" rel="noopener">open source at the span</a>');
     if (e.screenshot_url) capLinks.push('<a href="' + esc(e.screenshot_url) + '" target="_blank" rel="noopener">frozen capture</a>');
-    if (e.source_url) capLinks.push('<a href="' + esc(e.source_url) + '" target="_blank" rel="noopener">source</a>');
-    return '<div class="rv-head"><span class="rv-title">Verify sources</span>' +
+    return sectionHead +
+      '<div class="rv-head"><span class="rv-title">Verify sources</span>' +
         '<span class="rv-progress">' + (REVIEW.i + 1) + ' of ' + total + ' · ' + REVIEW.done + ' confirmed</span></div>' +
       '<div class="rv-body">' +
         '<div class="rv-claim"><div class="rv-lab">Claim' + (e.section ? ' · ' + esc(e.section) : '') + '</div>' +
@@ -684,19 +706,24 @@
           (capLinks.length ? '<div class="rv-links">' + capLinks.join('<span class="gf-link-sep">·</span>') + '</div>' : '') +
         '</div>' +
       '</div>' +
-      '<div class="rv-q">Does this source support this claim?</div>' +
+      '<div class="rv-q">Does this quote — which is on this page — support this claim?</div>' +
       '<div class="rv-actions">' +
         '<button type="button" class="rv-confirm" data-edge="' + esc(e.edge_id) + '">Confirm — it supports the claim</button>' +
         '<button type="button" class="rv-reject-open">Reject…</button>' +
         '<button type="button" class="rv-skip">Skip for now</button>' +
       '</div>' +
+      // REJECT REASONS SPLIT (Eames 57480e66): three DIFFERENT meanings that must not conflate — one is a
+      // finding against the CLAIM, two are defects in the CAPTURE (Angelia's worklist, not a claim penalty).
       '<div class="rv-reject" hidden>' +
-        '<input type="text" class="rv-reason" placeholder="Why does it not support the claim? (required)" maxlength="1000">' +
-        '<button type="button" class="rv-reject-do" data-edge="' + esc(e.edge_id) + '">Confirm reject</button>' +
+        '<div class="rv-reject-lab">Why reject?</div>' +
+        '<button type="button" class="rv-rej-btn" data-edge="' + esc(e.edge_id) + '" data-class="source_no_support">The source does not support the claim</button>' +
+        '<button type="button" class="rv-rej-btn" data-edge="' + esc(e.edge_id) + '" data-class="not_on_page">Support is in the document but not on this page</button>' +
+        '<button type="button" class="rv-rej-btn" data-edge="' + esc(e.edge_id) + '" data-class="paraphrase">Quote is a paraphrase — support IS on the page</button>' +
+        '<input type="text" class="rv-reason" placeholder="Optional note" maxlength="1000">' +
       '</div>';
   }
   function reviewAdvance() { REVIEW.i++; var el = document.getElementById('reviewSurface'); if (el) el.innerHTML = reviewCardHTML(); }
-  function reviewWrite(edgeId, verdict, reason, btn) {
+  function reviewWrite(edgeId, verdict, reasonClass, note, btn) {
     var ep = reviewEndpoint();
     var token = (typeof window !== 'undefined') ? window.RENDER_SHARE_TOKEN : '';
     if (!ep || !token) { alert('Review is unavailable in this view (no editor token).'); return; }
@@ -705,7 +732,7 @@
     controls.forEach(function (x) { x.disabled = true; });
     fetch(ep, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token, edge_id: edgeId, verdict: verdict, reason: reason || undefined })
+      body: JSON.stringify({ token: token, edge_id: edgeId, verdict: verdict, reason_class: reasonClass || undefined, note: note || undefined })
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (x) { throw new Error(x.error || ('HTTP ' + r.status)); });
       return r.json();
@@ -721,11 +748,11 @@
     var el = document.getElementById('reviewSurface'); if (!el) return;
     el.addEventListener('click', function (e) {
       var c = e.target.closest && e.target.closest('.rv-confirm');
-      if (c) { reviewWrite(c.getAttribute('data-edge'), 'confirm', null, c); return; }
+      if (c) { reviewWrite(c.getAttribute('data-edge'), 'confirm', null, null, c); return; }
       var ro = e.target.closest && e.target.closest('.rv-reject-open');
-      if (ro) { var box = el.querySelector('.rv-reject'); if (box) { box.hidden = false; var inp = box.querySelector('.rv-reason'); if (inp) inp.focus(); } return; }
-      var rd = e.target.closest && e.target.closest('.rv-reject-do');
-      if (rd) { var inp2 = el.querySelector('.rv-reason'); var reason = inp2 ? inp2.value.trim() : ''; if (!reason) { if (inp2) inp2.focus(); return; } reviewWrite(rd.getAttribute('data-edge'), 'reject', reason, rd); return; }
+      if (ro) { var box = el.querySelector('.rv-reject'); if (box) box.hidden = false; return; }
+      var rj = e.target.closest && e.target.closest('.rv-rej-btn');
+      if (rj) { var inp = el.querySelector('.rv-reason'); var note = inp ? inp.value.trim() : ''; reviewWrite(rj.getAttribute('data-edge'), 'reject', rj.getAttribute('data-class'), note, rj); return; }
       var sk = e.target.closest && e.target.closest('.rv-skip');
       if (sk) { reviewAdvance(); return; }
     });

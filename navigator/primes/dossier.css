@@ -405,3 +405,14 @@ a.av-doc:hover { color: var(--accent); }
              background: var(--surface, #fff); color: var(--text); }
 .rv-reject-do { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
 .rv-clear { font-size: 14px; color: var(--status-green, #2f7d4f); font-style: italic; }
+
+/* Review surface — section grouping + split reject reasons + deep-link (Eames 57480e66 amendment). */
+.rv-section { font-family: 'Cormorant SC', serif; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase;
+              color: var(--text-muted); margin: 4px 0 10px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.rv-reject-lab { font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+                 color: var(--text-muted); margin-bottom: 4px; width: 100%; }
+.rv-reject { flex-direction: column; align-items: stretch; }
+.rv-rej-btn { text-align: left; font-family: 'Lora', Georgia, serif; font-size: 13px; padding: 8px 12px; margin-bottom: 6px;
+              border: 1px solid var(--border); border-radius: 3px; background: var(--surface, #fff); color: var(--text); cursor: pointer; }
+.rv-rej-btn:hover { border-color: var(--status-red, #b3423a); color: var(--status-red, #b3423a); }
+.rv-rej-btn:disabled { opacity: 0.5; cursor: default; }

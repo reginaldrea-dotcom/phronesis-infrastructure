@@ -16,7 +16,7 @@
 
 import type { Tool, ToolContext } from "./types.ts";
 import { captureSource } from "../lib/captureSource.ts";
-import { indexPageSignals } from "../lib/coLocationGate.ts";
+import { indexPageSignals, normProse } from "../lib/coLocationGate.ts";
 
 function fail(msg: string): string {
   return `write_ground_fact error: ${msg}\n[SYSTEM: surface to Reg, do not retry.]`;
@@ -193,10 +193,12 @@ export const writeGroundFactTool: Tool = {
         verificationState = "screenshot_review"; reviewState = "pending";
       }
     } else {
-      // qualitative: reviewable if there is visible proof — a screenshot OR (operator-supplied) a
-      // retrievable frozen document a human can open. Fact-level state is legacy; the per-edge co-location
-      // gate at write_element_dependency is what actually earns 'anchored'.
-      verificationState = (screenshotUrl || archiveUrl) ? "screenshot_review" : "cited_not_verified";
+      // qualitative: CHECK 1 AT CAPTURE (Napoleon ab73864a rule 2 — for ALL captures, not just figures).
+      // The quote (canonical_string) must be present VERBATIM on the rendered page. A quote absent from the
+      // page is a paraphrase or a wrong/gated/index capture; it must NOT become a reviewable screenshot_review
+      // fact. Reviewable requires BOTH the quote-on-page AND visible proof (screenshot or retrievable doc).
+      const quoteOnPage = !!renderedText && normProse(renderedText).includes(normProse(canonical));
+      verificationState = (quoteOnPage && (screenshotUrl || archiveUrl)) ? "screenshot_review" : "cited_not_verified";
       reviewState = "pending";
     }
 

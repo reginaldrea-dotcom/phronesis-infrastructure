@@ -223,9 +223,21 @@ export function runCoLocationGate(inp: GateInput): GateResult {
     GateResult => ({ verificationState: state, reviewState: review, reason, subjectTerms: [], matchedTerms: [] });
 
   // Qualitative edge (no figure to co-locate): a human confirms the screenshot supports the claim.
+  // THE CAPTURE CONTRACT (Napoleon ab73864a; Eames d5283648). CHECK 1 — "is this verbatim span on the
+  // captured page" — needs NO figure, and was silently skipped for prose: qualitative edges went straight
+  // to screenshot_review on quote+screenshot alone, so 23 of 37 betterworld quotes pointed at a page that
+  // did not contain them. Now Check 1 runs for prose too, at the same gate:
+  //   Rule 3 — NO QUOTE, NO (reviewable) EDGE. A quoteless edge cannot be reviewed; it stays cited.
+  //   Rule 1 & 2 — the quote must be a VERBATIM extract PRESENT on the captured page. A paraphrase or a
+  //   wrong/gated/index capture fails here and is cited_not_verified (honest, re-workable), NEVER a
+  //   reviewable screenshot_review edge handed to a human as if the evidence held.
   if (!inp.claimFigure || !inp.claimFigure.trim()) {
-    if (quote && inp.hasScreenshot) return none("screenshot_review", "pending", "qualitative — screenshot awaits human review");
-    return none("cited_not_verified", "pending", "qualitative — no quote or no screenshot to review");
+    if (!quote) return none("cited_not_verified", "pending", "qualitative — no anchor_quote supplied (no quote, no reviewable edge)");
+    if (!normProse(inp.pageContent).includes(normProse(quote))) {
+      return none("cited_not_verified", "pending", "qualitative — anchor_quote is NOT present verbatim on the captured page (paraphrase, or wrong/gated/index capture): re-extract the quote from the page, or re-capture the locus");
+    }
+    if (inp.hasScreenshot) return none("screenshot_review", "pending", "qualitative — quote verbatim on the captured page; screenshot awaits human review");
+    return none("cited_not_verified", "pending", "qualitative — quote on page but no screenshot/retrievable capture to review");
   }
   const figure = inp.claimFigure.trim();
 
