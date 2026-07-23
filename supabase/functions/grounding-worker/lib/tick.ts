@@ -65,8 +65,19 @@ export async function tick(supabase: SupabaseClient): Promise<TickSummary> {
 
 // Ground ONE claim. Judge success by whether a VERIFIED claim_on_fact edge exists AFTER the invocation, never
 // by the model's words. Returns grounded + a short note (the model's reason on a miss, for Theo's triage).
+//
+// RE-GROUND MODE (C13, Napoleon 9e10eb02 — the landing-page correction run): a source_hint carrying
+// "reground": true means the claim ALREADY has a verified edge (typically screenshot_review on an
+// index-suspect landing page) and the task is to ground the underlying DOCUMENT instead. Two changes,
+// both ADDITIVE: (1) the already-grounded short-circuit is skipped — it would otherwise return
+// success without invoking Angelia at all; (2) success is judged ONLY by a verified edge CREATED
+// AFTER this invocation started — the pre-existing edge cannot fake a pass. The old edge is never
+// touched: Angelia mints a NEW fact from the document and links a NEW parallel edge; supersession of
+// the landing edge is a later, human-gated act once the replacement has verified better.
 async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded: boolean; note: string }> {
-  if (await hasVerifiedEdge(supabase, r.claim_id)) return { grounded: true, note: "already grounded" };
+  const reground = (r.source_hint as { reground?: boolean } | null)?.reground === true;
+  const startedIso = new Date().toISOString();
+  if (!reground && await hasVerifiedEdge(supabase, r.claim_id)) return { grounded: true, note: "already grounded" };
 
   let respText = "";
   try {
@@ -92,7 +103,7 @@ async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded:
     respText = `prime invoke error: ${e instanceof Error ? e.message : String(e)}`;
   }
 
-  const grounded = await hasVerifiedEdge(supabase, r.claim_id);
+  const grounded = await hasVerifiedEdge(supabase, r.claim_id, reground ? startedIso : undefined);
   return { grounded, note: grounded ? "grounded" : excerpt(respText) };
 }
 
@@ -102,10 +113,14 @@ async function groundOne(supabase: SupabaseClient, r: QRow): Promise<{ grounded:
 // grounded"), so the anchor could never land (repro: claim 47ffb727 stuck cited_not_verified across 4
 // re-queues - the worker skipped Angelia on the pre-existing bare edge). Now a bare edge is a MISS: the worker
 // re-grounds up to max_attempts, then routes to Theo (decision 4) rather than silently marking it done.
-async function hasVerifiedEdge(supabase: SupabaseClient, claimId: string): Promise<boolean> {
-  const { data } = await supabase.from("element_dependency")
+// Optional `sinceIso` (re-ground mode): only an edge CREATED after that instant counts — the
+// pre-existing landing-page edge must not satisfy the judge for a re-grounding run.
+async function hasVerifiedEdge(supabase: SupabaseClient, claimId: string, sinceIso?: string): Promise<boolean> {
+  let q = supabase.from("element_dependency")
     .select("id").eq("dependent_synthesis_claim_id", claimId).eq("edge_kind", "claim_on_fact")
-    .in("verification_state", ["anchored", "screenshot_review"]).limit(1);
+    .in("verification_state", ["anchored", "screenshot_review"]);
+  if (sinceIso) q = q.gt("created_at", sinceIso);
+  const { data } = await q.limit(1);
   return Array.isArray(data) && data.length > 0;
 }
 
@@ -145,6 +160,10 @@ function groundingPrompt(claimId: string, hint: Record<string, unknown> | null):
   // false landing). The tools detect this from the captured page's SHAPE and will demote instead of
   // anchoring; the craft is to go one level deeper yourself.
   lines.push("If write_ground_fact reports the page is INDEX/LANDING-SUSPECT (or you can see the capture is a contents/FAQ/catalogue/hub page): do NOT settle for it. Find within it the link to the page or document that actually STATES the claim (often the underlying PDF or section page), re-mint from THAT URL, and link the claim there. Never anchor to a page that merely mentions. If no deeper page exists, leave the fact in review honestly.");
+  // C13 re-ground run: the claim already has a landing-page edge; the task is the DOCUMENT.
+  if (hint?.reground === true) {
+    lines.push("RE-GROUNDING NOTE: this claim is ALREADY linked to a fact whose source was a landing/index page (it merely MENTIONS the material). Your task is the DOCUMENT given above — the page that STATES it. Mint a NEW ground_fact from that source and link a NEW claim_on_fact edge. Do NOT modify, supersede, or delete the existing fact or edge — the comparison and any supersession happen later, by a human, once your replacement has verified better.");
+  }
   lines.push("Do exactly this ONE claim. Do not ground others.");
   return lines.join("\n");
 }
