@@ -132,8 +132,19 @@ Deno.serve(async (req: Request) => {
   let groundFacts: unknown[] = [];
 
   if (synthesis?.id) {
-    const [secs, clm, conf, gfacts, sfacts] = await Promise.all([
+    const [secs, canon, clm, conf, gfacts, sfacts] = await Promise.all([
+      // Base section rows are still read for shape/metadata (join_note is not in the resolver's
+      // return set), but the RENDERED TEXT comes from the canonical resolver below — never from
+      // content_md directly.
       run("sections", () => supabase.from("synthesis_section").select("id, section_index, title, content_md, callout_md, section_type, needs_review, join_note").eq("synthesis_id", synthesis.id).order("section_index", { ascending: true })),
+      // CANONICAL RESOLVER (Connie's canonical_synthesis_sections(), Napoleon GO 6fbc5ddb): one
+      // set-returning call resolves every section to its highest-rank non-superseded GENERAL
+      // overlay (operator_edit > language > coherence), falling back to base content_md. PERSONAL
+      // overlays are excluded by the resolver — a user's personal overlay must never leak into
+      // the general render. SECURITY DEFINER, granted to service_role only (we call with the
+      // service credential). overlay_id is passed through per section so the integrity-pass
+      // precheck can bind section -> overlay from the render payload without a separate lookup.
+      run("canonical", () => supabase.rpc("canonical_synthesis_sections", { p_synthesis_id: synthesis.id })),
       run("claims", () => supabase.from("render_claim_v1").select("*").eq("session_id", sessionId)),
       // Per-section confidence (dossier L1): confidence_state from the tier-composition of the facts a
       // section's claims rest on (synthesis_claim.section_id -> element_dependency). 'ungrounded' until edges land.
@@ -152,11 +163,18 @@ Deno.serve(async (req: Request) => {
         .order("authority_tier", { ascending: true })),
     ]);
     if (secs.error) return json({ error: `sections: ${secs.error.message}` }, 500);
+    // Fail LOUD if the resolver errors — silently rendering base where an operator_edit overlay
+    // exists is exactly the drift the canonical chain guards against.
+    if (canon.error) return json({ error: `canonical: ${canon.error.message}` }, 500);
     if (clm.error) return json({ error: `claims: ${clm.error.message}` }, 500);
     if (conf.error) return json({ error: `section_confidence: ${conf.error.message}` }, 500);
     if (gfacts.error) return json({ error: `ground_facts: ${gfacts.error.message}` }, 500);
     if (sfacts.error) return json({ error: `section_facts: ${sfacts.error.message}` }, 500);
     groundFacts = gfacts.data ?? [];
+    // Canonical text per section, keyed by section_id. The resolver already falls back to base
+    // content_md internally, so every section should have a row; if one is somehow absent the
+    // merge below keeps the base text (same value the resolver's own fallback would give).
+    const canonBy = new Map((canon.data ?? []).map((r: Record<string, unknown>) => [r.section_id as string, r]));
     const confBy = new Map((conf.data ?? []).map((r: Record<string, unknown>) => [r.section_id as string, r]));
     const factsBySection = new Map<string, Array<Record<string, unknown>>>();
     for (const f of (sfacts.data ?? []) as Array<Record<string, unknown>>) {
@@ -186,10 +204,17 @@ Deno.serve(async (req: Request) => {
 
     sections = (secs.data ?? []).map((s: Record<string, unknown>) => {
       const c = confBy.get(s.id as string);
+      const k = canonBy.get(s.id as string);
       const links = linksBySection.get(s.id as string) ?? [];
       // Section-level "(valid: DATE)" = the freshest valid_as_of among the section's links.
       const validDates = links.map((l) => l.valid_as_of as string).filter(Boolean).sort();
       return { ...s,
+        // content_md carries the CANONICAL text (see resolver note above) — the front-end field
+        // name is unchanged, so both hosts render canonical with no page change.
+        content_md: (k?.canonical_text as string) ?? s.content_md,
+        has_overlay: (k?.has_overlay as boolean) ?? false,
+        overlay_kind: (k?.overlay_kind as string) ?? null,
+        overlay_id: (k?.overlay_id as string) ?? null,
         confidence_state: (c?.confidence_state as string) ?? "ungrounded",
         claim_count: c?.claim_count ?? 0,
         grounded_claim_count: c?.grounded_claim_count ?? 0,
