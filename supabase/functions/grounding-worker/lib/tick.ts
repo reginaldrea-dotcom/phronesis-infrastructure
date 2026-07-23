@@ -138,7 +138,11 @@ function groundingPrompt(claimId: string, hint: Record<string, unknown> | null):
   const lines = [
     "GROUNDING TASK - one claim, full grounding (capture/attach + verify + link).",
     `Ground synthesis_claim ${claimId}.`,
-    "1. Read the claim.",
+    // Angelia's suit orients her via Super-T / inbox; here that wastes the 6-turn budget. Everything
+    // she needs is in THIS message. (Observed 23 Jul: sessions spent hunting for "the betterworld
+    // session" instead of acting on the claim_id + source given.)
+    "SELF-CONTAINED: everything you need is IN THIS MESSAGE - the claim_id above and the source below. Do NOT search for a dossier session, a grounding brief, an inbox message, or any other context; do NOT read the ledger to 'find the session'. Read the claim by its id, then act. Your ONLY tools this task are write_ground_fact and write_element_dependency.",
+    "1. Read the claim (by the id above - read_synthesis or read the claim row; do not go looking for its dossier).",
     captureStep,
     `3. Then link it AND prove it: write_element_dependency (dependent_type=synthesis_claim, dependent_id=${claimId}, depends_on_type=ground_fact, depends_on_id=<the ground_fact you just wrote>, edge_kind=claim_on_fact). Verification is EARNED on this edge by CO-LOCATION, not by the figure being somewhere in the source:`,
     "   - For a NUMERIC claim: also pass claim_canonical_string = the claim's load-bearing figure exactly as the claim states it, AND anchor_quote = a SHORT VERBATIM span copied word-for-word from the source's own text that contains BOTH that figure AND the claim's subject. The edge ANCHORS only if that span is in the source and the figure + the claim's subject terms co-locate inside it. CRITICAL for TABLES / key-value / statement-of-verification layouts: the bare value is NOT a valid anchor_quote - 'Limited / 10%' or '294,999.6' on its own carries no subject and will FAIL. You MUST include the ROW LABEL / field name in the SAME span, e.g. 'GHG Emissions avoidance: 294,999.6 t CO2e (over a 10-year product in service period)' or 'Level of assurance / materiality: Limited / 10%'. Do NOT paraphrase the quote, do NOT stitch a span from two places, and do NOT pick a span where the figure belongs to a DIFFERENT subject. If no single span carries both the figure and the subject, omit anchor_quote and leave it cited_not_verified - do not force it.",
