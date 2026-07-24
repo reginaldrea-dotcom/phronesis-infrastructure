@@ -109,3 +109,10 @@ verify_jwt = false
 # WORKER_INVOKE_KEY apikey. verify_jwt=false. MUST deploy with --no-verify-jwt.
 [functions.pdf-page-ingest]
 verify_jwt = false
+
+# operator-source-ingest is Component C (Napoleon 169f00e0): the operator "grab what I'm reading/watching"
+# acquisition with four renderers (html / pdf / scanned-pdf+ocr / video_transcript). One source per call
+# (no list/iterate entry point — "pull all forty" impossible by construction). WORKER_INVOKE_KEY guarded.
+# MUST deploy with --no-verify-jwt.
+[functions.operator-source-ingest]
+verify_jwt = false
