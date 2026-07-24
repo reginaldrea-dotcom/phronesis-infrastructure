@@ -59,7 +59,11 @@ Deno.serve(async (req: Request) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ error: "invalid JSON body" }, 400); }
   const rawUrl = typeof body.url === "string" ? body.url.trim() : "";
-  const title = typeof body.title === "string" ? body.title.trim() : "";
+  // Sanitise the title (Eames 4fa390a0 / Napoleon 670b6c99): the title flows into every citation, so a
+  // mangled byte there is what an adversarial reader notices first. Drop the U+FFFD replacement char and
+  // normalise en/em/other dashes to a clean ASCII hyphen — belt-and-braces even if the caller sent bad UTF-8.
+  const title = (typeof body.title === "string" ? body.title : "")
+    .replace(/�/g, "-").replace(/[‒–—―]/g, "-").replace(/\s+/g, " ").trim();
   const docSlug = typeof body.doc_key === "string" ? body.doc_key.trim() : "";
   const docKey = crypto.randomUUID(); // document_key is a uuid; the human slug (if any) rides in attestation
   const dryRun = body.dry_run === true; // extract + report only, write nothing

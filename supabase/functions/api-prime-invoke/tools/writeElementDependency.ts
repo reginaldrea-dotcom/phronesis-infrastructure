@@ -113,7 +113,7 @@ export const writeElementDependencyTool: Tool = {
           ]);
           const claimText = (claimRes.data as { claim_text?: string } | null)?.claim_text ?? "";
           const docId = (factRes.data as { source_document_id?: string } | null)?.source_document_id ?? null;
-          let pageContent = "", hasScreenshot = false;
+          let pageContent = "", hasScreenshot = false, docSlug = "";
           if (docId) {
             const docRes = await ctx.supabase.from("source_document")
               .select("content, attestation").eq("id", docId).maybeSingle();
@@ -121,8 +121,9 @@ export const writeElementDependencyTool: Tool = {
             pageContent = d?.content ?? "";
             // Reviewable proof for the qualitative path = a screenshot OR (operator-supplied) a retrievable
             // frozen document a human can open. Operator uploads carry retrievable_url, not a screenshot.
-            const attn = (d?.attestation ?? {}) as { screenshot_url?: string; retrievable_url?: string; archive_url?: string };
+            const attn = (d?.attestation ?? {}) as { screenshot_url?: string; retrievable_url?: string; archive_url?: string; doc_slug?: string };
             hasScreenshot = !!(attn.screenshot_url || attn.retrievable_url || attn.archive_url);
+            docSlug = String(attn.doc_slug ?? "");
           }
           const gate = runCoLocationGate({ claimText, pageContent, anchorQuote, claimFigure, hasScreenshot });
           // C12 (Napoleon 16918c96): an anchored outcome on an INDEX-SUSPECT page demotes to
@@ -137,13 +138,29 @@ export const writeElementDependencyTool: Tool = {
               gate.reason += ` — BUT the page shape is index/landing-suspect (${idx.links_per_kchar} links/kchar, list/para ${idx.list_para_ratio}): it may MENTION rather than STATE. Demoted to human review; prefer following to the page that states the claim and re-linking there.`;
             }
           }
+          // WRONG-DOCUMENT FLAG (Eames 4fa390a0 / Napoleon 670b6c99). Evidence kind determines the DOCUMENT,
+          // as it determines the artifact: a claim about what a STANDARD REQUIRES must anchor to the standard,
+          // not to an EXPLAINER that restates it. The explainer contains near-verbatim passages, so a normative
+          // claim can pass the span + subject gates while citing the wrong document — the industry/buildings
+          // hazard moved up a level (wrong SUBJECT -> wrong DOCUMENT), and harder to see (titles truncate alike).
+          // FLAG FOR THE HUMAN, NEVER BLOCK: the distinction is EDITORIAL and a keyword test would misfire, so
+          // this leaves verification_state untouched and only raises a review note. Document-level, never touches
+          // the span matcher. (Explainer identified by its ingest doc_slug; a proper document-role tag can
+          // replace the slug test later.)
+          let flagNote: string | null = null;
+          const normative = /\b(shall|must|require[sd]?|requires|mandate[sd]?|mandates|prohibit(?:s|ed)?)\b/i.test(claimText);
+          const isExplainer = /change|explainer|summary|main-changes/i.test(docSlug);
+          if (normative && isExplainer) {
+            flagNote = `flag:wrong_document_risk — this NORMATIVE claim (shall/requires/prohibits) is anchored to an EXPLAINER (doc_slug '${docSlug}'), which RESTATES the standard rather than being it. The span can pass every check yet cite the wrong document. A reviewer must confirm the document fit: a claim about what the standard REQUIRES belongs on the standard; a claim about what CHANGED belongs here. Flag, not a block (editorial).`;
+          }
           await ctx.supabase.from("element_dependency").update({
             verification_state: gate.verificationState,
             anchor_quote: anchorQuote || null,
             claim_canonical_string: claimFigure || null,
             review_state: gate.reviewState,
+            ...(flagNote ? { review_note: flagNote } : {}),
           }).eq("id", row.id);
-          verification = { state: gate.verificationState, review: gate.reviewState, reason: gate.reason };
+          verification = { state: gate.verificationState, review: gate.reviewState, reason: gate.reason + (flagNote ? ` [${flagNote}]` : "") };
         } catch (e) {
           // Fail-safe: if the gate cannot run, the edge must NOT read as verified.
           await ctx.supabase.from("element_dependency").update({
