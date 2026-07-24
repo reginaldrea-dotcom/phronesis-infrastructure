@@ -103,3 +103,9 @@ verify_jwt = false
 # element_dependency (RLS deny-all) with the service-role credential. MUST deploy with --no-verify-jwt.
 [functions.dossier-review-edge]
 verify_jwt = false
+
+# pdf-page-ingest is C14 page-locus ingest (Napoleon cda68b43): splits a born-digital PDF into
+# per-page source_document units (evidence_scope='page'). Manual admin trigger, guarded by the
+# WORKER_INVOKE_KEY apikey. verify_jwt=false. MUST deploy with --no-verify-jwt.
+[functions.pdf-page-ingest]
+verify_jwt = false
