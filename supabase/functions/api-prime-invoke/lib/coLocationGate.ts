@@ -39,9 +39,18 @@ export function figureIn(haystack: string, figure: string): boolean {
   const h = normFigure(haystack), n = normFigure(figure);
   return n.length >= 2 && h.includes(n);
 }
-// Prose identity for the quote-on-page check.
+// Standards documents interleave their OWN clause cross-references INSIDE sentences —
+// "reduced to residual emissions (3.2.11) and these residual emissions (3.2.11) are counterbalanced" —
+// so a genuine verbatim span is not CONTIGUOUS once normProse turns "(3.2.11)" into stray digits. This
+// is a real, recurring pattern in every standard we ingest (Napoleon 0bca6710), not a one-off. Strip the
+// parenthetical clause refs BEFORE normalising so the span matches its own source. Only removes a
+// parenthetical of dotted integers — "(3.2.11)", "(12.2)" — never prose, never a figure in the claim.
+export function stripClauseRefs(s: string): string {
+  return (s || "").replace(/\(\s*\d+(?:\.\d+)+\s*\)/g, " ");
+}
+// Prose identity for the quote-on-page check. Clause refs stripped first (see above).
 export function normProse(s: string): string {
-  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  return stripClauseRefs(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
 // ---- clause scoping ------------------------------------------------------------------------------------
@@ -234,10 +243,16 @@ export function runCoLocationGate(inp: GateInput): GateResult {
   if (!inp.claimFigure || !inp.claimFigure.trim()) {
     if (!quote) return none("cited_not_verified", "pending", "qualitative — no anchor_quote supplied (no quote, no reviewable edge)");
     if (!normProse(inp.pageContent).includes(normProse(quote))) {
-      return none("cited_not_verified", "pending", "qualitative — anchor_quote is NOT present verbatim on the captured page (paraphrase, or wrong/gated/index capture): re-extract the quote from the page, or re-capture the locus");
+      return none("cited_not_verified", "pending", "qualitative — anchor_quote is NOT present verbatim on the captured page (paraphrase, stitched, or wrong/gated/index capture): re-extract a single contiguous span from the page, or re-capture the locus");
     }
-    if (inp.hasScreenshot) return none("screenshot_review", "pending", "qualitative — quote verbatim on the captured page; screenshot awaits human review");
-    return none("cited_not_verified", "pending", "qualitative — quote on page but no screenshot/retrievable capture to review");
+    // OPTION (b) — Reg ruling, Napoleon 0bca6710 / Eames 38ebea13. The STORED PAGE TEXT is the reviewable
+    // artifact for a qualitative claim; NO page image required. Check 1 has already PROVEN the span is in
+    // these bytes, so the reviewer confirms FIT, not PRESENCE, reading the highlighted span on the frozen
+    // page — better proof for a text standard than an image. Evidence kind determines the artifact: a text
+    // span reviews as text. The image carve-out applies only where the evidence is VISUAL (figure/chart/
+    // table) — those pages carry no text layer, so Check 1 above already fails them to cited and they route
+    // to the image path. hasScreenshot is no longer required here (kept in the input for the image path).
+    return none("screenshot_review", "pending", "qualitative — anchor_quote verbatim on the stored page; reviewable as text (option b), awaits human confirmation of fit");
   }
   const figure = inp.claimFigure.trim();
 
